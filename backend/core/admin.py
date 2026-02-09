@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
 
-from .models import ERP, Post, Product, Rating, Skill, User
+from .models import ERP, Notification, Post, Product, Rating, Skill, User
 
 
 @admin.register(User)
@@ -85,3 +85,10 @@ class RatingAdmin(admin.ModelAdmin):
         "provider__username",
         "customer__username",
     )
+
+
+@admin.register(Notification)
+class NotificationAdmin(admin.ModelAdmin):
+    list_display = ("user", "title", "is_read", "created_at")
+    list_filter = ("is_read",)
+    search_fields = ("user__username", "title", "message")
