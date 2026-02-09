@@ -6,18 +6,28 @@ export default function ERP() {
   const [erpItems, setErpItems] = useState([])
   const [posts, setPosts] = useState([])
 
-  const load = async () => {
-    try {
-      const [erpRes, postRes] = await Promise.all([api.get('/erp/'), api.get('/posts/')])
-      setErpItems(erpRes.data)
-      setPosts(postRes.data)
-    } catch (error) {
-      console.error(error)
-    }
-  }
-
   useEffect(() => {
+    let active = true
+
+    const load = async () => {
+      try {
+        const [erpRes, postRes] = await Promise.all([
+          api.get('/erp/'),
+          api.get('/posts/'),
+        ])
+        if (!active) return
+        setErpItems(erpRes.data)
+        setPosts(postRes.data)
+      } catch (error) {
+        console.error(error)
+      }
+    }
+
     load()
+
+    return () => {
+      active = false
+    }
   }, [])
 
   const postMap = useMemo(() => {
