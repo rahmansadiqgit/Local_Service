@@ -1,18 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import api from '../api/client'
 
-const customers = [
-  { id: 1, name: 'Ayesha Khan', role: 'Customer', location: 'Dhaka', status: 'Active' },
-  { id: 2, name: 'Rafi Ahmed', role: 'Customer', location: 'Sylhet', status: 'Available' },
-  { id: 3, name: 'Nusrat Jahan', role: 'Customer', location: 'Khulna', status: 'Viewer' },
-]
-
-const providers = [
-  { id: 11, name: 'Mehedi Hasan', role: 'Skilled Person', location: 'Chattogram', status: 'Busy' },
-  { id: 12, name: 'Sadia Noor', role: 'Business', location: 'Dhaka', status: 'Active' },
-  { id: 13, name: 'Rony Kabir', role: 'Skilled Person', location: 'Rajshahi', status: 'Inactive' },
-]
-
 const statusStyles = {
   Active: 'bg-emerald-100 text-emerald-700',
   Available: 'bg-blue-100 text-blue-700',
@@ -24,6 +12,7 @@ const statusStyles = {
 export default function Connections() {
   const [selected, setSelected] = useState(null)
   const [posts, setPosts] = useState([])
+  const [users, setUsers] = useState([])
   const [message, setMessage] = useState('')
 
   useEffect(() => {
@@ -31,9 +20,13 @@ export default function Connections() {
 
     const load = async () => {
       try {
-        const { data } = await api.get('/posts/')
+        const [postRes, userRes] = await Promise.all([
+          api.get('/posts/'),
+          api.get('/users/'),
+        ])
         if (!active) return
-        setPosts(data)
+        setPosts(postRes.data)
+        setUsers(userRes.data)
       } catch (error) {
         console.error(error)
       }
@@ -48,11 +41,20 @@ export default function Connections() {
 
   const recentPosts = useMemo(() => {
     if (!selected) return []
-    const matched = posts.filter((post) =>
-      post.brand_company_name?.toLowerCase().includes(selected.name.toLowerCase()),
-    )
-    return (matched.length ? matched : posts).slice(0, 3)
+    return posts
+      .filter((post) => post.owner_id === selected.id)
+      .slice(0, 3)
   }, [posts, selected])
+
+  const customers = useMemo(
+    () => users.filter((user) => user.role === 'Customer'),
+    [users],
+  )
+
+  const providers = useMemo(
+    () => users.filter((user) => user.role !== 'Customer'),
+    [users],
+  )
 
   const sendNotification = async (title, messageText) => {
     setMessage('')
@@ -74,13 +76,13 @@ export default function Connections() {
     >
       <div className="flex items-center gap-3">
         <div className="flex h-12 w-12 items-center justify-center rounded-full bg-brand-100 text-brand-600">
-          {person.name
+          {(person.name || person.username || 'U')
             .split(' ')
             .map((word) => word[0])
             .join('')}
         </div>
         <div>
-          <p className="font-semibold">{person.name}</p>
+          <p className="font-semibold">{person.name || person.username}</p>
           <p className="text-xs text-slate-500">{person.role}</p>
         </div>
         <span
@@ -88,7 +90,7 @@ export default function Connections() {
             statusStyles[person.status] || 'text-slate-400'
           }`}
         >
-          {person.status}
+          {person.status || 'Inactive'}
         </span>
       </div>
       <p className="mt-4 text-sm text-slate-500">{person.location}</p>
@@ -130,7 +132,7 @@ export default function Connections() {
           <div className="mt-4 space-y-4">
             <div className="flex flex-wrap items-center gap-3">
               <div>
-                <p className="text-sm font-semibold">{selected.name}</p>
+                <p className="text-sm font-semibold">{selected.name || selected.username}</p>
                 <p className="text-xs text-slate-500">{selected.role} • {selected.location}</p>
               </div>
               <span

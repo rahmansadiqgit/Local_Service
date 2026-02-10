@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import defaultAvatar from '../assets/default-avatar.svg'
 import ProductTable from './ProductTable'
 import RatingCard from './RatingCard'
 import SkillTable from './SkillTable'
@@ -13,51 +14,91 @@ export default function PostCard({
 }) {
   const [expanded, setExpanded] = useState(false)
 
-  const costSummary = useMemo(() => {
-    const skillCosts = skills.map((item) => Number(item.cost_per_unit || 0))
-    const productCosts = products.map((item) => Number(item.cost_per_unit || 0))
-    const allCosts = [...skillCosts, ...productCosts]
-    const min = allCosts.length ? Math.min(...allCosts) : 0
-    const max = allCosts.length ? Math.max(...allCosts) : 0
-    return { min, max, count: allCosts.length }
-  }, [skills, products])
+  const statusLabels = useMemo(() => {
+    const raw = post?.post_type === 'Supply' ? profile?.supplyStatus : profile?.demandStatus
+    const tokens = raw
+      ? raw
+          .split(',')
+          .map((item) => item.trim())
+          .filter(Boolean)
+      : []
+    return tokens.length ? tokens : ['None']
+  }, [post?.post_type, profile])
+
+  const statusDotClass = (status) => {
+    const normalized = status.toLowerCase()
+    const isSupply = post?.post_type === 'Supply'
+
+    if (isSupply) {
+      if (normalized === 'active') return 'bg-emerald-500'
+      if (normalized === 'available') return 'bg-sky-500'
+      return 'bg-slate-400 dark:bg-slate-500'
+    }
+
+    if (normalized === 'busy') return 'bg-rose-500'
+    if (normalized === 'active') return 'bg-amber-500'
+    return 'bg-slate-400 dark:bg-slate-500'
+  }
+
+  const formattedTime = useMemo(() => {
+    if (!post?.created_at) return 'Just now'
+    const parsed = new Date(post.created_at)
+    if (Number.isNaN(parsed.getTime())) return 'Just now'
+    return parsed.toLocaleString()
+  }, [post])
 
   if (!post) return null
 
   return (
-    <div className="card space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <p className="text-xs uppercase text-slate-500">{post.post_type}</p>
-          <h3 className="text-xl font-semibold">{post.post_name}</h3>
-          <p className="text-sm text-slate-500">
-            {post.brand_company_name || 'Independent'} • {post.location || 'Remote'}
-          </p>
+    <div className="card space-y-6 transition-shadow hover:shadow-lg">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="flex items-start gap-3">
+          <div className="h-10 w-10 overflow-hidden rounded-full border border-slate-200 bg-white dark:border-slate-700">
+            <img
+              src={profile?.photo || defaultAvatar}
+              alt={profile?.name || 'Profile'}
+              className="h-full w-full object-cover"
+            />
+          </div>
+          <div>
+            <p className="font-semibold text-slate-900 dark:text-slate-100">
+              {profile?.name || 'Localix Member'}
+            </p>
+            <p className="text-xs text-slate-500">
+              {post.brand_company_name || 'Independent'} • {post.location || 'Remote'}
+            </p>
+            <p className="text-xs text-slate-400">{formattedTime}</p>
+          </div>
         </div>
-        <span className="rounded-full bg-brand-100 px-3 py-1 text-xs font-semibold text-brand-600 dark:bg-brand-500/20 dark:text-brand-200">
-          {post.service_type}
-        </span>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-200">
+            {post.post_type}
+          </span>
+          <span className="rounded-full bg-brand-100 px-3 py-1 text-xs font-semibold text-brand-600 dark:bg-brand-500/20 dark:text-brand-200">
+            {post.service_type}
+          </span>
+        </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300">
-        <div>
-          <p className="text-xs uppercase text-slate-500">Profile</p>
-          <p className="font-semibold">{profile?.name || 'Localix Member'}</p>
-        </div>
-        <div>
-          <p className="text-xs uppercase text-slate-500">Status</p>
-          <p className="font-semibold">{profile?.status || 'Active'}</p>
-        </div>
-        <div>
-          <p className="text-xs uppercase text-slate-500">Cost Range</p>
-          <p className="font-semibold">
-            ${costSummary.min.toFixed(2)} - ${costSummary.max.toFixed(2)}
-          </p>
-        </div>
-        <div>
-          <p className="text-xs uppercase text-slate-500">Items</p>
-          <p className="font-semibold">{costSummary.count}</p>
-        </div>
+      <div className="space-y-2">
+        <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+          {post.post_name}
+        </h3>
+        {post.description && (
+          <p className="text-sm text-slate-600 dark:text-slate-300">{post.description}</p>
+        )}
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        {statusLabels.map((status) => (
+          <div
+            key={status}
+            className="flex items-center gap-2 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-200"
+          >
+            <span className={`h-2 w-2 rounded-full ${statusDotClass(status)}`} />
+            <span>{status}</span>
+          </div>
+        ))}
       </div>
 
       {post.image ? (

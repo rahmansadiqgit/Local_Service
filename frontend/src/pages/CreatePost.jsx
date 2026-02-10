@@ -1,9 +1,11 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import api from '../api/client'
 
 const initialPost = {
   post_type: 'Supply',
   post_name: '',
+  description: '',
   brand_company_name: '',
   location: '',
   service_type: 'Skill',
@@ -11,6 +13,7 @@ const initialPost = {
 }
 
 export default function CreatePost() {
+  const navigate = useNavigate()
   const [post, setPost] = useState(initialPost)
   const [imageFile, setImageFile] = useState(null)
   const [skills, setSkills] = useState([
@@ -60,6 +63,8 @@ export default function CreatePost() {
       setImageFile(null)
       setSkills([{ skill_name: '', unit: '', cost_per_unit: '', available_workers: 0 }])
       setProducts([{ product_name: '', unit: '', cost_per_unit: '', available_units: 0 }])
+      window.dispatchEvent(new Event('post-created'))
+      navigate('/')
     } catch (error) {
       console.error(error)
       setMessage('Failed to create post. Check console for details.')
@@ -107,6 +112,17 @@ export default function CreatePost() {
               name="post_name"
               value={post.post_name}
               onChange={handleChange}
+              required
+              className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900"
+            />
+          </div>
+          <div className="lg:col-span-2">
+            <label className="text-xs font-semibold text-slate-500">Description</label>
+            <textarea
+              name="description"
+              value={post.description}
+              onChange={handleChange}
+              rows={3}
               className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900"
             />
           </div>
@@ -125,6 +141,7 @@ export default function CreatePost() {
               name="location"
               value={post.location}
               onChange={handleChange}
+              required
               className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900"
             />
           </div>

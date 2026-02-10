@@ -7,7 +7,8 @@ export default function Profile() {
     name: '',
     phone: '',
     location: '',
-    status: '',
+    supply_status: [],
+    demand_status: [],
     education_skills: '',
     experience: '',
     facebook_link: '',
@@ -27,11 +28,20 @@ export default function Profile() {
       try {
         const { data } = await api.get('/users/profile/')
         setProfile(data)
+        const parseStatus = (value) =>
+          value
+            ? value
+                .split(',')
+                .map((item) => item.trim())
+                .filter(Boolean)
+            : []
+
         setForm({
           name: data.name || '',
           phone: data.phone || '',
           location: data.location || '',
-          status: data.status || '',
+          supply_status: parseStatus(data.supply_status),
+          demand_status: parseStatus(data.demand_status),
           education_skills: data.education_skills || '',
           experience: data.experience || '',
           facebook_link: data.facebook_link || '',
@@ -49,6 +59,18 @@ export default function Profile() {
     setForm((prev) => ({ ...prev, [name]: value }))
   }
 
+  const toggleStatus = (field, value) => {
+    setForm((prev) => {
+      const current = new Set(prev[field])
+      if (current.has(value)) {
+        current.delete(value)
+      } else {
+        current.add(value)
+      }
+      return { ...prev, [field]: Array.from(current) }
+    })
+  }
+
   const handleSubmit = async (event) => {
     event.preventDefault()
     setSaving(true)
@@ -56,7 +78,11 @@ export default function Profile() {
     try {
       const payload = new FormData()
       Object.entries(form).forEach(([key, value]) => {
-        payload.append(key, value ?? '')
+        if (Array.isArray(value)) {
+          payload.append(key, value.join(', '))
+        } else {
+          payload.append(key, value ?? '')
+        }
       })
       if (photoFile) {
         payload.append('profile_photo', photoFile)
@@ -106,7 +132,10 @@ export default function Profile() {
               {profile?.role || 'Customer'}
             </span>
             <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-200">
-              {profile?.status || 'Available'}
+              Supply: {profile?.supply_status || 'None'}
+            </span>
+            <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-200">
+              Demand: {profile?.demand_status || 'None'}
             </span>
           </div>
         </div>
@@ -192,18 +221,40 @@ export default function Profile() {
             />
           </div>
           <div>
-            <label className="text-xs font-semibold text-slate-500">Status</label>
-            <select
-              name="status"
-              value={form.status}
-              onChange={handleChange}
-              className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900"
-            >
-              <option value="">Select status</option>
-              <option value="Active">Active</option>
-              <option value="Busy">Busy</option>
-              <option value="Available">Available</option>
-            </select>
+            <label className="text-xs font-semibold text-slate-500">Supply Status</label>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {['Active', 'Available', 'Viewer'].map((status) => (
+                <label
+                  key={status}
+                  className="flex items-center gap-2 rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 dark:border-slate-700 dark:text-slate-300"
+                >
+                  <input
+                    type="checkbox"
+                    checked={form.supply_status.includes(status)}
+                    onChange={() => toggleStatus('supply_status', status)}
+                  />
+                  {status}
+                </label>
+              ))}
+            </div>
+          </div>
+          <div>
+            <label className="text-xs font-semibold text-slate-500">Demand Status</label>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {['Busy', 'Active', 'Inactive'].map((status) => (
+                <label
+                  key={status}
+                  className="flex items-center gap-2 rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 dark:border-slate-700 dark:text-slate-300"
+                >
+                  <input
+                    type="checkbox"
+                    checked={form.demand_status.includes(status)}
+                    onChange={() => toggleStatus('demand_status', status)}
+                  />
+                  {status}
+                </label>
+              ))}
+            </div>
           </div>
           <div className="lg:col-span-2">
             <label className="text-xs font-semibold text-slate-500">Education & Skills</label>

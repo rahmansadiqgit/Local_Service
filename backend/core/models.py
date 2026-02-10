@@ -19,6 +19,8 @@ class User(AbstractUser):
     education_skills = models.TextField(blank=True)
     experience = models.TextField(blank=True)
     status = models.CharField(max_length=50, blank=True)
+    supply_status = models.CharField(max_length=100, blank=True)
+    demand_status = models.CharField(max_length=100, blank=True)
     facebook_link = models.URLField(blank=True)
     whatsapp_link = models.URLField(blank=True)
     role = models.CharField(max_length=20, choices=UserRole.choices, default=UserRole.CUSTOMER)
@@ -38,8 +40,15 @@ class ServiceType(models.TextChoices):
 
 
 class Post(models.Model):
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name="posts",
+    )
     post_type = models.CharField(max_length=10, choices=PostType.choices)
     post_name = models.CharField(max_length=255)
+    description = models.TextField(blank=True)
     brand_company_name = models.CharField(max_length=255, blank=True)
     location = models.CharField(max_length=255, blank=True)
     service_type = models.CharField(max_length=10, choices=ServiceType.choices)

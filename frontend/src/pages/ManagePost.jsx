@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useParams } from 'react-router-dom'
 import api from '../api/client'
 
 export default function ManagePost() {
+  const { id } = useParams()
   const [posts, setPosts] = useState([])
   const [skills, setSkills] = useState([])
   const [products, setProducts] = useState([])
@@ -14,7 +16,7 @@ export default function ManagePost() {
   const loadPosts = async () => {
     try {
       const [postRes, skillRes, productRes, erpRes] = await Promise.all([
-        api.get('/posts/'),
+        api.get('/posts/?mine=1'),
         api.get('/skills/'),
         api.get('/products/'),
         api.get('/erp/'),
@@ -136,6 +138,11 @@ export default function ManagePost() {
     }
   }
 
+  const visiblePosts = useMemo(() => {
+    if (!id) return posts
+    return posts.filter((post) => String(post.id) === String(id))
+  }, [posts, id])
+
   return (
     <div className="space-y-6">
       <div className="card">
@@ -158,10 +165,10 @@ export default function ManagePost() {
         </div>
         {loading ? (
           <p className="text-sm text-slate-500">Loading posts...</p>
-        ) : posts.length === 0 ? (
+        ) : visiblePosts.length === 0 ? (
           <p className="text-sm text-slate-500">No posts created yet.</p>
         ) : (
-          posts.map((post) => (
+          visiblePosts.map((post) => (
             <div
               key={post.id}
               className="space-y-4 rounded-2xl border border-slate-200 px-4 py-4 dark:border-slate-800"
@@ -206,11 +213,16 @@ export default function ManagePost() {
                           </tr>
                         </thead>
                         <tbody>
-                          {(skillsByPost[post.id] || []).map((skill) => {
+                          {(skillsByPost[post.id] || []).map((skill, index) => {
                             const qty = Number(quantities[`skill-${skill.id}`] || 0)
                             const total = qty * Number(skill.cost_per_unit || 0)
                             return (
-                              <tr key={skill.id} className="border-t border-slate-200 dark:border-slate-800">
+                              <tr
+                                key={skill.id}
+                                className={`border-t border-slate-200 dark:border-slate-800 ${
+                                  index % 2 === 1 ? 'bg-slate-50 dark:bg-slate-900/40' : ''
+                                }`}
+                              >
                                 <td className="px-3 py-2 font-medium">{skill.skill_name}</td>
                                 <td className="px-3 py-2">{skill.unit}</td>
                                 <td className="px-3 py-2">${skill.cost_per_unit}</td>
@@ -255,11 +267,16 @@ export default function ManagePost() {
                           </tr>
                         </thead>
                         <tbody>
-                          {(productsByPost[post.id] || []).map((product) => {
+                          {(productsByPost[post.id] || []).map((product, index) => {
                             const qty = Number(quantities[`product-${product.id}`] || 0)
                             const total = qty * Number(product.cost_per_unit || 0)
                             return (
-                              <tr key={product.id} className="border-t border-slate-200 dark:border-slate-800">
+                              <tr
+                                key={product.id}
+                                className={`border-t border-slate-200 dark:border-slate-800 ${
+                                  index % 2 === 1 ? 'bg-slate-50 dark:bg-slate-900/40' : ''
+                                }`}
+                              >
                                 <td className="px-3 py-2 font-medium">{product.product_name}</td>
                                 <td className="px-3 py-2">{product.unit}</td>
                                 <td className="px-3 py-2">${product.cost_per_unit}</td>

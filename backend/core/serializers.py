@@ -2,6 +2,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
 from rest_framework import serializers
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
 from .models import ERP, Notification, Post, Product, Rating, Skill
 
@@ -25,17 +26,50 @@ class UserRegisterSerializer(serializers.ModelSerializer):
             "education_skills",
             "experience",
             "status",
+            "supply_status",
+            "demand_status",
             "facebook_link",
             "whatsapp_link",
             "role",
         )
+        extra_kwargs = {
+            "email": {"required": True},
+        }
 
     def create(self, validated_data):
         password = validated_data.pop("password")
+        if not validated_data.get("username") and validated_data.get("email"):
+            validated_data["username"] = validated_data["email"]
         user = User(**validated_data)
         user.set_password(password)
         user.save()
         return user
+
+
+class EmailTokenObtainPairSerializer(TokenObtainPairSerializer):
+    username_field = User.EMAIL_FIELD
+    email = serializers.EmailField()
+    password = serializers.CharField(write_only=True)
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields.pop("username", None)
+
+    def validate(self, attrs):
+        email = attrs.get("email")
+        password = attrs.get("password")
+        if not email or not password:
+            raise serializers.ValidationError("Email and password are required.")
+
+        user = User.objects.filter(email=email).first()
+        if not user or not user.check_password(password):
+            raise serializers.ValidationError("Invalid credentials.")
+
+        refresh = self.get_token(user)
+        return {
+            "refresh": str(refresh),
+            "access": str(refresh.access_token),
+        }
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -52,6 +86,8 @@ class UserSerializer(serializers.ModelSerializer):
             "education_skills",
             "experience",
             "status",
+            "supply_status",
+            "demand_status",
             "facebook_link",
             "whatsapp_link",
             "role",
@@ -90,12 +126,28 @@ class PasswordResetConfirmSerializer(serializers.Serializer):
 
 
 class PostSerializer(serializers.ModelSerializer):
+    owner_name = serializers.CharField(source="owner.name", read_only=True)
+    owner_id = serializers.IntegerField(source="owner.id", read_only=True)
+    owner_status = serializers.CharField(source="owner.status", read_only=True)
+    owner_role = serializers.CharField(source="owner.role", read_only=True)
+    owner_profile_photo = serializers.ImageField(source="owner.profile_photo", read_only=True)
+    owner_supply_status = serializers.CharField(source="owner.supply_status", read_only=True)
+    owner_demand_status = serializers.CharField(source="owner.demand_status", read_only=True)
+
     class Meta:
         model = Post
         fields = (
             "id",
+            "owner_id",
+            "owner_name",
+            "owner_status",
+            "owner_role",
+            "owner_profile_photo",
+            "owner_supply_status",
+            "owner_demand_status",
             "post_type",
             "post_name",
+            "description",
             "brand_company_name",
             "location",
             "service_type",

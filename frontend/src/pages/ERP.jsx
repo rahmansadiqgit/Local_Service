@@ -312,15 +312,21 @@ export default function ERP() {
           filteredTasks.map((erp) => {
             const post = postMap[erp.post]
             const rating = averageRatingByPost[erp.post] || 0
+            const stageStyle =
+              erp.stage === 'Completed'
+                ? 'bg-emerald-100 text-emerald-700'
+                : erp.stage === 'On Process'
+                  ? 'bg-blue-100 text-blue-700'
+                  : 'bg-amber-100 text-amber-700'
             return (
-              <div key={erp.id} className="card space-y-4">
+              <div key={erp.id} className="card space-y-4 transition-shadow hover:shadow-lg">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div>
                     <p className="text-xs uppercase text-slate-500">{erp.category}</p>
                     <h3 className="text-lg font-semibold">{post?.post_name || `Task #${erp.id}`}</h3>
                     <p className="text-sm text-slate-500">{post?.location || 'Unknown location'}</p>
                   </div>
-                  <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
+                  <span className={`rounded-full px-3 py-1 text-xs font-semibold ${stageStyle}`}>
                     {erp.stage}
                   </span>
                 </div>

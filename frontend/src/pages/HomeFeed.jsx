@@ -1,9 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
 import api from '../api/client'
 import NotificationPanel from '../components/NotificationPanel'
 import PostCard from '../components/PostCard'
+import useAuth from '../context/useAuth'
 
 export default function HomeFeed() {
+  const navigate = useNavigate()
+  const { isAuthenticated } = useAuth()
   const [posts, setPosts] = useState([])
   const [skills, setSkills] = useState([])
   const [products, setProducts] = useState([])
@@ -12,7 +16,7 @@ export default function HomeFeed() {
   const [loading, setLoading] = useState(true)
   const [filters, setFilters] = useState({
     search: '',
-    postType: 'Demand',
+    postType: '',
     location: '',
     minCost: '',
     maxCost: '',
@@ -25,19 +29,26 @@ export default function HomeFeed() {
 
     const load = async () => {
       try {
-        const [postRes, skillRes, productRes, ratingRes, noteRes] = await Promise.all([
-          api.get('/posts/'),
+        const postRes = await api.get('/posts/')
+        if (!active) return
+        setPosts(postRes.data)
+        const [skillRes, productRes, ratingRes] = await Promise.all([
           api.get('/skills/'),
           api.get('/products/'),
           api.get('/ratings/'),
-          api.get('/notifications/'),
         ])
         if (!active) return
-        setPosts(postRes.data)
         setSkills(skillRes.data)
         setProducts(productRes.data)
         setRatings(ratingRes.data)
-        setNotifications(noteRes.data)
+
+        if (isAuthenticated) {
+          const noteRes = await api.get('/notifications/')
+          if (!active) return
+          setNotifications(noteRes.data)
+        } else {
+          setNotifications([])
+        }
       } catch (error) {
         console.error(error)
       } finally {
@@ -47,10 +58,14 @@ export default function HomeFeed() {
 
     load()
 
+    const handlePostCreated = () => load()
+    window.addEventListener('post-created', handlePostCreated)
+
     return () => {
       active = false
+      window.removeEventListener('post-created', handlePostCreated)
     }
-  }, [])
+  }, [isAuthenticated])
 
   const skillsByPost = useMemo(() => {
     return skills.reduce((acc, skill) => {
@@ -100,7 +115,7 @@ export default function HomeFeed() {
       }
       if (filters.search) {
         const query = filters.search.toLowerCase()
-        const haystack = `${post.post_name} ${post.brand_company_name || ''}`.toLowerCase()
+        const haystack = `${post.post_name} ${post.brand_company_name || ''} ${post.description || ''}`.toLowerCase()
         if (!haystack.includes(query)) return false
       }
 
@@ -121,7 +136,18 @@ export default function HomeFeed() {
 
   const handleAction = async (post, actionType) => {
     setActionMessage('')
+    if (!isAuthenticated) {
+      navigate('/login')
+      return
+    }
     try {
+      const cost = costSummaryByPost[post.id] || { min: 0 }
+      const erpPayload = {
+        category: post.post_type === 'Supply' ? 'Provided' : 'Received',
+        post: post.id,
+        total_cost: cost.min,
+      }
+      await api.post('/erp/', erpPayload)
       const title = actionType === 'apply' ? 'New Application' : 'New Booking'
       const message = `${title} for ${post.post_name} (${post.post_type}).`
       const { data } = await api.post('/notifications/', {
@@ -129,7 +155,7 @@ export default function HomeFeed() {
         message,
       })
       setNotifications((prev) => [data, ...prev])
-      setActionMessage('Action sent and notification created.')
+      setActionMessage('Action sent. ERP task created and notification triggered.')
     } catch (error) {
       console.error(error)
       setActionMessage('Action failed. Please try again.')
@@ -144,14 +170,16 @@ export default function HomeFeed() {
             <h2 className="text-2xl font-semibold">Home Feed</h2>
             <p className="text-sm text-slate-500">Browse the latest supply & demand posts.</p>
           </div>
-          <div className="flex gap-2">
-            {['Demand', 'Supply'].map((type) => (
+          <div className="flex flex-wrap gap-2">
+            {['All', 'Demand', 'Supply'].map((type) => (
               <button
                 key={type}
                 type="button"
-                onClick={() => setFilters((prev) => ({ ...prev, postType: type }))}
+                onClick={() =>
+                  setFilters((prev) => ({ ...prev, postType: type === 'All' ? '' : type }))
+                }
                 className={`rounded-full px-3 py-1 text-xs font-semibold transition ${
-                  filters.postType === type
+                  (filters.postType === '' && type === 'All') || filters.postType === type
                     ? 'bg-brand-500 text-white'
                     : 'border border-slate-200 text-slate-600 dark:border-slate-700 dark:text-slate-300'
                 }`}
@@ -159,6 +187,12 @@ export default function HomeFeed() {
                 {type}
               </button>
             ))}
+            <Link
+              to="/create-post"
+              className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-700 transition hover:border-brand-400 hover:text-brand-600 dark:border-slate-700 dark:text-slate-200"
+            >
+              New Post
+            </Link>
           </div>
         </div>
 
@@ -236,8 +270,10 @@ export default function HomeFeed() {
               products={productsByPost[post.id] || []}
               rating={ratingByPost[post.id]}
               profile={{
-                name: post.brand_company_name || 'Localix Member',
-                status: post.location ? `Serving ${post.location}` : 'Available',
+                name: post.owner_name || post.brand_company_name || 'Localix Member',
+                supplyStatus: post.owner_supply_status || '',
+                demandStatus: post.owner_demand_status || '',
+                photo: post.owner_profile_photo || '',
               }}
               onAction={handleAction}
             />

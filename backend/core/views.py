@@ -2,6 +2,7 @@ from io import BytesIO
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.tokens import default_token_generator
+from django.conf import settings
 from django.core.files.base import ContentFile
 from django.core.mail import send_mail
 from django.db.models import Avg, DecimalField, Max, Min
@@ -13,6 +14,7 @@ from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from reportlab.lib.pagesizes import A4
@@ -21,6 +23,7 @@ from reportlab.pdfgen import canvas
 from .models import ERP, Notification, Post, Product, Rating, Skill
 from .serializers import (
     ChangePasswordSerializer,
+    EmailTokenObtainPairSerializer,
     ERPSerializer,
     NotificationSerializer,
     PasswordResetConfirmSerializer,
@@ -44,6 +47,10 @@ class RegisterView(APIView):
         serializer.is_valid(raise_exception=True)
         user = serializer.save()
         return Response(UserSerializer(user).data, status=status.HTTP_201_CREATED)
+
+
+class CustomTokenObtainPairView(TokenObtainPairView):
+    serializer_class = EmailTokenObtainPairSerializer
 
 
 class LogoutView(APIView):
@@ -72,6 +79,14 @@ class ProfileView(APIView):
         return Response(serializer.data)
 
 
+class MeView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        serializer = UserSerializer(request.user)
+        return Response(serializer.data)
+
+
 class ChangePasswordView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
@@ -97,8 +112,8 @@ class PasswordResetRequestView(APIView):
         if user:
             uid = urlsafe_base64_encode(force_bytes(user.pk))
             token = default_token_generator.make_token(user)
-            reset_url = request.build_absolute_uri(
-                f"/api/auth/password-reset/confirm/?uid={uid}&token={token}"
+            reset_url = (
+                f"{settings.FRONTEND_URL}/reset-password/confirm?uid={uid}&token={token}"
             )
             send_mail(
                 subject="Reset your Localix password",
@@ -166,6 +181,7 @@ class PostViewSet(viewsets.ModelViewSet):
         min_cost = self.request.query_params.get("min_cost")
         max_cost = self.request.query_params.get("max_cost")
         rating = self.request.query_params.get("rating")
+        mine = self.request.query_params.get("mine")
 
         if post_type:
             queryset = queryset.filter(post_type=post_type)
@@ -179,20 +195,25 @@ class PostViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(max_cost__lte=max_cost)
         if rating:
             queryset = queryset.filter(avg_rating__gte=rating)
+        if mine and self.request.user.is_authenticated:
+            queryset = queryset.filter(owner=self.request.user)
         return queryset
+
+    def perform_create(self, serializer):
+        serializer.save(owner=self.request.user)
 
 
 class SkillViewSet(viewsets.ModelViewSet):
     queryset = Skill.objects.all()
     serializer_class = SkillSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
     filterset_fields = ["post"]
 
 
 class ProductViewSet(viewsets.ModelViewSet):
     queryset = Product.objects.all()
     serializer_class = ProductSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
     filterset_fields = ["post"]
 
 
@@ -241,7 +262,7 @@ class ERPViewSet(viewsets.ModelViewSet):
 class RatingViewSet(viewsets.ModelViewSet):
     queryset = Rating.objects.all()
     serializer_class = RatingSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
     filterset_fields = ["post", "provider"]
 
     def perform_create(self, serializer):
@@ -262,3 +283,11 @@ class NotificationViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
+
+
+class UserViewSet(viewsets.ReadOnlyModelViewSet):
+    serializer_class = UserSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        return User.objects.all().order_by("id")
