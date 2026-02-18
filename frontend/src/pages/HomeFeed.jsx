@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import api from '../api/client'
-import NotificationPanel from '../components/NotificationPanel'
 import PostCard from '../components/PostCard'
 import useAuth from '../context/useAuth'
 
@@ -12,7 +11,6 @@ export default function HomeFeed() {
   const [skills, setSkills] = useState([])
   const [products, setProducts] = useState([])
   const [ratings, setRatings] = useState([])
-  const [notifications, setNotifications] = useState([])
   const [loading, setLoading] = useState(true)
   const [filters, setFilters] = useState({
     search: '',
@@ -42,13 +40,6 @@ export default function HomeFeed() {
         setProducts(productRes.data)
         setRatings(ratingRes.data)
 
-        if (isAuthenticated) {
-          const noteRes = await api.get('/notifications/')
-          if (!active) return
-          setNotifications(noteRes.data)
-        } else {
-          setNotifications([])
-        }
       } catch (error) {
         console.error(error)
       } finally {
@@ -150,11 +141,10 @@ export default function HomeFeed() {
       await api.post('/erp/', erpPayload)
       const title = actionType === 'apply' ? 'New Application' : 'New Booking'
       const message = `${title} for ${post.post_name} (${post.post_type}).`
-      const { data } = await api.post('/notifications/', {
+      await api.post('/notifications/', {
         title,
         message,
       })
-      setNotifications((prev) => [data, ...prev])
       setActionMessage('Action sent. ERP task created and notification triggered.')
     } catch (error) {
       console.error(error)
@@ -163,7 +153,7 @@ export default function HomeFeed() {
   }
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[2fr_1fr]">
+    <div className="space-y-6">
       <section className="space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
@@ -280,27 +270,6 @@ export default function HomeFeed() {
           ))
         )}
       </section>
-
-      <aside className="space-y-6">
-        <div className="card">
-          <h3 className="text-lg font-semibold">Quick filters</h3>
-          <div className="mt-4 space-y-3 text-sm text-slate-500">
-            <div className="flex items-center justify-between">
-              <span>Location</span>
-              <span className="font-semibold text-slate-700 dark:text-slate-200">
-                {filters.location || 'Any'}
-              </span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span>Type</span>
-              <span className="font-semibold text-slate-700 dark:text-slate-200">
-                {filters.postType}
-              </span>
-            </div>
-          </div>
-        </div>
-        <NotificationPanel notifications={notifications} />
-      </aside>
     </div>
   )
 }
