@@ -72,7 +72,6 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "corsheaders",
     "rest_framework",
-    "whitenoise.middleware.WhiteNoiseMiddleware",  # Add WhiteNoise for static files
     "rest_framework_simplejwt.token_blacklist",
     "django_filters",
     "core",
@@ -81,6 +80,7 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.security.SecurityMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -103,11 +103,18 @@ TEMPLATES = [
                 "django.contrib.messages.context_processors.messages",
             ],
         },
+    }
+]
+
+WSGI_APPLICATION = "localix.wsgi.application"
+
+# Database
+# https://docs.djangoproject.com/en/6.0/ref/settings/#databases
+
 # Use PostgreSQL in production (Railway), SQLite in development
 DATABASE_URL = os.getenv("DATABASE_URL")
 
 if DATABASE_URL:
-    # Production database (PostgreSQL)
     DATABASES = {
         "default": dj_database_url.config(
             default=DATABASE_URL,
@@ -116,22 +123,12 @@ if DATABASE_URL:
         )
     }
 else:
-    # Development database (SQLite)
     DATABASES = {
         "default": {
             "ENGINE": "django.db.backends.sqlite3",
             "NAME": BASE_DIR / "db.sqlite3",
         }
-    
-# Database
-# https://docs.djangoproject.com/en/6.0/ref/settings/#databases
-
-DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.sqlite3",
-        "NAME": BASE_DIR / "db.sqlite3",
     }
-}
 
 
 # Password validation
@@ -154,17 +151,8 @@ AUTH_PASSWORD_VALIDATORS = [
 
 
 # Internationalization
-STATIC_ROOT = BASE_DIR / "staticfiles"
 
-# WhiteNoise configuration for static files
-STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
-
-MEDIA_URL = "/media/"
-MEDIA_ROOT = BASE_DIR / "media"
-
-# Use Cloudinary or Railway volumes for media files in production
-# For now, media files will be stored locally (not recommended for production)
-# Consider using AWS S3, Cloudinary, or Railway Volumes for production media storage
+LANGUAGE_CODE = "en-us"
 
 TIME_ZONE = "UTC"
 
@@ -177,9 +165,17 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
 STATIC_URL = "static/"
+STATIC_ROOT = BASE_DIR / "staticfiles"
+
+# WhiteNoise configuration for static files
+STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
+
+# Use Cloudinary or Railway volumes for media files in production
+# For now, media files will be stored locally (not recommended for production)
+# Consider using AWS S3, Cloudinary, or Railway Volumes for production media storage
 
 AUTH_USER_MODEL = "core.User"
 
