@@ -12,6 +12,10 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 
 from pathlib import Path
 import os
+import dj_database_url
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -21,10 +25,10 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = "django-insecure-gh-ih7!w5-l86(u6v7u67x+uf$c_3p7)&8_bd6*@8^j97n0y4f"
+SECRET_KEY = os.getenv("SECRET_KEY", "django-insecure-gh-ih7!w5-l86(u6v7u67x+uf$c_3p7)&8_bd6*@8^j97n0y4f")
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.getenv("DEBUG", "False") == "True"
 
 ALLOWED_HOSTS = [
     "localhost",
@@ -33,10 +37,28 @@ ALLOWED_HOSTS = [
     "testserver",
 ]
 
+# Add Railway domain
+RAILWAY_DOMAIN = os.getenv("RAILWAY_PUBLIC_DOMAIN")
+if RAILWAY_DOMAIN:
+    ALLOWED_HOSTS.append(RAILWAY_DOMAIN)
+
+# Add custom domain if provided
+CUSTOM_DOMAIN = os.getenv("CUSTOM_DOMAIN")
+if CUSTOM_DOMAIN:
+    ALLOWED_HOSTS.append(CUSTOM_DOMAIN)
+
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
 ]
+
+# Add production frontend URL
+FRONTEND_DOMAIN = os.getenv("FRONTEND_DOMAIN")
+if FRONTEND_DOMAIN:
+    CORS_ALLOWED_ORIGINS.append(f"https://{FRONTEND_DOMAIN}")
+    CORS_ALLOWED_ORIGINS.append(f"http://{FRONTEND_DOMAIN}")
+
+CORS_ALLOW_CREDENTIALS = True
 
 
 # Application definition
@@ -50,6 +72,7 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "corsheaders",
     "rest_framework",
+    "whitenoise.middleware.WhiteNoiseMiddleware",  # Add WhiteNoise for static files
     "rest_framework_simplejwt.token_blacklist",
     "django_filters",
     "core",
@@ -80,12 +103,26 @@ TEMPLATES = [
                 "django.contrib.messages.context_processors.messages",
             ],
         },
-    },
-]
+# Use PostgreSQL in production (Railway), SQLite in development
+DATABASE_URL = os.getenv("DATABASE_URL")
 
-WSGI_APPLICATION = "localix.wsgi.application"
-
-
+if DATABASE_URL:
+    # Production database (PostgreSQL)
+    DATABASES = {
+        "default": dj_database_url.config(
+            default=DATABASE_URL,
+            conn_max_age=600,
+            conn_health_checks=True,
+        )
+    }
+else:
+    # Development database (SQLite)
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": BASE_DIR / "db.sqlite3",
+        }
+    
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 
@@ -117,9 +154,17 @@ AUTH_PASSWORD_VALIDATORS = [
 
 
 # Internationalization
-# https://docs.djangoproject.com/en/6.0/topics/i18n/
+STATIC_ROOT = BASE_DIR / "staticfiles"
 
-LANGUAGE_CODE = "en-us"
+# WhiteNoise configuration for static files
+STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
+
+MEDIA_URL = "/media/"
+MEDIA_ROOT = BASE_DIR / "media"
+
+# Use Cloudinary or Railway volumes for media files in production
+# For now, media files will be stored locally (not recommended for production)
+# Consider using AWS S3, Cloudinary, or Railway Volumes for production media storage
 
 TIME_ZONE = "UTC"
 
