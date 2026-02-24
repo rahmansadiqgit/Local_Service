@@ -23,13 +23,21 @@ api.interceptors.response.use(
         try {
           const { data } = await api.post('/auth/refresh/', { refresh: refreshToken })
           localStorage.setItem('accessToken', data.access)
+          if (!original.headers) original.headers = {}
           original.headers.Authorization = `Bearer ${data.access}`
           return api(original)
         } catch (refreshError) {
           localStorage.removeItem('accessToken')
           localStorage.removeItem('refreshToken')
+          window.location.href = '/login'
+          return Promise.reject(refreshError)
         }
       }
+      // No refresh token available, redirect to login
+      localStorage.removeItem('accessToken')
+      localStorage.removeItem('refreshToken')
+      window.location.href = '/login'
+      return Promise.reject(error)
     }
     return Promise.reject(error)
   },
