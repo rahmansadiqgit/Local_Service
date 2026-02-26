@@ -4,10 +4,6 @@ from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 
 
-class UserRole(models.TextChoices):
-    CUSTOMER = "Customer", "Customer"
-    SKILLED_PERSON = "SkilledPerson", "Skilled Person"
-    BUSINESS = "Business", "Business"
 
 
 class User(AbstractUser):
@@ -23,7 +19,6 @@ class User(AbstractUser):
     demand_status = models.CharField(max_length=100, blank=True)
     facebook_link = models.URLField(blank=True)
     whatsapp_link = models.URLField(blank=True)
-    role = models.CharField(max_length=20, choices=UserRole.choices, default=UserRole.CUSTOMER)
 
     def __str__(self) -> str:
         return self.username
@@ -145,6 +140,5 @@ class Notification(models.Model):
     message = models.TextField()
     is_read = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
-
     def __str__(self) -> str:
         return f"{self.user.username} - {self.title}"

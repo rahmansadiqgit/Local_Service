@@ -30,7 +30,6 @@ class UserRegisterSerializer(serializers.ModelSerializer):
             "demand_status",
             "facebook_link",
             "whatsapp_link",
-            "role",
         )
         extra_kwargs = {
             "email": {"required": True},
@@ -90,9 +89,8 @@ class UserSerializer(serializers.ModelSerializer):
             "demand_status",
             "facebook_link",
             "whatsapp_link",
-            "role",
         )
-        read_only_fields = ("id", "username", "email", "role")
+        read_only_fields = ("id", "username", "email")
 
 
 class ChangePasswordSerializer(serializers.Serializer):
@@ -129,7 +127,6 @@ class PostSerializer(serializers.ModelSerializer):
     owner_name = serializers.CharField(source="owner.name", read_only=True)
     owner_id = serializers.IntegerField(source="owner.id", read_only=True)
     owner_status = serializers.CharField(source="owner.status", read_only=True)
-    owner_role = serializers.CharField(source="owner.role", read_only=True)
     owner_profile_photo = serializers.ImageField(source="owner.profile_photo", read_only=True)
     owner_supply_status = serializers.CharField(source="owner.supply_status", read_only=True)
     owner_demand_status = serializers.CharField(source="owner.demand_status", read_only=True)
@@ -141,7 +138,6 @@ class PostSerializer(serializers.ModelSerializer):
             "owner_id",
             "owner_name",
             "owner_status",
-            "owner_role",
             "owner_profile_photo",
             "owner_supply_status",
             "owner_demand_status",

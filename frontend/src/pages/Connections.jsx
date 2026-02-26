@@ -46,15 +46,9 @@ export default function Connections() {
       .slice(0, 3)
   }, [posts, selected])
 
-  const customers = useMemo(
-    () => users.filter((user) => user.role === 'Customer'),
-    [users],
-  )
-
-  const providers = useMemo(
-    () => users.filter((user) => user.role !== 'Customer'),
-    [users],
-  )
+  // If you want to filter users, use another property or remove these filters
+  const customers = users;
+  const providers = users;
 
   const sendNotification = async (title, messageText) => {
     setMessage('')
@@ -83,7 +77,7 @@ export default function Connections() {
         </div>
         <div>
           <p className="font-semibold">{person.name || person.username}</p>
-          <p className="text-xs text-slate-500">{person.role}</p>
+          {/* Removed role display */}
         </div>
         <span
           className={`ml-auto rounded-full px-2 py-1 text-xs font-semibold ${
@@ -133,7 +127,7 @@ export default function Connections() {
             <div className="flex flex-wrap items-center gap-3">
               <div>
                 <p className="text-sm font-semibold">{selected.name || selected.username}</p>
-                <p className="text-xs text-slate-500">{selected.role} • {selected.location}</p>
+                <p className="text-xs text-slate-500">{selected.location}</p>
               </div>
               <span
                 className={`rounded-full px-2 py-1 text-xs font-semibold ${

@@ -10,10 +10,10 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 
-from pathlib import Path
-import os
-import dj_database_url
-from dotenv import load_dotenv
+from pathlib import Path # A modern way to handle file paths in Python
+import os # For accessing environment variables and file paths
+import dj_database_url # Helps configure PostgreSQL (or other DBs) from a single URL, useful for production.
+from dotenv import load_dotenv #Loads variables from a .env file into the environment.
 
 load_dotenv()
 
@@ -25,6 +25,8 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
+
+# Used for cryptography in Django (cookies, password reset tokens).
 SECRET_KEY = os.getenv("SECRET_KEY", "django-insecure-gh-ih7!w5-l86(u6v7u67x+uf$c_3p7)&8_bd6*@8^j97n0y4f")
 
 # SECURITY WARNING: don't run with debug turned on in production!
@@ -46,7 +48,9 @@ if RAILWAY_DOMAIN:
 CUSTOM_DOMAIN = os.getenv("CUSTOM_DOMAIN")
 if CUSTOM_DOMAIN:
     ALLOWED_HOSTS.append(CUSTOM_DOMAIN)
-
+    
+    
+# Cross-Origin Resource Sharing (CORS) allows frontend (running on another port or domain) to access Django API.
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
@@ -58,44 +62,79 @@ CORS_ALLOWED_ORIGINS = [
     "http://127.0.0.1:4173",
 ]
 
+
 # Add production frontend URL
 FRONTEND_DOMAIN = os.getenv("FRONTEND_DOMAIN")
 if FRONTEND_DOMAIN:
     CORS_ALLOWED_ORIGINS.append(f"https://{FRONTEND_DOMAIN}")
     CORS_ALLOWED_ORIGINS.append(f"http://{FRONTEND_DOMAIN}")
 
+# Allows cookies and authentication headers to be sent across domains.
 CORS_ALLOW_CREDENTIALS = True
 
 
 # Application definition
 
 INSTALLED_APPS = [
-    "django.contrib.admin",
-    "django.contrib.auth",
-    "django.contrib.contenttypes",
-    "django.contrib.sessions",
-    "django.contrib.messages",
-    "django.contrib.staticfiles",
-    "corsheaders",
-    "rest_framework",
-    "rest_framework_simplejwt.token_blacklist",
-    "django_filters",
+    "django.contrib.admin", # Purpose: Enables Django admin interface
+    "django.contrib.auth",  # Purpose: Provides authentication framework (users, groups, permissions)
+    "django.contrib.contenttypes", # Purpose: Tracks all models in your project
+    "django.contrib.sessions", # Purpose: Provides session management
+    "django.contrib.messages", # Purpose: Handles temporary notifications to users.
+    "django.contrib.staticfiles", # Purpose: Manages static files (CSS, JS, images).
+    "corsheaders", # Purpose: Enables CORS (Cross-Origin Resource Sharing).
+    "rest_framework", # Purpose: Enables Django REST Framework (DRF).
+    "rest_framework_simplejwt.token_blacklist", # Purpose: Adds JWT token blacklisting for security.
+    "django_filters", # Purpose: Provides filtering for DRF.
     "core",
 ]
 
+
+# Middleware is a chain of hooks that process every request before it reaches your view, and every response before it’s sent back to the client.
+"""
+Browser Request
+       |
+       v
+1. CORS Middleware → checks cross-origin
+       |
+2. Security Middleware → adds security headers
+       |
+3. WhiteNoise → serves static files if requested
+       |
+4. Session Middleware → loads session
+       |
+5. Common Middleware → URL normalization, trailing slash
+       |
+6. CSRF Middleware → verify POST forms
+       |
+7. Authentication Middleware → sets request.user
+       |
+8. Message Middleware → load flash messages
+       |
+9. Clickjacking Middleware → add X-Frame-Options
+       |
+       v
+     View
+       |
+       v
+Browser Response (passes **backwards** through middleware in reverse order)
+"""
+
 MIDDLEWARE = [
-    "corsheaders.middleware.CorsMiddleware",
-    "django.middleware.security.SecurityMiddleware",
-    "whitenoise.middleware.WhiteNoiseMiddleware",
-    "django.contrib.sessions.middleware.SessionMiddleware",
-    "django.middleware.common.CommonMiddleware",
-    "django.middleware.csrf.CsrfViewMiddleware",
-    "django.contrib.auth.middleware.AuthenticationMiddleware",
-    "django.contrib.messages.middleware.MessageMiddleware",
-    "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "corsheaders.middleware.CorsMiddleware", # Checks if the request from frontend (different domain/port) is allowed.
+    "django.middleware.security.SecurityMiddleware", # Adds security features:
+    "whitenoise.middleware.WhiteNoiseMiddleware", # Handles CSS, JS, images
+    "django.contrib.sessions.middleware.SessionMiddleware", # Loads session data from the session store (DB, cache, or cookie)
+    "django.middleware.common.CommonMiddleware", # URL normalization
+    "django.middleware.csrf.CsrfViewMiddleware", # Protects against Cross-Site Request Forgery (CSRF)
+    "django.contrib.auth.middleware.AuthenticationMiddleware",  # Reads the session to check who is logged in
+    "django.contrib.messages.middleware.MessageMiddleware", # Reads messages stored in session
+    "django.middleware.clickjacking.XFrameOptionsMiddleware", # Protects against clickjacking attacks
 ]
 
+
 ROOT_URLCONF = "localix.urls"
+
 
 TEMPLATES = [
     {
@@ -112,7 +151,7 @@ TEMPLATES = [
     }
 ]
 
-WSGI_APPLICATION = "localix.wsgi.application"
+WSGI_APPLICATION = "localix.wsgi.application" # Entry point for WSGI servers (like Gunicorn) in production.
 
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
@@ -155,6 +194,13 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
+"""
+Validates user passwords for security
+
+Checks similarity, minimum length, common passwords, numeric-only passwords.
+"""
+
+
 
 # Internationalization
 
@@ -183,23 +229,25 @@ MEDIA_ROOT = BASE_DIR / "media"
 # For now, media files will be stored locally (not recommended for production)
 # Consider using AWS S3, Cloudinary, or Railway Volumes for production media storage
 
-AUTH_USER_MODEL = "core.User"
+AUTH_USER_MODEL = "core.User" # Tells Django to use your custom User model (core.User) instead of default auth.User.
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
+
 REST_FRAMEWORK = {
-    "DEFAULT_AUTHENTICATION_CLASSES": (
+    "DEFAULT_AUTHENTICATION_CLASSES": ( # Sets JWT authentication as default
         "rest_framework_simplejwt.authentication.JWTAuthentication",
     ),
-    "DEFAULT_PERMISSION_CLASSES": (
+    "DEFAULT_PERMISSION_CLASSES": ( # Requires authentication for all views by default
         "rest_framework.permissions.IsAuthenticated",
     ),
-    "DEFAULT_FILTER_BACKENDS": (
+    "DEFAULT_FILTER_BACKENDS": ( # Enables filtering, searching, and ordering in APIs
         "django_filters.rest_framework.DjangoFilterBackend",
         "rest_framework.filters.SearchFilter",
         "rest_framework.filters.OrderingFilter",
     ),
 }
+
 
 from datetime import timedelta
 

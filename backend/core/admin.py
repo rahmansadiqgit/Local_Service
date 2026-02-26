@@ -3,7 +3,6 @@ from django.contrib.auth.admin import UserAdmin
 
 from .models import ERP, Notification, Post, Product, Rating, Skill, User
 
-
 @admin.register(User)
 class CustomUserAdmin(UserAdmin):
     fieldsets = UserAdmin.fieldsets + (
@@ -20,7 +19,7 @@ class CustomUserAdmin(UserAdmin):
                     "status",
                     "facebook_link",
                     "whatsapp_link",
-                    "role",
+                    # "role",  # removed
                 )
             },
         ),
@@ -39,14 +38,14 @@ class CustomUserAdmin(UserAdmin):
                     "status",
                     "facebook_link",
                     "whatsapp_link",
-                    "role",
+                    # "role",  # removed
                 )
             },
         ),
     )
-    list_display = ("username", "email", "name", "role", "is_staff", "is_active")
+    list_display = ("username", "email", "name", "is_staff", "is_active")
     search_fields = ("username", "email", "name", "phone")
-    list_filter = ("role", "is_staff", "is_active")
+    list_filter = ("is_staff", "is_active")
 
 
 @admin.register(Post)

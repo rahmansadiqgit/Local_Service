@@ -119,10 +119,7 @@ export default function Dashboard() {
             <p className="text-xs uppercase text-slate-500">Phone</p>
             <p className="font-semibold">{profile?.phone || '-'}</p>
           </div>
-          <div>
-            <p className="text-xs uppercase text-slate-500">Role</p>
-            <p className="font-semibold">{profile?.role || '-'}</p>
-          </div>
+          {/* Role removed */}
           <div>
             <p className="text-xs uppercase text-slate-500">Location</p>
             <p className="font-semibold">{profile?.location || '-'}</p>
