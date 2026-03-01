@@ -1,8 +1,31 @@
+
+/*
+Hook	Analogy	Purpose
+useState	Notebook	Store and update local data
+useEffect	Personal assistant	Perform side-effects after render
+createContext/useContext	Bulletin board	Share data globally across components
+useCallback	Shortcut	Keep function from being recreated
+useMemo	Smart calculator	Keep calculation result from recalculating
+*/
 import { useEffect, useMemo, useState } from 'react'
+/*
+Link is used to move between pages without reloading the browser.
+Instead of using <a> tag:
+
+useNavigate is a hook used to navigate programmatically (inside functions).
+
+const navigate = useNavigate()
+const handleLogin = () => {
+  navigate('/dashboard')
+}
+Now when handleLogin runs → user goes to /dashboard.
+*/
 import { Link, useNavigate } from 'react-router-dom'
 import api from '../api/client'
 import PostCard from '../components/PostCard'
 import useAuth from '../context/useAuth'
+
+
 
 export default function HomeFeed() {
   const navigate = useNavigate()
@@ -22,15 +45,14 @@ export default function HomeFeed() {
   })
   const [actionMessage, setActionMessage] = useState('')
 
-  useEffect(() => {
-    let active = true
-
+  useEffect(() => { // Side-effects = anything that interacts with outside world (API calls, timers, event listeners, DOM manipulation, etc.).
+    let active = true // unmount problem solver
     const load = async () => {
       try {
         const postRes = await api.get('/posts/')
         if (!active) return
         setPosts(postRes.data)
-        const [skillRes, productRes, ratingRes] = await Promise.all([
+        const [skillRes, productRes, ratingRes] = await Promise.all([ // Promise.all is used here to run all three API calls at the same time instead of waiting for each one sequentially.
           api.get('/skills/'),
           api.get('/products/'),
           api.get('/ratings/'),
@@ -48,7 +70,6 @@ export default function HomeFeed() {
     }
 
     load()
-
     const handlePostCreated = () => load()
     window.addEventListener('post-created', handlePostCreated)
 
