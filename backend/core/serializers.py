@@ -7,7 +7,7 @@ from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from .models import ERP, Notification, Post, Product, Rating, Skill
 
 User = get_user_model()
-
+# Hi
 
 class UserRegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True)

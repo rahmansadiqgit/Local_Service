@@ -144,16 +144,28 @@ class PasswordResetConfirmView(APIView):
         user.set_password(new_password)
         user.save()
         return Response({"detail": "Password reset successful."})
+"""
+ModelViewSet automatically gives you:
 
+list() → GET all
+retrieve() → GET single
+create() → POST
+update() → PUT
+partial_update() → PATCH
+destroy() → DELETE
+So you don’t write those manually.
+
+"""
 
 class PostViewSet(viewsets.ModelViewSet):
     serializer_class = PostSerializer
+    #Anyone can read (GET) Only logged-in users can POST, PUT, DELETE
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
     search_fields = ["post_name", "brand_company_name", "location"]
     ordering_fields = ["post_name", "location"]
 
     def get_queryset(self):
-        queryset = (
+        queryset = ( # A SQL query builder object
             Post.objects.all()
             .annotate(
                 avg_rating=Avg("ratings__rating_value"),
@@ -163,7 +175,7 @@ class PostViewSet(viewsets.ModelViewSet):
                 max_product_cost=Max("products__cost_per_unit"),
             )
             .annotate(
-                min_cost=Coalesce(
+                min_cost=Coalesce( # Coalesce means: Give me the first non-null value from these fields
                     "min_skill_cost",
                     "min_product_cost",
                     output_field=DecimalField(max_digits=12, decimal_places=2),
@@ -174,7 +186,8 @@ class PostViewSet(viewsets.ModelViewSet):
                     output_field=DecimalField(max_digits=12, decimal_places=2),
                 ),
             )
-        )
+        ) # And they are calculated at database level (not Python).
+        
         post_type = self.request.query_params.get("type")
         location = self.request.query_params.get("location")
         service_type = self.request.query_params.get("service_type")
@@ -204,17 +217,17 @@ class PostViewSet(viewsets.ModelViewSet):
 
 
 class SkillViewSet(viewsets.ModelViewSet):
-    queryset = Skill.objects.all()
+    queryset = Skill.objects.all() 
     serializer_class = SkillSerializer
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
     filterset_fields = ["post"]
 
 
 class ProductViewSet(viewsets.ModelViewSet):
-    queryset = Product.objects.all()
-    serializer_class = ProductSerializer
-    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
-    filterset_fields = ["post"]
+    queryset = Product.objects.all() # From GenericAPIView
+    serializer_class = ProductSerializer # From GenericAPIView
+    permission_classes = [permissions.IsAuthenticatedOrReadOnly] # APIView
+    filterset_fields = ["post"] # Used by DjangoFilterBackend
 
 
 class ERPViewSet(viewsets.ModelViewSet):

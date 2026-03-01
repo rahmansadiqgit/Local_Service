@@ -20,6 +20,13 @@ class User(AbstractUser):
     facebook_link = models.URLField(blank=True)
     whatsapp_link = models.URLField(blank=True)
 
+    class Role(models.TextChoices):
+        CUSTOMER = "Customer", "Customer"
+        SKILLED = "SkilledPerson", "Skilled Person"
+        BUSINESS = "Business", "Business"
+
+    role = models.CharField(max_length=20, choices=Role.choices, default=Role.CUSTOMER)
+
     def __str__(self) -> str:
         return self.username
 

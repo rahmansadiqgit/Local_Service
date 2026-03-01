@@ -20,6 +20,28 @@ from .views import (
     UserViewSet,
 )
 
+"""
+| Router                   | path()                 |
+| ------------------------ | ---------------------- |
+| Used for ViewSets        | Used for APIView       |
+| Auto generates CRUD URLs | Manual URL definition  |
+| Resource-based           | Action-based           |
+| REST style               | Custom logic endpoints |
+
+🧠 When To Use Router?
+Use router when:
+You are using ViewSet or ModelViewSet
+You want automatic CRUD endpoints
+Your API is resource-based (REST style)
+Like:
+posts
+users
+products
+ratings
+notifications
+All of these are resources.
+"""
+
 router = DefaultRouter()
 router.register(r"posts", PostViewSet, basename="post")
 router.register(r"skills", SkillViewSet, basename="skill")
@@ -29,6 +51,19 @@ router.register(r"ratings", RatingViewSet, basename="rating")
 router.register(r"notifications", NotificationViewSet, basename="notification")
 router.register(r"users", UserViewSet, basename="user")
 
+
+
+"""
+🟡 Why Not Use Router For Auth?
+
+Because auth endpoints are:
+
+Not resource-based
+
+Not CRUD
+
+They are action-based
+"""
 urlpatterns = [
     path("auth/register/", RegisterView.as_view(), name="register"),
     path("auth/login/", CustomTokenObtainPairView.as_view(), name="login"),
