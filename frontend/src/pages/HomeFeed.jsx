@@ -44,6 +44,7 @@ export default function HomeFeed() {
     rating: '',
   })
   const [actionMessage, setActionMessage] = useState('')
+  
 
   useEffect(() => { // Side-effects = anything that interacts with outside world (API calls, timers, event listeners, DOM manipulation, etc.).
     let active = true // unmount problem solver
@@ -57,9 +58,14 @@ export default function HomeFeed() {
           api.get('/products/'),
           api.get('/ratings/'),
         ])
+
+        /*
+         Yes, the async code runs successfully.
+         But updating state after unmount is logically wrong in React, so we stop it using
+        */
         if (!active) return
         setSkills(skillRes.data)
-        setProducts(productRes.data)
+        setProducts(productRes.data) // State variable
         setRatings(ratingRes.data)
 
       } catch (error) {
@@ -79,6 +85,8 @@ export default function HomeFeed() {
     }
   }, [isAuthenticated])
 
+
+
   const skillsByPost = useMemo(() => {
     return skills.reduce((acc, skill) => {
       acc[skill.post] = acc[skill.post] || []
@@ -86,6 +94,8 @@ export default function HomeFeed() {
       return acc
     }, {})
   }, [skills])
+
+
 
   const productsByPost = useMemo(() => {
     return products.reduce((acc, product) => {
@@ -118,6 +128,8 @@ export default function HomeFeed() {
     })
     return map
   }, [posts, productsByPost, skillsByPost])
+
+
 
   const filteredPosts = useMemo(() => {
     return posts.filter((post) => {
