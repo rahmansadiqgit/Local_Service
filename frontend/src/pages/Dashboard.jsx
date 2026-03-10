@@ -139,7 +139,7 @@ export default function Dashboard() {
               <p className="text-sm text-slate-500">No demand posts.</p>
             ) : (
               demandPosts.map((post) => (
-                <div key={post.id} className="rounded-2xl border border-slate-200 p-4 dark:border-slate-800">
+                  <div key={post.id} className="rounded-2xl border border-slate-200 p-4">
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="font-semibold">{post.post_name}</p>

@@ -3,7 +3,6 @@ import { Link, useNavigate } from 'react-router-dom'
 import api from '../api/client'
 import useAuth from '../context/useAuth'
 import NotificationPanel from './NotificationPanel'
-import ThemeToggle from './ThemeToggle'
 
 export default function Header() {
   const navigate = useNavigate()
@@ -30,9 +29,13 @@ export default function Header() {
 
   useEffect(() => {
     if (!isAuthenticated) return
-    loadNotifications()
+    // Defer loadNotifications to avoid synchronous setState in effect
+    const timeout = setTimeout(loadNotifications, 0)
     const interval = setInterval(loadNotifications, 20000)
-    return () => clearInterval(interval)
+    return () => {
+      clearTimeout(timeout)
+      clearInterval(interval)
+    }
   }, [isAuthenticated, loadNotifications])
 
   useEffect(() => {
@@ -68,7 +71,7 @@ export default function Header() {
   }
 
   return (
-    <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/90 backdrop-blur dark:border-slate-800 dark:bg-slate-950/90">
+    <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/90 backdrop-blur">
       <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4 sm:px-6 lg:px-8">
 
         {/* Left: Logo */}
@@ -76,7 +79,7 @@ export default function Header() {
           to="/"
           className="flex items-center gap-3 cursor-pointer"
         >
-          <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-brand-500 text-white font-bold">
+          <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#1877f2] text-white font-bold shadow-lg">
             LX
           </div>
         </Link>
@@ -84,8 +87,8 @@ export default function Header() {
         {/* Center: Localix + subtitle */}
         <div className="absolute left-1/2 transform -translate-x-1/2 text-center">
           <Link to="/" className="cursor-pointer">
-            <p className="text-2xl font-bold hover:text-brand-500">Localix</p>
-            <p className="text-sm md:text-base text-slate-500 dark:text-slate-400">
+            <p className="text-2xl font-bold text-[#1877f2] drop-shadow-sm">Localix</p>
+            <p className="text-sm md:text-base text-slate-500">
               Local services marketplace
             </p>
           </Link>
@@ -101,7 +104,7 @@ export default function Header() {
                 type="button"
                 onClick={() => setNotifOpen((prev) => !prev)}
                 aria-label="Notifications"
-                className="relative rounded-full border border-slate-200 bg-white p-2 text-slate-700 shadow-sm hover:border-brand-300 hover:text-brand-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+                className="relative rounded-full border border-slate-200 bg-white p-2 text-slate-700 shadow-sm hover:border-brand-300 hover:text-brand-600"
               >
                 <span className="sr-only">Notifications</span>
                 <svg
@@ -126,7 +129,7 @@ export default function Header() {
               </button>
 
               {notifOpen && (
-                <div className="absolute right-0 mt-3 w-80 rounded-2xl border border-slate-200 bg-white p-4 shadow-lg dark:border-slate-800 dark:bg-slate-950">
+                <div className="absolute right-0 mt-3 w-80 rounded-2xl border border-slate-200 bg-white p-4 shadow-lg">
                   <NotificationPanel
                     notifications={notifications}
                     compact
@@ -145,22 +148,22 @@ export default function Header() {
               <button
                 type="button"
                 onClick={() => setUserOpen((prev) => !prev)}
-                className="rounded-full border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:border-brand-300 hover:text-brand-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+                className="rounded-full border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:border-brand-300 hover:text-brand-600"
               >
                 {user?.name || user?.username || 'Account'}
               </button>
 
               {userOpen && (
-                <div className="absolute right-0 mt-3 w-48 rounded-2xl border border-slate-200 bg-white p-2 shadow-lg dark:border-slate-800 dark:bg-slate-950">
+                <div className="absolute right-0 mt-3 w-48 rounded-2xl border border-slate-200 bg-white p-2 shadow-lg">
                   <Link
                     to="/profile"
-                    className="block rounded-xl px-3 py-2 text-sm text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-900"
+                    className="block rounded-xl px-3 py-2 text-sm text-slate-700 hover:bg-slate-100"
                   >
                     Profile
                   </Link>
                   <Link
                     to="/dashboard"
-                    className="block rounded-xl px-3 py-2 text-sm text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-900"
+                    className="block rounded-xl px-3 py-2 text-sm text-slate-700 hover:bg-slate-100"
                   >
                     Dashboard
                   </Link>
@@ -178,7 +181,7 @@ export default function Header() {
             <>
               <Link
                 to="/login"
-                className="rounded-full border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:border-brand-300 hover:text-brand-600 dark:border-slate-700 dark:text-slate-200"
+                className="rounded-full border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:border-brand-300 hover:text-brand-600"
               >
                 Login
               </Link>
@@ -197,7 +200,7 @@ export default function Header() {
               <button
                 type="button"
                 onClick={() => setMenuOpen((prev) => !prev)}
-                className="rounded-full border border-slate-200 bg-white p-2 text-slate-700 shadow-sm hover:border-brand-300 hover:text-brand-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+                className="rounded-full border border-slate-200 bg-white p-2 text-slate-700 shadow-sm hover:border-brand-300 hover:text-brand-600"
               >
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
@@ -216,23 +219,20 @@ export default function Header() {
               </button>
 
               {menuOpen && (
-                <div className="absolute right-0 mt-3 w-56 rounded-2xl border border-slate-200 bg-white p-2 shadow-lg dark:border-slate-800 dark:bg-slate-950">
+                <div className="absolute right-0 mt-3 w-56 rounded-2xl border border-slate-200 bg-white p-2 shadow-lg">
                   <Link
                     to="/connections"
-                    className="block rounded-xl px-3 py-2 text-sm text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-900"
+                    className="block rounded-xl px-3 py-2 text-sm text-slate-700 hover:bg-slate-100"
                   >
                     Connections
                   </Link>
                   <Link
                     to="/erp"
-                    className="block rounded-xl px-3 py-2 text-sm text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-900"
+                    className="block rounded-xl px-3 py-2 text-sm text-slate-700 hover:bg-slate-100"
                   >
                     ERP
                   </Link>
-                  <div className="mt-1 px-2">
-                    {/* ThemeToggle now only toggles on user click */}
-                    <ThemeToggle />
-                  </div>
+                 
                 </div>
               )}
             </div>

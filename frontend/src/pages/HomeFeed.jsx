@@ -1,4 +1,3 @@
-
 /*
 Hook	Analogy	Purpose
 useState	Notebook	Store and update local data
@@ -64,7 +63,6 @@ export default function HomeFeed() {
          But updating state after unmount is logically wrong in React, so we stop it using
         */
         if (!active) return
-        setSkills(skillRes.data)
         setProducts(productRes.data) // State variable
         setRatings(ratingRes.data)
 
@@ -204,7 +202,7 @@ export default function HomeFeed() {
                 className={`rounded-full px-3 py-1 text-xs font-semibold transition ${
                   (filters.postType === '' && type === 'All') || filters.postType === type
                     ? 'bg-brand-500 text-white'
-                    : 'border border-slate-200 text-slate-600 dark:border-slate-700 dark:text-slate-300'
+                    : 'border border-slate-200 text-slate-600'
                 }`}
               >
                 {type}

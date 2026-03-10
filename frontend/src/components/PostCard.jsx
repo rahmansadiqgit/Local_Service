@@ -50,10 +50,10 @@ export default function PostCard({
   if (!post) return null
 
   return (
-    <div className="card space-y-6 transition-shadow hover:shadow-lg">
+    <div className="card space-y-6 transition-shadow hover:shadow-lg bg-white text-black">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="flex items-start gap-3">
-          <div className="h-10 w-10 overflow-hidden rounded-full border border-slate-200 bg-white dark:border-slate-700">
+          <div className="h-10 w-10 overflow-hidden rounded-full border border-slate-200 bg-white">
             <img
               src={profile?.photo || defaultAvatar}
               alt={profile?.name || 'Profile'}
@@ -61,7 +61,7 @@ export default function PostCard({
             />
           </div>
           <div>
-            <p className="font-semibold text-slate-900 dark:text-slate-100">
+            <p className="font-semibold text-black">
               {profile?.name || 'Localix Member'}
             </p>
             <p className="text-xs text-slate-500">
@@ -71,21 +71,21 @@ export default function PostCard({
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-200">
+          <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
             {post.post_type}
           </span>
-          <span className="rounded-full bg-brand-100 px-3 py-1 text-xs font-semibold text-brand-600 dark:bg-brand-500/20 dark:text-brand-200">
+          <span className="rounded-full bg-brand-100 px-3 py-1 text-xs font-semibold text-brand-600">
             {post.service_type}
           </span>
         </div>
       </div>
 
       <div className="space-y-2">
-        <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+        <h3 className="text-lg font-semibold text-black">
           {post.post_name}
         </h3>
         {post.description && (
-          <p className="text-sm text-slate-600 dark:text-slate-300">{post.description}</p>
+          <p className="text-sm" style={{ color: 'rgba(0,0,0,0.7)' }}>{post.description}</p>
         )}
       </div>
 
