@@ -87,14 +87,20 @@ export default function Dashboard() {
     }, {})
   }, [products])
 
+  // Filter posts belonging to the logged-in user using their profile ID
+  const userPosts = useMemo(
+    () => posts.filter((post) => post.owner_id === profile?.id),
+    [posts, profile],
+  )
+
   const demandPosts = useMemo(
-    () => posts.filter((post) => post.post_type === 'Demand'),
-    [posts],
+    () => userPosts.filter((post) => post.post_type === 'Demand'),
+    [userPosts],
   )
 
   const supplyPosts = useMemo(
-    () => posts.filter((post) => post.post_type === 'Supply'),
-    [posts],
+    () => userPosts.filter((post) => post.post_type === 'Supply'),
+    [userPosts],
   )
 
   return (
