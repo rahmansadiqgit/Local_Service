@@ -44,7 +44,7 @@ export default function Login() {
             value={form.email}
             onChange={handleChange}
             required
-            className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900"
+            className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
           />
         </div>
         <div>
@@ -55,13 +55,13 @@ export default function Login() {
             value={form.password}
             onChange={handleChange}
             required
-            className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900"
+            className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm "
           />
         </div>
         <button
           type="submit"
           disabled={loading}
-          className="w-full rounded-full bg-brand-500 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-brand-600 disabled:opacity-70"
+         className="px-6 py-2 rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-700 active:scale-95 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {loading ? 'Signing in...' : 'Login'}
         </button>

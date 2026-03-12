@@ -88,7 +88,7 @@ export default function CreatePost() {
               name="post_type"
               value={post.post_type}
               onChange={handleChange}
-              className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900"
+              className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
             >
               <option>Supply</option>
               <option>Demand</option>
@@ -100,7 +100,7 @@ export default function CreatePost() {
               name="service_type"
               value={post.service_type}
               onChange={handleChange}
-              className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900"
+              className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm "
             >
               <option>Skill</option>
               <option>Product</option>
@@ -113,7 +113,7 @@ export default function CreatePost() {
               value={post.post_name}
               onChange={handleChange}
               required
-              className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900"
+              className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm "
             />
           </div>
           <div className="lg:col-span-2">
@@ -123,7 +123,7 @@ export default function CreatePost() {
               value={post.description}
               onChange={handleChange}
               rows={3}
-              className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900"
+              className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm "
             />
           </div>
           <div>
@@ -132,7 +132,7 @@ export default function CreatePost() {
               name="brand_company_name"
               value={post.brand_company_name}
               onChange={handleChange}
-              className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900"
+              className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm "
             />
           </div>
           <div>
@@ -142,7 +142,7 @@ export default function CreatePost() {
               value={post.location}
               onChange={handleChange}
               required
-              className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900"
+              className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm "
             />
           </div>
           <div>
@@ -151,7 +151,7 @@ export default function CreatePost() {
               type="file"
               accept="image/*"
               onChange={(event) => setImageFile(event.target.files?.[0] || null)}
-              className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900"
+              className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm "
             />
           </div>
           <div>
@@ -160,7 +160,7 @@ export default function CreatePost() {
               name="website_link"
               value={post.website_link}
               onChange={handleChange}
-              className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900"
+              className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm "
             />
           </div>
         </div>
@@ -194,7 +194,7 @@ export default function CreatePost() {
                       ),
                     )
                   }
-                  className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900"
+                  className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm  "
                 />
                 <input
                   placeholder="Unit"
@@ -204,7 +204,7 @@ export default function CreatePost() {
                       prev.map((item, i) => (i === index ? { ...item, unit: event.target.value } : item)),
                     )
                   }
-                  className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900"
+                  className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm "
                 />
                 <input
                   type="number"
@@ -217,7 +217,7 @@ export default function CreatePost() {
                       ),
                     )
                   }
-                  className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900"
+                  className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm "
                 />
                 <div className="flex gap-2">
                   <input
@@ -233,12 +233,12 @@ export default function CreatePost() {
                         ),
                       )
                     }
-                    className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900"
+                    className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm "
                   />
                   <button
                     type="button"
                     onClick={() => setSkills((prev) => prev.filter((_, i) => i !== index))}
-                    className="mt-1 rounded-full border border-rose-200 px-3 py-2 text-xs font-semibold text-rose-600"
+                    className="px-6 py-2 rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-700 active:scale-95 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     Remove
                   </button>
@@ -249,7 +249,7 @@ export default function CreatePost() {
         ) : (
           <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <p className="text-sm font-semibold text-slate-600 dark:text-slate-300">Products</p>
+              <p className="text-sm font-semibold text-slate-600 ">Products</p>
               <button
                 type="button"
                 onClick={() =>
@@ -258,7 +258,7 @@ export default function CreatePost() {
                     { product_name: '', unit: '', cost_per_unit: '', available_units: 0 },
                   ])
                 }
-                className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600"
+                className="px-6 py-2 rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-700 active:scale-95 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Add Row
               </button>
@@ -275,7 +275,7 @@ export default function CreatePost() {
                       ),
                     )
                   }
-                  className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900"
+                  className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm "
                 />
                 <input
                   placeholder="Unit"
@@ -285,7 +285,7 @@ export default function CreatePost() {
                       prev.map((item, i) => (i === index ? { ...item, unit: event.target.value } : item)),
                     )
                   }
-                  className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900"
+                  className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm "
                 />
                 <input
                   type="number"
@@ -298,7 +298,7 @@ export default function CreatePost() {
                       ),
                     )
                   }
-                  className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900"
+                  className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm "
                 />
                 <div className="flex gap-2">
                   <input
@@ -312,7 +312,7 @@ export default function CreatePost() {
                         ),
                       )
                     }
-                    className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900"
+                    className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm "
                   />
                   <button
                     type="button"
@@ -331,7 +331,7 @@ export default function CreatePost() {
           <button
             type="submit"
             disabled={saving}
-            className="rounded-full bg-brand-500 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-brand-600 disabled:opacity-70"
+            className="px-6 py-2 rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-700 active:scale-95 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {saving ? 'Publishing...' : 'Publish Post'}
           </button>
