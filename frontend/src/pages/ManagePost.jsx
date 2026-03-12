@@ -158,7 +158,7 @@ export default function ManagePost() {
               value={workerPool}
               onChange={(event) => setWorkerPool(event.target.value)}
               placeholder="e.g. 12, 15, 18"
-              className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900"
+              className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm border-slate-200 bg-slate-100"
             />
           </div>
           {message && <p className="text-sm text-slate-500">{message}</p>}
@@ -237,7 +237,7 @@ export default function ManagePost() {
                                         [`skill-${skill.id}`]: event.target.value,
                                       }))
                                     }
-                                    className="w-20 rounded border border-slate-200 px-2 py-1 text-xs dark:border-slate-700 dark:bg-slate-900"
+                                    className="w-20 rounded border border-slate-200 px-2 py-1 text-xs border-slate-200 bg-slate-100"
                                   />
                                 </td>
                                 <td className="px-3 py-2">${total.toFixed(2)}</td>

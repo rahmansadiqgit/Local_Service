@@ -64,7 +64,7 @@ export default function ResetPasswordConfirm() {
             value={password}
             onChange={(event) => setPassword(event.target.value)}
             required
-            className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900"
+            className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm border-slate-200 bg-slate-100"
           />
         </div>
         <div>
@@ -76,7 +76,7 @@ export default function ResetPasswordConfirm() {
             value={confirmPassword}
             onChange={(event) => setConfirmPassword(event.target.value)}
             required
-            className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900"
+            className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm border-slate-200 bg-slate-100"
           />
         </div>
         <button

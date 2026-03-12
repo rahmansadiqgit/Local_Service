@@ -225,7 +225,7 @@ export default function HomeFeed() {
               value={filters.search}
               onChange={handleFilterChange}
               placeholder="Post name or brand"
-              className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900"
+              className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm "
             />
           </div>
           <div>
@@ -235,7 +235,7 @@ export default function HomeFeed() {
               value={filters.location}
               onChange={handleFilterChange}
               placeholder="City"
-              className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900"
+              className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm "
             />
           </div>
           <div>
@@ -245,7 +245,7 @@ export default function HomeFeed() {
               type="number"
               value={filters.minCost}
               onChange={handleFilterChange}
-              className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900"
+              className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm "
             />
           </div>
           <div>
@@ -255,7 +255,7 @@ export default function HomeFeed() {
               type="number"
               value={filters.maxCost}
               onChange={handleFilterChange}
-              className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900"
+              className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm "
             />
           </div>
           <div>
@@ -264,7 +264,7 @@ export default function HomeFeed() {
               name="rating"
               value={filters.rating}
               onChange={handleFilterChange}
-              className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900"
+              className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm "
             >
               <option value="">Any</option>
               <option value="5">5+</option>
