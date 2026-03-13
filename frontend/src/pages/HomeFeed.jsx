@@ -6,34 +6,24 @@ createContext/useContext	Bulletin board	Share data globally across components
 useCallback	Shortcut	Keep function from being recreated
 useMemo	Smart calculator	Keep calculation result from recalculating
 */
+
 import { useEffect, useMemo, useState } from 'react'
-/*
-Link is used to move between pages without reloading the browser.
-Instead of using <a> tag:
-
-useNavigate is a hook used to navigate programmatically (inside functions).
-
-const navigate = useNavigate()
-const handleLogin = () => {
-  navigate('/dashboard')
-}
-Now when handleLogin runs → user goes to /dashboard.
-*/
 import { Link, useNavigate } from 'react-router-dom'
 import api from '../api/client'
 import PostCard from '../components/PostCard'
 import useAuth from '../context/useAuth'
 
-
-
 export default function HomeFeed() {
+
   const navigate = useNavigate()
   const { isAuthenticated } = useAuth()
+
   const [posts, setPosts] = useState([])
   const [skills, setSkills] = useState([])
   const [products, setProducts] = useState([])
   const [ratings, setRatings] = useState([])
   const [loading, setLoading] = useState(true)
+
   const [filters, setFilters] = useState({
     search: '',
     postType: '',
@@ -42,28 +32,30 @@ export default function HomeFeed() {
     maxCost: '',
     rating: '',
   })
-  const [actionMessage, setActionMessage] = useState('')
-  
 
-  useEffect(() => { // Side-effects = anything that interacts with outside world (API calls, timers, event listeners, DOM manipulation, etc.).
-    let active = true // unmount problem solver
+  const [actionMessage, setActionMessage] = useState('')
+
+  useEffect(() => {
+
+    let active = true
+
     const load = async () => {
       try {
+
         const postRes = await api.get('/posts/')
         if (!active) return
         setPosts(postRes.data)
-        const [skillRes, productRes, ratingRes] = await Promise.all([ // Promise.all is used here to run all three API calls at the same time instead of waiting for each one sequentially.
+
+        const [skillRes, productRes, ratingRes] = await Promise.all([
           api.get('/skills/'),
           api.get('/products/'),
           api.get('/ratings/'),
         ])
 
-        /*
-         Yes, the async code runs successfully.
-         But updating state after unmount is logically wrong in React, so we stop it using
-        */
         if (!active) return
-        setProducts(productRes.data) // State variable
+
+        setSkills(skillRes.data)
+        setProducts(productRes.data)
         setRatings(ratingRes.data)
 
       } catch (error) {
@@ -74,6 +66,7 @@ export default function HomeFeed() {
     }
 
     load()
+
     const handlePostCreated = () => load()
     window.addEventListener('post-created', handlePostCreated)
 
@@ -81,6 +74,7 @@ export default function HomeFeed() {
       active = false
       window.removeEventListener('post-created', handlePostCreated)
     }
+
   }, [isAuthenticated])
 
 
@@ -103,6 +97,8 @@ export default function HomeFeed() {
     }, {})
   }, [products])
 
+
+
   const ratingByPost = useMemo(() => {
     return ratings.reduce((acc, rating) => {
       acc[rating.post] = rating
@@ -110,197 +106,301 @@ export default function HomeFeed() {
     }, {})
   }, [ratings])
 
+
+
   const costSummaryByPost = useMemo(() => {
+
     const map = {}
+
     posts.forEach((post) => {
-      const skillCosts = (skillsByPost[post.id] || []).map((item) =>
-        Number(item.cost_per_unit || 0),
+
+      const skillCosts = (skillsByPost[post.id] || []).map(item =>
+        Number(item.cost_per_unit || 0)
       )
-      const productCosts = (productsByPost[post.id] || []).map((item) =>
-        Number(item.cost_per_unit || 0),
+
+      const productCosts = (productsByPost[post.id] || []).map(item =>
+        Number(item.cost_per_unit || 0)
       )
+
       const allCosts = [...skillCosts, ...productCosts]
+
       const min = allCosts.length ? Math.min(...allCosts) : 0
       const max = allCosts.length ? Math.max(...allCosts) : 0
+
       map[post.id] = { min, max }
+
     })
+
     return map
+
   }, [posts, productsByPost, skillsByPost])
 
 
 
   const filteredPosts = useMemo(() => {
+
     return posts.filter((post) => {
+
       if (filters.postType && post.post_type !== filters.postType) return false
-      if (filters.location && !post.location?.toLowerCase().includes(filters.location.toLowerCase())) {
+
+      if (filters.location &&
+          !post.location?.toLowerCase().includes(filters.location.toLowerCase()))
         return false
-      }
+
       if (filters.search) {
+
         const query = filters.search.toLowerCase()
-        const haystack = `${post.post_name} ${post.brand_company_name || ''} ${post.description || ''}`.toLowerCase()
+
+        const haystack =
+          `${post.post_name} ${post.brand_company_name || ''} ${post.description || ''}`
+          .toLowerCase()
+
         if (!haystack.includes(query)) return false
       }
 
       const cost = costSummaryByPost[post.id] || { min: 0, max: 0 }
+
       if (filters.minCost && cost.min < Number(filters.minCost)) return false
       if (filters.maxCost && cost.max > Number(filters.maxCost)) return false
 
       const ratingValue = ratingByPost[post.id]?.rating_value || 0
+
       if (filters.rating && ratingValue < Number(filters.rating)) return false
+
       return true
     })
+
   }, [posts, filters, costSummaryByPost, ratingByPost])
 
+
+
   const handleFilterChange = (event) => {
+
     const { name, value } = event.target
-    setFilters((prev) => ({ ...prev, [name]: value }))
+
+    setFilters(prev => ({
+      ...prev,
+      [name]: value
+    }))
   }
 
+
+
   const handleAction = async (post, actionType) => {
+
     setActionMessage('')
+
     if (!isAuthenticated) {
       navigate('/login')
       return
     }
+
     try {
+
       const cost = costSummaryByPost[post.id] || { min: 0 }
+
       const erpPayload = {
         category: post.post_type === 'Supply' ? 'Provided' : 'Received',
         post: post.id,
         total_cost: cost.min,
       }
+
       await api.post('/erp/', erpPayload)
-      const title = actionType === 'apply' ? 'New Application' : 'New Booking'
-      const message = `${title} for ${post.post_name} (${post.post_type}).`
-      await api.post('/notifications/', {
-        title,
-        message,
-      })
-      setActionMessage('Action sent. ERP task created and notification triggered.')
+
+      const title = actionType === 'apply'
+        ? 'New Application'
+        : 'New Booking'
+
+      const message =
+        `${title} for ${post.post_name} (${post.post_type}).`
+
+      await api.post('/notifications/', { title, message })
+
+      setActionMessage(
+        'Action sent. ERP task created and notification triggered.'
+      )
+
     } catch (error) {
+
       console.error(error)
+
       setActionMessage('Action failed. Please try again.')
+
     }
+
   }
 
+
+
   return (
-    <div className="space-y-6">
-      <section className="space-y-6">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <h2 className="text-2xl font-semibold">Home Feed</h2>
-            <p className="text-sm text-slate-500">Browse the latest supply & demand posts.</p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {['All', 'Demand', 'Supply'].map((type) => (
-              <button
-                key={type}
-                type="button"
-                onClick={() =>
-                  setFilters((prev) => ({ ...prev, postType: type === 'All' ? '' : type }))
-                }
-                className={`rounded-full px-3 py-1 text-xs font-semibold transition ${
-                  (filters.postType === '' && type === 'All') || filters.postType === type
-                    ? 'bg-brand-500 text-white'
-                    : 'border border-slate-200 text-slate-600'
-                }`}
+    <div>
+      {/* MAIN FEED SECTION */}
+      <div className="max-w-7xl mx-auto px-4 py-16 space-y-6">
+
+        <section className="space-y-6">
+
+          <div className="flex flex-wrap items-center justify-between gap-4">
+
+            <div>
+              <h2 className="text-2xl font-semibold">Home Feed</h2>
+              <p className="text-sm text-slate-500">
+                Browse the latest supply & demand posts.
+              </p>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+
+              {['All','Demand','Supply'].map(type => (
+
+                <button
+                  key={type}
+                  type="button"
+                  onClick={() =>
+                    setFilters(prev => ({
+                      ...prev,
+                      postType: type === 'All' ? '' : type
+                    }))
+                  }
+                  className={`rounded-full px-3 py-1 text-xs font-semibold transition
+                  ${
+                    (filters.postType === '' && type === 'All') ||
+                    filters.postType === type
+                      ? 'bg-brand-500 text-white'
+                      : 'border border-slate-200 text-slate-600'
+                  }`}
+                >
+                  {type}
+                </button>
+
+              ))}
+
+              <Link
+                to="/create-post"
+                className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-700 hover:border-brand-400 hover:text-brand-600"
               >
-                {type}
-              </button>
-            ))}
-            <Link
-              to="/create-post"
-              className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-700 transition hover:border-brand-400 hover:text-brand-600 dark:border-slate-700 dark:text-slate-200"
-            >
-              New Post
-            </Link>
-          </div>
-        </div>
+                New Post
+              </Link>
 
-        <div className="card grid gap-4 lg:grid-cols-6">
-          <div className="lg:col-span-2">
-            <label className="text-xs font-semibold text-slate-500">Search</label>
-            <input
-              name="search"
-              value={filters.search}
-              onChange={handleFilterChange}
-              placeholder="Post name or brand"
-              className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm "
-            />
-          </div>
-          <div>
-            <label className="text-xs font-semibold text-slate-500">Location</label>
-            <input
-              name="location"
-              value={filters.location}
-              onChange={handleFilterChange}
-              placeholder="City"
-              className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm "
-            />
-          </div>
-          <div>
-            <label className="text-xs font-semibold text-slate-500">Min Cost</label>
-            <input
-              name="minCost"
-              type="number"
-              value={filters.minCost}
-              onChange={handleFilterChange}
-              className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm "
-            />
-          </div>
-          <div>
-            <label className="text-xs font-semibold text-slate-500">Max Cost</label>
-            <input
-              name="maxCost"
-              type="number"
-              value={filters.maxCost}
-              onChange={handleFilterChange}
-              className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm "
-            />
-          </div>
-          <div>
-            <label className="text-xs font-semibold text-slate-500">Rating</label>
-            <select
-              name="rating"
-              value={filters.rating}
-              onChange={handleFilterChange}
-              className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm "
-            >
-              <option value="">Any</option>
-              <option value="5">5+</option>
-              <option value="4">4+</option>
-              <option value="3">3+</option>
-              <option value="2">2+</option>
-              <option value="1">1+</option>
-            </select>
-          </div>
-        </div>
+            </div>
 
-        {actionMessage && <div className="card text-sm text-slate-500">{actionMessage}</div>}
+          </div>
 
-        {loading ? (
-          <div className="card">Loading feed...</div>
-        ) : filteredPosts.length === 0 ? (
-          <div className="card">No posts match your filters.</div>
-        ) : (
-          filteredPosts.map((post) => (
-            <PostCard
-              key={post.id}
-              post={post}
-              skills={skillsByPost[post.id] || []}
-              products={productsByPost[post.id] || []}
-              rating={ratingByPost[post.id]}
-              profile={{
-                name: post.owner_name || post.brand_company_name || 'Localix Member',
-                supplyStatus: post.owner_supply_status || '',
-                demandStatus: post.owner_demand_status || '',
-                photo: post.owner_profile_photo || '',
-              }}
-              onAction={handleAction}
-            />
-          ))
-        )}
-      </section>
+
+
+          <div className="card grid gap-4 lg:grid-cols-6">
+
+            <div className="lg:col-span-2">
+              <label className="text-xs font-semibold text-slate-500">Search</label>
+              <input
+                name="search"
+                value={filters.search}
+                onChange={handleFilterChange}
+                placeholder="Post name or brand"
+                className="mt-1 w-full rounded-xl border px-3 py-2 text-sm"
+              />
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold text-slate-500">Location</label>
+              <input
+                name="location"
+                value={filters.location}
+                onChange={handleFilterChange}
+                placeholder="City"
+                className="mt-1 w-full rounded-xl border px-3 py-2 text-sm"
+              />
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold text-slate-500">Min Cost</label>
+              <input
+                name="minCost"
+                type="number"
+                value={filters.minCost}
+                onChange={handleFilterChange}
+                className="mt-1 w-full rounded-xl border px-3 py-2 text-sm"
+              />
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold text-slate-500">Max Cost</label>
+              <input
+                name="maxCost"
+                type="number"
+                value={filters.maxCost}
+                onChange={handleFilterChange}
+                className="mt-1 w-full rounded-xl border px-3 py-2 text-sm"
+              />
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold text-slate-500">Rating</label>
+              <select
+                name="rating"
+                value={filters.rating}
+                onChange={handleFilterChange}
+                className="mt-1 w-full rounded-xl border px-3 py-2 text-sm"
+              >
+                <option value="">Any</option>
+                <option value="5">5+</option>
+                <option value="4">4+</option>
+                <option value="3">3+</option>
+                <option value="2">2+</option>
+                <option value="1">1+</option>
+              </select>
+            </div>
+
+          </div>
+
+
+
+          {actionMessage && (
+            <div className="card text-sm text-slate-500">
+              {actionMessage}
+            </div>
+          )}
+
+
+
+          {loading ? (
+
+            <div className="card">Loading feed...</div>
+
+          ) : filteredPosts.length === 0 ? (
+
+            <div className="card">No posts match your filters.</div>
+
+          ) : (
+
+            filteredPosts.map(post => (
+
+              <PostCard
+                key={post.id}
+                post={post}
+                skills={skillsByPost[post.id] || []}
+                products={productsByPost[post.id] || []}
+                rating={ratingByPost[post.id]}
+                profile={{
+                  name: post.owner_name ||
+                        post.brand_company_name ||
+                        'Localix Member',
+                  supplyStatus: post.owner_supply_status || '',
+                  demandStatus: post.owner_demand_status || '',
+                  photo: post.owner_profile_photo || '',
+                }}
+                onAction={handleAction}
+              />
+
+            ))
+
+          )}
+
+        </section>
+
+      </div>
+
     </div>
+
   )
+
 }
