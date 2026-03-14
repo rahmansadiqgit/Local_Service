@@ -98,9 +98,16 @@ export default function PostCard({
           <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
             {post.post_type}
           </span>
-          <span className="rounded-full bg-brand-100 px-3 py-1 text-xs font-semibold text-brand-600">
-            {post.service_type}
-          </span>
+          {skills && skills.length > 0 && (
+            <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-600">
+              Skills
+            </span>
+          )}
+          {products && products.length > 0 && (
+            <span className="rounded-full bg-green-100 px-3 py-1 text-xs font-semibold text-green-600">
+              Products
+            </span>
+          )}
         </div>
       </div>
 
@@ -148,14 +155,18 @@ export default function PostCard({
         <button
           type="button"
           onClick={() => onAction?.(post, post.post_type === 'Demand' ? 'apply' : 'book')}
+
           className="rounded-full bg-sky-600 px-5 py-2 text-sm font-semibold text-white shadow-md transition hover:bg-sky-700 focus:outline-none focus:ring-2 focus:ring-sky-300"
+
         >
           {post.post_type === 'Demand' ? 'Apply' : 'Book'}
         </button>
         <button
           type="button"
           onClick={() => setExpanded((prev) => !prev)}
+
           className="rounded-full border border-amber-300 bg-amber-50 px-5 py-2 text-sm font-semibold text-amber-700 shadow-sm transition hover:bg-amber-100 hover:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-200"
+
         >
           {expanded ? 'Hide Details' : 'View Details'}
         </button>

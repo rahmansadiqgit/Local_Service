@@ -50,9 +50,9 @@ class CustomUserAdmin(UserAdmin):
 
 @admin.register(Post)
 class PostAdmin(admin.ModelAdmin):
-    list_display = ("post_name", "post_type", "service_type", "location")
+    list_display = ("post_name", "post_type", "location")
     search_fields = ("post_name", "brand_company_name", "location")
-    list_filter = ("post_type", "service_type")
+    list_filter = ("post_type",)
 
 
 @admin.register(Skill)

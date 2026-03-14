@@ -36,11 +36,6 @@ class PostType(models.TextChoices):
     DEMAND = "Demand", "Demand"
 
 
-class ServiceType(models.TextChoices):
-    SKILL = "Skill", "Skill"
-    PRODUCT = "Product", "Product"
-
-
 class Post(models.Model):
     owner = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -54,7 +49,6 @@ class Post(models.Model):
     description = models.TextField(blank=True)
     brand_company_name = models.CharField(max_length=255, blank=True)
     location = models.CharField(max_length=255, blank=True)
-    service_type = models.CharField(max_length=10, choices=ServiceType.choices)
     image = models.ImageField(upload_to="post_images/", blank=True, null=True)
     website_link = models.URLField(blank=True)
 

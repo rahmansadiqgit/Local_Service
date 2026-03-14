@@ -190,7 +190,6 @@ class PostViewSet(viewsets.ModelViewSet):
         
         post_type = self.request.query_params.get("type")
         location = self.request.query_params.get("location")
-        service_type = self.request.query_params.get("service_type")
         min_cost = self.request.query_params.get("min_cost")
         max_cost = self.request.query_params.get("max_cost")
         rating = self.request.query_params.get("rating")
@@ -200,8 +199,6 @@ class PostViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(post_type=post_type)
         if location:
             queryset = queryset.filter(location__icontains=location)
-        if service_type:
-            queryset = queryset.filter(service_type=service_type)
         if min_cost:
             queryset = queryset.filter(min_cost__gte=min_cost)
         if max_cost:

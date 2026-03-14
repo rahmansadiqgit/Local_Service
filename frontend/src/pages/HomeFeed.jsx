@@ -6,7 +6,6 @@ createContext/useContext	Bulletin board	Share data globally across components
 useCallback	Shortcut	Keep function from being recreated
 useMemo	Smart calculator	Keep calculation result from recalculating
 */
-
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import api from '../api/client'
@@ -36,28 +35,22 @@ export default function HomeFeed() {
   const [actionMessage, setActionMessage] = useState('')
 
   useEffect(() => {
-
     let active = true
-
     const load = async () => {
       try {
 
         const postRes = await api.get('/posts/')
         if (!active) return
         setPosts(postRes.data)
-
         const [skillRes, productRes, ratingRes] = await Promise.all([
           api.get('/skills/'),
           api.get('/products/'),
           api.get('/ratings/'),
         ])
-
         if (!active) return
-
         setSkills(skillRes.data)
         setProducts(productRes.data)
         setRatings(ratingRes.data)
-
       } catch (error) {
         console.error(error)
       } finally {
@@ -77,8 +70,6 @@ export default function HomeFeed() {
 
   }, [isAuthenticated])
 
-
-
   const skillsByPost = useMemo(() => {
     return skills.reduce((acc, skill) => {
       acc[skill.post] = acc[skill.post] || []
@@ -86,8 +77,6 @@ export default function HomeFeed() {
       return acc
     }, {})
   }, [skills])
-
-
 
   const productsByPost = useMemo(() => {
     return products.reduce((acc, product) => {
@@ -113,12 +102,10 @@ export default function HomeFeed() {
     const map = {}
 
     posts.forEach((post) => {
-
-      const skillCosts = (skillsByPost[post.id] || []).map(item =>
+      const skillCosts = (skillsByPost[post.id] || []).map((item) =>
         Number(item.cost_per_unit || 0)
       )
-
-      const productCosts = (productsByPost[post.id] || []).map(item =>
+      const productCosts = (productsByPost[post.id] || []).map((item) =>
         Number(item.cost_per_unit || 0)
       )
 
@@ -135,18 +122,12 @@ export default function HomeFeed() {
 
   }, [posts, productsByPost, skillsByPost])
 
-
-
   const filteredPosts = useMemo(() => {
 
     return posts.filter((post) => {
 
       if (filters.postType && post.post_type !== filters.postType) return false
-
-      if (filters.location &&
-          !post.location?.toLowerCase().includes(filters.location.toLowerCase()))
-        return false
-
+      if (filters.location && !post.location?.toLowerCase().includes(filters.location.toLowerCase())) return false
       if (filters.search) {
 
         const query = filters.search.toLowerCase()
@@ -157,12 +138,10 @@ export default function HomeFeed() {
 
         if (!haystack.includes(query)) return false
       }
-
       const cost = costSummaryByPost[post.id] || { min: 0, max: 0 }
 
       if (filters.minCost && cost.min < Number(filters.minCost)) return false
       if (filters.maxCost && cost.max > Number(filters.maxCost)) return false
-
       const ratingValue = ratingByPost[post.id]?.rating_value || 0
 
       if (filters.rating && ratingValue < Number(filters.rating)) return false
@@ -206,20 +185,12 @@ export default function HomeFeed() {
       }
 
       await api.post('/erp/', erpPayload)
-
-      const title = actionType === 'apply'
-        ? 'New Application'
-        : 'New Booking'
-
-      const message =
-        `${title} for ${post.post_name} (${post.post_type}).`
-
-      await api.post('/notifications/', { title, message })
-
-      setActionMessage(
-        'Action sent. ERP task created and notification triggered.'
-      )
-
+      const title = actionType === 'apply' ? 'New Application' : 'New Booking'
+      await api.post('/notifications/', {
+        title,
+        message: `${title} for ${post.post_name} (${post.post_type}).`,
+      })
+      setActionMessage('Action sent. ERP task created and notification triggered.')
     } catch (error) {
 
       console.error(error)
@@ -233,56 +204,145 @@ export default function HomeFeed() {
 
 
   return (
-    <div>
-      {/* MAIN FEED SECTION */}
-      <div className="max-w-7xl mx-auto px-4 py-16 space-y-6">
+    <div className="space-y-6">
 
-        <section className="space-y-6">
+      {/* HERO BANNER SECTION */}
+      <section
+        className="relative rounded-3xl overflow-hidden shadow-lg"
+        style={{
+          backgroundImage: `url(/images/hero.png)`,
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+        }}
+      >
+        {/* Dimmed overlay for lower image opacity */}
+        <div className="absolute inset-0 bg-black/30"></div>
 
-          <div className="flex flex-wrap items-center justify-between gap-4">
+        {/* Gradient overlay */}
+        <div className="absolute inset-0 bg-gradient-to-r from-brand-600/20 via-brand-700/20 to-brand-800/20"></div>
 
-            <div>
-              <h2 className="text-2xl font-semibold">Home Feed</h2>
-              <p className="text-sm text-slate-500">
-                Browse the latest supply & demand posts.
+        {/* Background pattern overlay */}
+        <div className="absolute inset-0 opacity-20">
+          <svg className="w-full h-full" viewBox="0 0 1200 400" preserveAspectRatio="none">
+            <defs>
+              <pattern id="grid" width="100" height="100" patternUnits="userSpaceOnUse">
+                <path d="M 100 0 L 0 0 0 100" fill="none" stroke="white" strokeWidth="0.5" />
+              </pattern>
+            </defs>
+            <rect width="1200" height="400" fill="url(#grid)" opacity="0.1" />
+          </svg>
+        </div>
+
+        {/* Content */}
+        <div className="relative z-10 px-6 py-16 sm:px-10 lg:px-16">
+          <div className="max-w-4xl mx-auto text-center space-y-8">
+
+            {/* Heading */}
+            <div className="space-y-4">
+              <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-white drop-shadow-lg">
+                Find Trusted Local Services Near You
+              </h1>
+              <p className="text-lg sm:text-xl lg:text-2xl text-white font-bold drop-shadow-xl" style={{ textShadow: '0 2px 8px rgba(0, 0, 0, 0.8)' }}>
+                Connect with plumbers, electricians, cleaners, and other professionals in your area.
               </p>
             </div>
 
-            <div className="flex flex-wrap gap-2">
-
-              {['All','Demand','Supply'].map(type => (
-
-                <button
-                  key={type}
-                  type="button"
-                  onClick={() =>
-                    setFilters(prev => ({
-                      ...prev,
-                      postType: type === 'All' ? '' : type
-                    }))
-                  }
-                  className={`rounded-full px-3 py-1 text-xs font-semibold transition
-                  ${
-                    (filters.postType === '' && type === 'All') ||
-                    filters.postType === type
-                      ? 'bg-brand-500 text-white'
-                      : 'border border-slate-200 text-slate-600'
-                  }`}
-                >
-                  {type}
-                </button>
-
-              ))}
-
-              <Link
-                to="/create-post"
-                className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-700 hover:border-brand-400 hover:text-brand-600"
+            {/* Search Bar */}
+            <div className="flex flex-col sm:flex-row gap-3">
+              <input
+                type="text"
+                placeholder="Search services..."
+                value={filters.search}
+                onChange={handleFilterChange}
+                name="search"
+                className="flex-1 px-6 py-3 rounded-full text-lg bg-white text-slate-900 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-300 shadow-lg"
+              />
+              <button
+                type="button"
+                className="px-8 py-3 rounded-full font-bold text-lg bg-yellow-400 text-slate-900 hover:bg-yellow-500 transition shadow-lg whitespace-nowrap"
               >
-                New Post
-              </Link>
-
+                Search
+              </button>
             </div>
 
+            {/* Action Buttons */}
+            <div className="flex flex-col sm:flex-row gap-4 justify-center pt-4">
+              <button
+                type="button"
+                onClick={() => setFilters((prev) => ({ ...prev, postType: '' }))}
+                className="px-8 py-3 rounded-full font-bold text-lg bg-yellow-400 text-slate-900 hover:bg-yellow-500 transition shadow-lg"
+              >
+                Browse Services
+              </button>
+              <Link
+                to={isAuthenticated ? '/create-post' : '/register'}
+                className="px-8 py-3 rounded-full font-bold text-lg border-2 border-white text-white hover:bg-white/10 transition shadow-lg text-center"
+              >
+                Make Supply or Demand
+              </Link>
+            </div>
+
+          </div>
+        </div>
+      </section>
+
+      {/* HOME FEED SECTION */}
+      <section className="space-y-6">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <h5 className="text-2xl font-semibold">Browse the latest supply & demand posts</h5>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {['All', 'Demand', 'Supply'].map((type) => (
+              <button
+                key={type}
+                type="button"
+                onClick={() =>
+                  setFilters((prev) => ({ ...prev, postType: type === 'All' ? '' : type }))
+                }
+                className={`rounded-full px-3 py-1 text-xs font-semibold transition ${
+                  (filters.postType === '' && type === 'All') || filters.postType === type
+                    ? 'bg-brand-500 text-white'
+                    : 'border border-slate-200 text-slate-600'
+                }`}
+              >
+                {type}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="card grid gap-4 lg:grid-cols-6">
+
+          <div>
+            <label className="text-xs font-semibold text-slate-500">Location</label>
+            <input
+              name="location"
+              value={filters.location}
+              onChange={handleFilterChange}
+              placeholder="City"
+              className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm "
+            />
+          </div>
+          <div>
+            <label className="text-xs font-semibold text-slate-500">Min Cost</label>
+            <input
+              name="minCost"
+              type="number"
+              value={filters.minCost}
+              onChange={handleFilterChange}
+              className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm "
+            />
+          </div>
+          <div>
+            <label className="text-xs font-semibold text-slate-500">Max Cost</label>
+            <input
+              name="maxCost"
+              type="number"
+              value={filters.maxCost}
+              onChange={handleFilterChange}
+              className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm "
+            />
           </div>
 
 
@@ -402,5 +462,4 @@ export default function HomeFeed() {
     </div>
 
   )
-
 }

@@ -146,7 +146,6 @@ class PostSerializer(serializers.ModelSerializer):
             "description",
             "brand_company_name",
             "location",
-            "service_type",
             "image",
             "website_link",
         )
