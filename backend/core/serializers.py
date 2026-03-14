@@ -134,6 +134,7 @@ class PostSerializer(serializers.ModelSerializer):
         model = Post
         fields = (
             "id",
+            "created_at",
             "owner_id",
             "owner_name",
             "owner_status",
