@@ -14,6 +14,25 @@ export default function PostCard({
 }) {
   const [expanded, setExpanded] = useState(false)
 
+  const backendOrigin = useMemo(() => {
+    const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api'
+    return apiBase.replace(/\/api\/?$/, '')
+  }, [])
+
+  const toMediaUrl = (value) => {
+    if (!value) return ''
+    if (/^https?:\/\//i.test(value) || value.startsWith('data:') || value.startsWith('blob:')) {
+      return value
+    }
+    if (value.startsWith('/')) {
+      return `${backendOrigin}${value}`
+    }
+    return `${backendOrigin}/${value}`
+  }
+
+  const profilePhotoSrc = toMediaUrl(profile?.photo) || defaultAvatar
+  const postImageSrc = toMediaUrl(post?.image)
+
   const statusLabels = useMemo(() => {
     const raw = post?.post_type === 'Supply' ? profile?.supplyStatus : profile?.demandStatus
     const tokens = raw
@@ -50,12 +69,17 @@ export default function PostCard({
   if (!post) return null
 
   return (
-    <div className="card space-y-6 transition-shadow hover:shadow-lg bg-white text-black">
+    <div
+      className="card space-y-6 border border-slate-200 text-black shadow-sm transition-shadow hover:shadow-lg"
+      style={{
+        background: 'linear-gradient(135deg, #f8fafc 0%, #e3d5e5 45%, #8763ac 100%)',
+      }}
+    >
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="flex items-start gap-3">
           <div className="h-10 w-10 overflow-hidden rounded-full border border-slate-200 bg-white">
             <img
-              src={profile?.photo || defaultAvatar}
+              src={profilePhotoSrc}
               alt={profile?.name || 'Profile'}
               className="h-full w-full object-cover"
             />
@@ -87,12 +111,17 @@ export default function PostCard({
         </div>
       </div>
 
-      <div className="space-y-2">
+      <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
         <h3 className="text-lg font-semibold text-black">
           {post.post_name}
         </h3>
-        {post.description && (
-          <p className="text-sm" style={{ color: 'rgba(0,0,0,0.7)' }}>{post.description}</p>
+      </div>
+
+      <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+        {post.description ? (
+          <p className="text-sm leading-6 text-slate-700">{post.description}</p>
+        ) : (
+          <p className="text-sm text-slate-400">No description provided.</p>
         )}
       </div>
 
@@ -108,30 +137,36 @@ export default function PostCard({
         ))}
       </div>
 
-      {post.image ? (
-        <img
-          src={post.image}
-          alt={post.post_name}
-          className="h-44 w-full rounded-2xl object-cover"
-        />
+      {postImageSrc ? (
+        <div className="flex items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 p-4 shadow-inner">
+          <img
+            src={postImageSrc}
+            alt={post.post_name}
+            className="max-h-[320px] w-auto max-w-[92%] rounded-2xl object-contain"
+          />
+        </div>
       ) : (
-        <div className="flex h-44 items-center justify-center rounded-2xl bg-slate-100 text-sm text-slate-400 dark:bg-slate-800">
+        <div className="flex h-44 items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-slate-100 text-sm text-slate-400 dark:bg-slate-800">
           No image provided
         </div>
       )}
 
-      <div className="flex flex-wrap items-center gap-3">
+      <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
         <button
           type="button"
           onClick={() => onAction?.(post, post.post_type === 'Demand' ? 'apply' : 'book')}
-          className="rounded-full border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 hover:border-brand-300 hover:text-brand-500"
+
+          className="rounded-full bg-sky-600 px-5 py-2 text-sm font-semibold text-white shadow-md transition hover:bg-sky-700 focus:outline-none focus:ring-2 focus:ring-sky-300"
+
         >
           {post.post_type === 'Demand' ? 'Apply' : 'Book'}
         </button>
         <button
           type="button"
           onClick={() => setExpanded((prev) => !prev)}
-          className="rounded-full border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 hover:border-brand-300 hover:text-brand-500"
+
+          className="rounded-full border border-amber-300 bg-amber-50 px-5 py-2 text-sm font-semibold text-amber-700 shadow-sm transition hover:bg-amber-100 hover:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-200"
+
         >
           {expanded ? 'Hide Details' : 'View Details'}
         </button>
@@ -140,7 +175,7 @@ export default function PostCard({
             href={post.website_link}
             target="_blank"
             rel="noreferrer"
-            className="text-sm font-semibold text-brand-600 hover:text-brand-500"
+            className="rounded-full border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-100"
           >
             Visit website
           </a>
@@ -148,14 +183,14 @@ export default function PostCard({
       </div>
 
       {expanded && (
-        <div className="grid gap-4 lg:grid-cols-2">
-          <div>
+        <div className="grid gap-4 rounded-2xl border border-slate-200 bg-white px-4 py-4 lg:grid-cols-2">
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
             <p className="mb-2 text-sm font-semibold text-slate-600 dark:text-slate-300">
               Skills
             </p>
             <SkillTable skills={skills} />
           </div>
-          <div>
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
             <p className="mb-2 text-sm font-semibold text-slate-600 dark:text-slate-300">
               Products
             </p>

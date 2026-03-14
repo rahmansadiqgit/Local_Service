@@ -31,6 +31,7 @@ SECRET_KEY = os.getenv("SECRET_KEY", "django-insecure-gh-ih7!w5-l86(u6v7u67x+uf$
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.getenv("DEBUG", "False") == "True"
+SERVE_MEDIA = os.getenv("SERVE_MEDIA", "True") == "True"
 
 ALLOWED_HOSTS = [
     "localhost",
@@ -60,6 +61,10 @@ CORS_ALLOWED_ORIGINS = [
     "http://127.0.0.1:5175",
     "http://localhost:4173",
     "http://127.0.0.1:4173",
+]
+CORS_ALLOWED_ORIGIN_REGEXES = [
+    r"^http://localhost:\d+$",
+    r"^http://127\.0\.0\.1:\d+$",
 ]
 
 
