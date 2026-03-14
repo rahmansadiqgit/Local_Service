@@ -7,24 +7,10 @@ useCallback	Shortcut	Keep function from being recreated
 useMemo	Smart calculator	Keep calculation result from recalculating
 */
 import { useEffect, useMemo, useState } from 'react'
-/*
-Link is used to move between pages without reloading the browser.
-Instead of using <a> tag:
-
-useNavigate is a hook used to navigate programmatically (inside functions).
-
-const navigate = useNavigate()
-const handleLogin = () => {
-  navigate('/dashboard')
-}
-Now when handleLogin runs → user goes to /dashboard.
-*/
 import { Link, useNavigate } from 'react-router-dom'
 import api from '../api/client'
 import PostCard from '../components/PostCard'
 import useAuth from '../context/useAuth'
-
-
 
 export default function HomeFeed() {
   const navigate = useNavigate()
@@ -43,29 +29,23 @@ export default function HomeFeed() {
     rating: '',
   })
   const [actionMessage, setActionMessage] = useState('')
-  
 
-  useEffect(() => { // Side-effects = anything that interacts with outside world (API calls, timers, event listeners, DOM manipulation, etc.).
-    let active = true // unmount problem solver
+  useEffect(() => {
+    let active = true
     const load = async () => {
       try {
         const postRes = await api.get('/posts/')
         if (!active) return
         setPosts(postRes.data)
-        const [skillRes, productRes, ratingRes] = await Promise.all([ // Promise.all is used here to run all three API calls at the same time instead of waiting for each one sequentially.
+        const [skillRes, productRes, ratingRes] = await Promise.all([
           api.get('/skills/'),
           api.get('/products/'),
           api.get('/ratings/'),
         ])
-
-        /*
-         Yes, the async code runs successfully.
-         But updating state after unmount is logically wrong in React, so we stop it using
-        */
         if (!active) return
-        setProducts(productRes.data) // State variable
+        setSkills(skillRes.data)
+        setProducts(productRes.data)
         setRatings(ratingRes.data)
-
       } catch (error) {
         console.error(error)
       } finally {
@@ -83,8 +63,6 @@ export default function HomeFeed() {
     }
   }, [isAuthenticated])
 
-
-
   const skillsByPost = useMemo(() => {
     return skills.reduce((acc, skill) => {
       acc[skill.post] = acc[skill.post] || []
@@ -92,8 +70,6 @@ export default function HomeFeed() {
       return acc
     }, {})
   }, [skills])
-
-
 
   const productsByPost = useMemo(() => {
     return products.reduce((acc, product) => {
@@ -114,10 +90,10 @@ export default function HomeFeed() {
     const map = {}
     posts.forEach((post) => {
       const skillCosts = (skillsByPost[post.id] || []).map((item) =>
-        Number(item.cost_per_unit || 0),
+        Number(item.cost_per_unit || 0)
       )
       const productCosts = (productsByPost[post.id] || []).map((item) =>
-        Number(item.cost_per_unit || 0),
+        Number(item.cost_per_unit || 0)
       )
       const allCosts = [...skillCosts, ...productCosts]
       const min = allCosts.length ? Math.min(...allCosts) : 0
@@ -127,24 +103,18 @@ export default function HomeFeed() {
     return map
   }, [posts, productsByPost, skillsByPost])
 
-
-
   const filteredPosts = useMemo(() => {
     return posts.filter((post) => {
       if (filters.postType && post.post_type !== filters.postType) return false
-      if (filters.location && !post.location?.toLowerCase().includes(filters.location.toLowerCase())) {
-        return false
-      }
+      if (filters.location && !post.location?.toLowerCase().includes(filters.location.toLowerCase())) return false
       if (filters.search) {
         const query = filters.search.toLowerCase()
         const haystack = `${post.post_name} ${post.brand_company_name || ''} ${post.description || ''}`.toLowerCase()
         if (!haystack.includes(query)) return false
       }
-
       const cost = costSummaryByPost[post.id] || { min: 0, max: 0 }
       if (filters.minCost && cost.min < Number(filters.minCost)) return false
       if (filters.maxCost && cost.max > Number(filters.maxCost)) return false
-
       const ratingValue = ratingByPost[post.id]?.rating_value || 0
       if (filters.rating && ratingValue < Number(filters.rating)) return false
       return true
@@ -171,10 +141,9 @@ export default function HomeFeed() {
       }
       await api.post('/erp/', erpPayload)
       const title = actionType === 'apply' ? 'New Application' : 'New Booking'
-      const message = `${title} for ${post.post_name} (${post.post_type}).`
       await api.post('/notifications/', {
         title,
-        message,
+        message: `${title} for ${post.post_name} (${post.post_type}).`,
       })
       setActionMessage('Action sent. ERP task created and notification triggered.')
     } catch (error) {
@@ -185,8 +154,9 @@ export default function HomeFeed() {
 
   return (
     <div className="space-y-6">
+
       {/* HERO BANNER SECTION */}
-      <section 
+      <section
         className="relative rounded-3xl overflow-hidden shadow-lg"
         style={{
           backgroundImage: `url(/images/hero.png)`,
@@ -194,31 +164,34 @@ export default function HomeFeed() {
           backgroundPosition: 'center',
         }}
       >
-        {/* Overlay for better text readability */}
-        <div className="absolute inset-0 bg-gradient-to-r from-brand-600/30 via-brand-700/30 to-brand-800/30"></div>
-        
+        {/* Dimmed overlay for lower image opacity */}
+        <div className="absolute inset-0 bg-black/30"></div>
+
+        {/* Gradient overlay */}
+        <div className="absolute inset-0 bg-gradient-to-r from-brand-600/20 via-brand-700/20 to-brand-800/20"></div>
+
         {/* Background pattern overlay */}
         <div className="absolute inset-0 opacity-20">
           <svg className="w-full h-full" viewBox="0 0 1200 400" preserveAspectRatio="none">
             <defs>
               <pattern id="grid" width="100" height="100" patternUnits="userSpaceOnUse">
-                <path d="M 100 0 L 0 0 0 100" fill="none" stroke="white" strokeWidth="0.5"/>
+                <path d="M 100 0 L 0 0 0 100" fill="none" stroke="white" strokeWidth="0.5" />
               </pattern>
             </defs>
-            <rect width="1200" height="400" fill="url(#grid)" opacity="0.1"/>
+            <rect width="1200" height="400" fill="url(#grid)" opacity="0.1" />
           </svg>
         </div>
 
         {/* Content */}
         <div className="relative z-10 px-6 py-16 sm:px-10 lg:px-16">
           <div className="max-w-4xl mx-auto text-center space-y-8">
-            
+
             {/* Heading */}
             <div className="space-y-4">
               <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-white drop-shadow-lg">
                 Find Trusted Local Services Near You
               </h1>
-              <p className="text-lg sm:text-xl lg:text-2xl text-white font-bold drop-shadow-xl" style={{textShadow: '0 2px 8px rgba(0, 0, 0, 0.8)'}}>
+              <p className="text-lg sm:text-xl lg:text-2xl text-white font-bold drop-shadow-xl" style={{ textShadow: '0 2px 8px rgba(0, 0, 0, 0.8)' }}>
                 Connect with plumbers, electricians, cleaners, and other professionals in your area.
               </p>
             </div>
@@ -285,12 +258,11 @@ export default function HomeFeed() {
                 {type}
               </button>
             ))}
-            
           </div>
         </div>
 
         <div className="card grid gap-4 lg:grid-cols-6">
-        
+
           <div>
             <label className="text-xs font-semibold text-slate-500">Location</label>
             <input
