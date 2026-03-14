@@ -48,6 +48,7 @@ class Post(models.Model):
         null=True,
         related_name="posts",
     )
+    created_at = models.DateTimeField(auto_now_add=True)
     post_type = models.CharField(max_length=10, choices=PostType.choices)
     post_name = models.CharField(max_length=255)
     description = models.TextField(blank=True)
