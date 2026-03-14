@@ -62,6 +62,10 @@ CORS_ALLOWED_ORIGINS = [
     "http://localhost:4173",
     "http://127.0.0.1:4173",
 ]
+CORS_ALLOWED_ORIGIN_REGEXES = [
+    r"^http://localhost:\d+$",
+    r"^http://127\.0\.0\.1:\d+$",
+]
 
 
 # Add production frontend URL
