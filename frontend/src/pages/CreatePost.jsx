@@ -184,42 +184,53 @@ export default function CreatePost() {
             </div>
             {skills.map((row, index) => (
               <div key={`skill-${index}`} className="grid gap-4 lg:grid-cols-4">
-                <input
-                  placeholder="Skill Name"
-                  value={row.skill_name}
-                  onChange={(event) =>
-                    setSkills((prev) =>
-                      prev.map((item, i) =>
-                        i === index ? { ...item, skill_name: event.target.value } : item,
-                      ),
-                    )
-                  }
-                  className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm  "
-                />
-                <input
-                  placeholder="Unit"
-                  value={row.unit}
-                  onChange={(event) =>
-                    setSkills((prev) =>
-                      prev.map((item, i) => (i === index ? { ...item, unit: event.target.value } : item)),
-                    )
-                  }
-                  className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm "
-                />
-                <input
-                  type="number"
-                  placeholder="Cost per Unit"
-                  value={row.cost_per_unit}
-                  onChange={(event) =>
-                    setSkills((prev) =>
-                      prev.map((item, i) =>
-                        i === index ? { ...item, cost_per_unit: event.target.value } : item,
-                      ),
-                    )
-                  }
-                  className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm "
-                />
-                <div className="flex gap-2">
+                <div>
+                  <label className="text-xs font-semibold text-slate-500">Skill Name</label>
+                  <input
+                    placeholder="Skill Name"
+                    value={row.skill_name}
+                    onChange={(event) =>
+                      setSkills((prev) =>
+                        prev.map((item, i) =>
+                          i === index ? { ...item, skill_name: event.target.value } : item,
+                        ),
+                      )
+                    }
+                    className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm  "
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-slate-500">Cost Unit</label>
+                  <input
+                    placeholder="e.g., Hours, Days"
+                    value={row.unit}
+                    onChange={(event) =>
+                      setSkills((prev) =>
+                        prev.map((item, i) => (i === index ? { ...item, unit: event.target.value } : item)),
+                      )
+                    }
+                    className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm "
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-slate-500">Cost per Unit</label>
+                  <input
+                    type="number"
+                    placeholder="Cost per Unit"
+                    value={row.cost_per_unit}
+                    onChange={(event) =>
+                      setSkills((prev) =>
+                        prev.map((item, i) =>
+                          i === index ? { ...item, cost_per_unit: event.target.value } : item,
+                        ),
+                      )
+                    }
+                    className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm "
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-slate-500">Available/Required Workers</label>
+                  <div className="flex gap-2">
                   <input
                     type="number"
                     placeholder="Workers"
@@ -242,6 +253,7 @@ export default function CreatePost() {
                   >
                     Remove
                   </button>
+                  </div>
                 </div>
               </div>
             ))}
@@ -265,42 +277,53 @@ export default function CreatePost() {
             </div>
             {products.map((row, index) => (
               <div key={`product-${index}`} className="grid gap-4 lg:grid-cols-4">
-                <input
-                  placeholder="Product Name"
-                  value={row.product_name}
-                  onChange={(event) =>
-                    setProducts((prev) =>
-                      prev.map((item, i) =>
-                        i === index ? { ...item, product_name: event.target.value } : item,
-                      ),
-                    )
-                  }
-                  className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm "
-                />
-                <input
-                  placeholder="Unit"
-                  value={row.unit}
-                  onChange={(event) =>
-                    setProducts((prev) =>
-                      prev.map((item, i) => (i === index ? { ...item, unit: event.target.value } : item)),
-                    )
-                  }
-                  className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm "
-                />
-                <input
-                  type="number"
-                  placeholder="Cost per Unit"
-                  value={row.cost_per_unit}
-                  onChange={(event) =>
-                    setProducts((prev) =>
-                      prev.map((item, i) =>
-                        i === index ? { ...item, cost_per_unit: event.target.value } : item,
-                      ),
-                    )
-                  }
-                  className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm "
-                />
-                <div className="flex gap-2">
+                <div>
+                  <label className="text-xs font-semibold text-slate-500">Product Name</label>
+                  <input
+                    placeholder="Product Name"
+                    value={row.product_name}
+                    onChange={(event) =>
+                      setProducts((prev) =>
+                        prev.map((item, i) =>
+                          i === index ? { ...item, product_name: event.target.value } : item,
+                        ),
+                      )
+                    }
+                    className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm "
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-slate-500">Cost Unit</label>
+                  <input
+                    placeholder="e.g., Kg, Liters"
+                    value={row.unit}
+                    onChange={(event) =>
+                      setProducts((prev) =>
+                        prev.map((item, i) => (i === index ? { ...item, unit: event.target.value } : item)),
+                      )
+                    }
+                    className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm "
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-slate-500">Cost per Unit</label>
+                  <input
+                    type="number"
+                    placeholder="Cost per Unit"
+                    value={row.cost_per_unit}
+                    onChange={(event) =>
+                      setProducts((prev) =>
+                        prev.map((item, i) =>
+                          i === index ? { ...item, cost_per_unit: event.target.value } : item,
+                        ),
+                      )
+                    }
+                    className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm "
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-slate-500">Available/Rquire Units</label>
+                  <div className="flex gap-2">
                   <input
                     type="number"
                     placeholder="Units"
@@ -321,6 +344,7 @@ export default function CreatePost() {
                   >
                     Remove
                   </button>
+                  </div>
                 </div>
               </div>
             ))}
