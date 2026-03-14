@@ -32,6 +32,7 @@ export default function HomeFeed() {
     maxCost: '',
     rating: '',
   })
+<<<<<<< Updated upstream
 
   const [actionMessage, setActionMessage] = useState('')
 
@@ -39,25 +40,37 @@ export default function HomeFeed() {
 
     let active = true
 
+=======
+  const [actionMessage, setActionMessage] = useState('')
+
+  useEffect(() => {
+    let active = true
+>>>>>>> Stashed changes
     const load = async () => {
       try {
 
         const postRes = await api.get('/posts/')
         if (!active) return
         setPosts(postRes.data)
+<<<<<<< Updated upstream
 
+=======
+>>>>>>> Stashed changes
         const [skillRes, productRes, ratingRes] = await Promise.all([
           api.get('/skills/'),
           api.get('/products/'),
           api.get('/ratings/'),
         ])
+<<<<<<< Updated upstream
 
         if (!active) return
 
+=======
+        if (!active) return
+>>>>>>> Stashed changes
         setSkills(skillRes.data)
         setProducts(productRes.data)
         setRatings(ratingRes.data)
-
       } catch (error) {
         console.error(error)
       } finally {
@@ -77,8 +90,6 @@ export default function HomeFeed() {
 
   }, [isAuthenticated])
 
-
-
   const skillsByPost = useMemo(() => {
     return skills.reduce((acc, skill) => {
       acc[skill.post] = acc[skill.post] || []
@@ -86,8 +97,6 @@ export default function HomeFeed() {
       return acc
     }, {})
   }, [skills])
-
-
 
   const productsByPost = useMemo(() => {
     return products.reduce((acc, product) => {
@@ -113,12 +122,19 @@ export default function HomeFeed() {
     const map = {}
 
     posts.forEach((post) => {
+<<<<<<< Updated upstream
 
       const skillCosts = (skillsByPost[post.id] || []).map(item =>
         Number(item.cost_per_unit || 0)
       )
 
       const productCosts = (productsByPost[post.id] || []).map(item =>
+=======
+      const skillCosts = (skillsByPost[post.id] || []).map((item) =>
+        Number(item.cost_per_unit || 0)
+      )
+      const productCosts = (productsByPost[post.id] || []).map((item) =>
+>>>>>>> Stashed changes
         Number(item.cost_per_unit || 0)
       )
 
@@ -135,18 +151,20 @@ export default function HomeFeed() {
 
   }, [posts, productsByPost, skillsByPost])
 
-
-
   const filteredPosts = useMemo(() => {
 
     return posts.filter((post) => {
 
       if (filters.postType && post.post_type !== filters.postType) return false
+<<<<<<< Updated upstream
 
       if (filters.location &&
           !post.location?.toLowerCase().includes(filters.location.toLowerCase()))
         return false
 
+=======
+      if (filters.location && !post.location?.toLowerCase().includes(filters.location.toLowerCase())) return false
+>>>>>>> Stashed changes
       if (filters.search) {
 
         const query = filters.search.toLowerCase()
@@ -157,12 +175,10 @@ export default function HomeFeed() {
 
         if (!haystack.includes(query)) return false
       }
-
       const cost = costSummaryByPost[post.id] || { min: 0, max: 0 }
 
       if (filters.minCost && cost.min < Number(filters.minCost)) return false
       if (filters.maxCost && cost.max > Number(filters.maxCost)) return false
-
       const ratingValue = ratingByPost[post.id]?.rating_value || 0
 
       if (filters.rating && ratingValue < Number(filters.rating)) return false
@@ -206,6 +222,7 @@ export default function HomeFeed() {
       }
 
       await api.post('/erp/', erpPayload)
+<<<<<<< Updated upstream
 
       const title = actionType === 'apply'
         ? 'New Application'
@@ -220,6 +237,14 @@ export default function HomeFeed() {
         'Action sent. ERP task created and notification triggered.'
       )
 
+=======
+      const title = actionType === 'apply' ? 'New Application' : 'New Booking'
+      await api.post('/notifications/', {
+        title,
+        message: `${title} for ${post.post_name} (${post.post_type}).`,
+      })
+      setActionMessage('Action sent. ERP task created and notification triggered.')
+>>>>>>> Stashed changes
     } catch (error) {
 
       console.error(error)
@@ -230,6 +255,7 @@ export default function HomeFeed() {
 
   }
 
+<<<<<<< Updated upstream
 
 
   return (
@@ -245,6 +271,49 @@ export default function HomeFeed() {
               <h2 className="text-2xl font-semibold">Home Feed</h2>
               <p className="text-sm text-slate-500">
                 Browse the latest supply & demand posts.
+=======
+  return (
+    <div className="space-y-6">
+
+      {/* HERO BANNER SECTION */}
+      <section
+        className="relative rounded-3xl overflow-hidden shadow-lg"
+        style={{
+          backgroundImage: `url(/images/hero.png)`,
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+        }}
+      >
+        {/* Dimmed overlay for lower image opacity */}
+        <div className="absolute inset-0 bg-black/30"></div>
+
+        {/* Gradient overlay */}
+        <div className="absolute inset-0 bg-gradient-to-r from-brand-600/20 via-brand-700/20 to-brand-800/20"></div>
+
+        {/* Background pattern overlay */}
+        <div className="absolute inset-0 opacity-20">
+          <svg className="w-full h-full" viewBox="0 0 1200 400" preserveAspectRatio="none">
+            <defs>
+              <pattern id="grid" width="100" height="100" patternUnits="userSpaceOnUse">
+                <path d="M 100 0 L 0 0 0 100" fill="none" stroke="white" strokeWidth="0.5" />
+              </pattern>
+            </defs>
+            <rect width="1200" height="400" fill="url(#grid)" opacity="0.1" />
+          </svg>
+        </div>
+
+        {/* Content */}
+        <div className="relative z-10 px-6 py-16 sm:px-10 lg:px-16">
+          <div className="max-w-4xl mx-auto text-center space-y-8">
+
+            {/* Heading */}
+            <div className="space-y-4">
+              <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-white drop-shadow-lg">
+                Find Trusted Local Services Near You
+              </h1>
+              <p className="text-lg sm:text-xl lg:text-2xl text-white font-bold drop-shadow-xl" style={{ textShadow: '0 2px 8px rgba(0, 0, 0, 0.8)' }}>
+                Connect with plumbers, electricians, cleaners, and other professionals in your area.
+>>>>>>> Stashed changes
               </p>
             </div>
 
@@ -352,7 +421,85 @@ export default function HomeFeed() {
 
           </div>
 
+<<<<<<< Updated upstream
 
+=======
+      {/* HOME FEED SECTION */}
+      <section className="space-y-6">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <h5 className="text-2xl font-semibold">Browse the latest supply & demand posts</h5>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {['All', 'Demand', 'Supply'].map((type) => (
+              <button
+                key={type}
+                type="button"
+                onClick={() =>
+                  setFilters((prev) => ({ ...prev, postType: type === 'All' ? '' : type }))
+                }
+                className={`rounded-full px-3 py-1 text-xs font-semibold transition ${
+                  (filters.postType === '' && type === 'All') || filters.postType === type
+                    ? 'bg-brand-500 text-white'
+                    : 'border border-slate-200 text-slate-600'
+                }`}
+              >
+                {type}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="card grid gap-4 lg:grid-cols-6">
+
+          <div>
+            <label className="text-xs font-semibold text-slate-500">Location</label>
+            <input
+              name="location"
+              value={filters.location}
+              onChange={handleFilterChange}
+              placeholder="City"
+              className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm "
+            />
+          </div>
+          <div>
+            <label className="text-xs font-semibold text-slate-500">Min Cost</label>
+            <input
+              name="minCost"
+              type="number"
+              value={filters.minCost}
+              onChange={handleFilterChange}
+              className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm "
+            />
+          </div>
+          <div>
+            <label className="text-xs font-semibold text-slate-500">Max Cost</label>
+            <input
+              name="maxCost"
+              type="number"
+              value={filters.maxCost}
+              onChange={handleFilterChange}
+              className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm "
+            />
+          </div>
+          <div>
+            <label className="text-xs font-semibold text-slate-500">Rating</label>
+            <select
+              name="rating"
+              value={filters.rating}
+              onChange={handleFilterChange}
+              className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm "
+            >
+              <option value="">Any</option>
+              <option value="5">5+</option>
+              <option value="4">4+</option>
+              <option value="3">3+</option>
+              <option value="2">2+</option>
+              <option value="1">1+</option>
+            </select>
+          </div>
+        </div>
+>>>>>>> Stashed changes
 
           {actionMessage && (
             <div className="card text-sm text-slate-500">
@@ -402,5 +549,9 @@ export default function HomeFeed() {
     </div>
 
   )
+<<<<<<< Updated upstream
 
 }
+=======
+}
+>>>>>>> Stashed changes

@@ -1,43 +1,63 @@
 @import "tailwindcss";
 
 :root {
-  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI',
-    sans-serif;
+  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
 
+/* Base body background and text color */
 body {
-  background-color: #f8fafc;
+  background: linear-gradient(to bottom, #FFF8DC, #F5DEB3); /* ghee-like yellow gradient */
   color: #0f172a;
+  min-height: 100vh;
 }
 
+/* Dark mode body */
 .dark body {
-  background-color: #020617;
+  background: linear-gradient(to bottom, #2D2D2D, #4A4A4A); /* darker gradient for dark mode */
   color: #f8fafc;
 }
 
+/* Form elements */
 input,
 select,
 textarea {
   color: #0f172a;
+  background-color: #fefeff;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.5rem;
+  padding: 0.5rem;
 }
 
 .dark input,
 .dark select,
 .dark textarea {
   color: #f8fafc;
+  background-color: #1e293b;
+  border: 1px solid #334155;
 }
 
+/* Card style */
 .card {
   border-radius: 1rem;
   border: 1px solid #e2e8f0;
   background-color: #ffffff;
   padding: 1.5rem;
   color: #0f172a;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08);
 }
 
 .dark .card {
-  border-color: #1e293b;
+  border-color: #334155;
   background-color: #0f172a;
   color: #f8fafc;
+}
+
+/* Links */
+a {
+  color: #4f46e5; /* Indigo accent for links */
+  transition: color 0.3s;
+}
+
+a:hover {
+  color: #ec4899; /* Pink hover to match gradient */
 }

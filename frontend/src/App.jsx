@@ -21,6 +21,7 @@ export default function App() {
   const isHomePage = location.pathname === "/"
 
   return (
+<<<<<<< Updated upstream
     <div className="min-h-screen bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100">
 
       {/* Show HeroHeader only for home page, Header for others */}
@@ -30,6 +31,12 @@ export default function App() {
 
         {isHomePage ? (
 
+=======
+    <div className="min-h-screen text-slate-900 dark:bg-slate-950 dark:text-slate-100">
+      <Header />
+      <div className="mx-auto flex w-full max-w-screen-2xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-10">
+        <main className="space-y-6">
+>>>>>>> Stashed changes
           <Routes>
             <Route path="/" element={<HomeFeed />} />
             <Route path="/login" element={<Login />} />
