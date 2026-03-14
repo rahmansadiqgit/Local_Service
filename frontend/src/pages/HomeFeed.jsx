@@ -185,6 +185,74 @@ export default function HomeFeed() {
 
   return (
     <div className="space-y-6">
+      {/* HERO BANNER SECTION */}
+      <section className="relative bg-gradient-to-r from-brand-600 via-brand-700 to-brand-800 rounded-3xl overflow-hidden shadow-lg">
+        {/* Background pattern overlay */}
+        <div className="absolute inset-0 opacity-20">
+          <svg className="w-full h-full" viewBox="0 0 1200 400" preserveAspectRatio="none">
+            <defs>
+              <pattern id="grid" width="100" height="100" patternUnits="userSpaceOnUse">
+                <path d="M 100 0 L 0 0 0 100" fill="none" stroke="white" strokeWidth="0.5"/>
+              </pattern>
+            </defs>
+            <rect width="1200" height="400" fill="url(#grid)" opacity="0.1"/>
+          </svg>
+        </div>
+
+        {/* Content */}
+        <div className="relative z-10 px-6 py-16 sm:px-10 lg:px-16">
+          <div className="max-w-4xl mx-auto text-center space-y-8">
+            
+            {/* Heading */}
+            <div className="space-y-4">
+              <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-white drop-shadow-lg">
+                Find Trusted Local Services Near You
+              </h1>
+              <p className="text-lg sm:text-xl lg:text-2xl text-slate-100">
+                Connect with plumbers, electricians, cleaners, and other professionals in your area.
+              </p>
+            </div>
+
+            {/* Search Bar */}
+            <div className="flex flex-col sm:flex-row gap-3">
+              <input
+                type="text"
+                placeholder="Search services..."
+                value={filters.search}
+                onChange={handleFilterChange}
+                name="search"
+                className="flex-1 px-6 py-3 rounded-full text-lg bg-white text-slate-900 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-300 shadow-lg"
+              />
+              <button
+                type="button"
+                className="px-8 py-3 rounded-full font-bold text-lg bg-yellow-400 text-slate-900 hover:bg-yellow-500 transition shadow-lg whitespace-nowrap"
+              >
+                Search
+              </button>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex flex-col sm:flex-row gap-4 justify-center pt-4">
+              <button
+                type="button"
+                onClick={() => setFilters((prev) => ({ ...prev, postType: '' }))}
+                className="px-8 py-3 rounded-full font-bold text-lg bg-yellow-400 text-slate-900 hover:bg-yellow-500 transition shadow-lg"
+              >
+                Browse Services
+              </button>
+              <Link
+                to={isAuthenticated ? '/create-post' : '/register'}
+                className="px-8 py-3 rounded-full font-bold text-lg border-2 border-white text-white hover:bg-white/10 transition shadow-lg text-center"
+              >
+                Make Supply or Demand
+              </Link>
+            </div>
+
+          </div>
+        </div>
+      </section>
+
+      {/* HOME FEED SECTION */}
       <section className="space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
@@ -208,26 +276,12 @@ export default function HomeFeed() {
                 {type}
               </button>
             ))}
-            <Link
-              to="/create-post"
-              className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-700 transition hover:border-brand-400 hover:text-brand-600 dark:border-slate-700 dark:text-slate-200"
-            >
-              New Post
-            </Link>
+            
           </div>
         </div>
 
         <div className="card grid gap-4 lg:grid-cols-6">
-          <div className="lg:col-span-2">
-            <label className="text-xs font-semibold text-slate-500">Search</label>
-            <input
-              name="search"
-              value={filters.search}
-              onChange={handleFilterChange}
-              placeholder="Post name or brand"
-              className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm "
-            />
-          </div>
+        
           <div>
             <label className="text-xs font-semibold text-slate-500">Location</label>
             <input
