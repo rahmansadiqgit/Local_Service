@@ -8,7 +8,6 @@ const initialPost = {
   description: '',
   brand_company_name: '',
   location: '',
-  service_type: 'Skill',
   website_link: '',
 }
 
@@ -47,17 +46,13 @@ export default function CreatePost() {
         headers: { 'Content-Type': 'multipart/form-data' },
       })
 
-      if (post.service_type === 'Skill') {
-        const validSkills = skills.filter((item) => item.skill_name)
-        await Promise.all(
-          validSkills.map((item) => api.post('/skills/', { ...item, post: createdPost.id })),
-        )
-      } else {
-        const validProducts = products.filter((item) => item.product_name)
-        await Promise.all(
-          validProducts.map((item) => api.post('/products/', { ...item, post: createdPost.id })),
-        )
-      }
+      const validSkills = skills.filter((item) => item.skill_name)
+      const validProducts = products.filter((item) => item.product_name)
+
+      await Promise.all([
+        ...validSkills.map((item) => api.post('/skills/', { ...item, post: createdPost.id })),
+        ...validProducts.map((item) => api.post('/products/', { ...item, post: createdPost.id })),
+      ])
       setMessage('Post created successfully.')
       setPost(initialPost)
       setImageFile(null)
@@ -92,18 +87,6 @@ export default function CreatePost() {
             >
               <option>Supply</option>
               <option>Demand</option>
-            </select>
-          </div>
-          <div>
-            <label className="text-xs font-semibold text-slate-500">Service Type</label>
-            <select
-              name="service_type"
-              value={post.service_type}
-              onChange={handleChange}
-              className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm "
-            >
-              <option>Skill</option>
-              <option>Product</option>
             </select>
           </div>
           <div>
@@ -165,72 +148,71 @@ export default function CreatePost() {
           </div>
         </div>
 
-        {post.service_type === 'Skill' ? (
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <p className="text-sm font-semibold text-slate-600 dark:text-slate-300">Skills</p>
-              <button
-                type="button"
-                onClick={() =>
-                  setSkills((prev) => [
-                    ...prev,
-                    { skill_name: '', unit: '', cost_per_unit: '', available_workers: 0 },
-                  ])
-                }
-                className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600"
-              >
-                Add Row
-              </button>
-            </div>
-            {skills.map((row, index) => (
-              <div key={`skill-${index}`} className="grid gap-4 lg:grid-cols-4">
-                <div>
-                  <label className="text-xs font-semibold text-slate-500">Skill Name</label>
-                  <input
-                    placeholder="Skill Name"
-                    value={row.skill_name}
-                    onChange={(event) =>
-                      setSkills((prev) =>
-                        prev.map((item, i) =>
-                          i === index ? { ...item, skill_name: event.target.value } : item,
-                        ),
-                      )
-                    }
-                    className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm  "
-                  />
-                </div>
-                <div>
-                  <label className="text-xs font-semibold text-slate-500">Cost Unit</label>
-                  <input
-                    placeholder="e.g., Hours, Days"
-                    value={row.unit}
-                    onChange={(event) =>
-                      setSkills((prev) =>
-                        prev.map((item, i) => (i === index ? { ...item, unit: event.target.value } : item)),
-                      )
-                    }
-                    className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm "
-                  />
-                </div>
-                <div>
-                  <label className="text-xs font-semibold text-slate-500">Cost per Unit</label>
-                  <input
-                    type="number"
-                    placeholder="Cost per Unit"
-                    value={row.cost_per_unit}
-                    onChange={(event) =>
-                      setSkills((prev) =>
-                        prev.map((item, i) =>
-                          i === index ? { ...item, cost_per_unit: event.target.value } : item,
-                        ),
-                      )
-                    }
-                    className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm "
-                  />
-                </div>
-                <div>
-                  <label className="text-xs font-semibold text-slate-500">Available/Required Workers</label>
-                  <div className="flex gap-2">
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-semibold text-slate-600 dark:text-slate-300">Skills</p>
+            <button
+              type="button"
+              onClick={() =>
+                setSkills((prev) => [
+                  ...prev,
+                  { skill_name: '', unit: '', cost_per_unit: '', available_workers: 0 },
+                ])
+              }
+              className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600"
+            >
+              Add Row
+            </button>
+          </div>
+          {skills.map((row, index) => (
+            <div key={`skill-${index}`} className="grid gap-4 lg:grid-cols-4">
+              <div>
+                <label className="text-xs font-semibold text-slate-500">Skill Name</label>
+                <input
+                  placeholder="Skill Name"
+                  value={row.skill_name}
+                  onChange={(event) =>
+                    setSkills((prev) =>
+                      prev.map((item, i) =>
+                        i === index ? { ...item, skill_name: event.target.value } : item,
+                      ),
+                    )
+                  }
+                  className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm  "
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-slate-500">Unit</label>
+                <input
+                  placeholder="e.g., Hours, Days"
+                  value={row.unit}
+                  onChange={(event) =>
+                    setSkills((prev) =>
+                      prev.map((item, i) => (i === index ? { ...item, unit: event.target.value } : item)),
+                    )
+                  }
+                  className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm "
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-slate-500">Cost per Unit</label>
+                <input
+                  type="number"
+                  placeholder="Cost per Unit"
+                  value={row.cost_per_unit}
+                  onChange={(event) =>
+                    setSkills((prev) =>
+                      prev.map((item, i) =>
+                        i === index ? { ...item, cost_per_unit: event.target.value } : item,
+                      ),
+                    )
+                  }
+                  className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm "
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-slate-500">Available Workers</label>
+                <div className="flex gap-2">
                   <input
                     type="number"
                     placeholder="Workers"
@@ -253,77 +235,77 @@ export default function CreatePost() {
                   >
                     Remove
                   </button>
-                  </div>
                 </div>
               </div>
-            ))}
-          </div>
-        ) : (
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <p className="text-sm font-semibold text-slate-600 ">Products</p>
-              <button
-                type="button"
-                onClick={() =>
-                  setProducts((prev) => [
-                    ...prev,
-                    { product_name: '', unit: '', cost_per_unit: '', available_units: 0 },
-                  ])
-                }
-                className="px-6 py-2 rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-700 active:scale-95 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Add Row
-              </button>
             </div>
-            {products.map((row, index) => (
-              <div key={`product-${index}`} className="grid gap-4 lg:grid-cols-4">
-                <div>
-                  <label className="text-xs font-semibold text-slate-500">Product Name</label>
-                  <input
-                    placeholder="Product Name"
-                    value={row.product_name}
-                    onChange={(event) =>
-                      setProducts((prev) =>
-                        prev.map((item, i) =>
-                          i === index ? { ...item, product_name: event.target.value } : item,
-                        ),
-                      )
-                    }
-                    className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm "
-                  />
-                </div>
-                <div>
-                  <label className="text-xs font-semibold text-slate-500">Cost Unit</label>
-                  <input
-                    placeholder="e.g., Kg, Liters"
-                    value={row.unit}
-                    onChange={(event) =>
-                      setProducts((prev) =>
-                        prev.map((item, i) => (i === index ? { ...item, unit: event.target.value } : item)),
-                      )
-                    }
-                    className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm "
-                  />
-                </div>
-                <div>
-                  <label className="text-xs font-semibold text-slate-500">Cost per Unit</label>
-                  <input
-                    type="number"
-                    placeholder="Cost per Unit"
-                    value={row.cost_per_unit}
-                    onChange={(event) =>
-                      setProducts((prev) =>
-                        prev.map((item, i) =>
-                          i === index ? { ...item, cost_per_unit: event.target.value } : item,
-                        ),
-                      )
-                    }
-                    className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm "
-                  />
-                </div>
-                <div>
-                  <label className="text-xs font-semibold text-slate-500">Available/Rquire Units</label>
-                  <div className="flex gap-2">
+          ))}
+        </div>
+
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-semibold text-slate-600 ">Products</p>
+            <button
+              type="button"
+              onClick={() =>
+                setProducts((prev) => [
+                  ...prev,
+                  { product_name: '', unit: '', cost_per_unit: '', available_units: 0 },
+                ])
+              }
+              className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600"
+            >
+              Add Row
+            </button>
+          </div>
+          {products.map((row, index) => (
+            <div key={`product-${index}`} className="grid gap-4 lg:grid-cols-4">
+              <div>
+                <label className="text-xs font-semibold text-slate-500">Product Name</label>
+                <input
+                  placeholder="Product Name"
+                  value={row.product_name}
+                  onChange={(event) =>
+                    setProducts((prev) =>
+                      prev.map((item, i) =>
+                        i === index ? { ...item, product_name: event.target.value } : item,
+                      ),
+                    )
+                  }
+                  className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm "
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-slate-500">Unit</label>
+                <input
+                  placeholder="e.g., Kg, Liters"
+                  value={row.unit}
+                  onChange={(event) =>
+                    setProducts((prev) =>
+                      prev.map((item, i) => (i === index ? { ...item, unit: event.target.value } : item)),
+                    )
+                  }
+                  className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm "
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-slate-500">Cost per Unit</label>
+                <input
+                  type="number"
+                  placeholder="Cost per Unit"
+                  value={row.cost_per_unit}
+                  onChange={(event) =>
+                    setProducts((prev) =>
+                      prev.map((item, i) =>
+                        i === index ? { ...item, cost_per_unit: event.target.value } : item,
+                      ),
+                    )
+                  }
+                  className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm "
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-slate-500">Available Units</label>
+                <div className="flex gap-2">
                   <input
                     type="number"
                     placeholder="Units"
@@ -340,16 +322,15 @@ export default function CreatePost() {
                   <button
                     type="button"
                     onClick={() => setProducts((prev) => prev.filter((_, i) => i !== index))}
-                    className="mt-1 rounded-full border border-rose-200 px-3 py-2 text-xs font-semibold text-rose-600"
+                    className="px-6 py-2 rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-700 active:scale-95 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     Remove
                   </button>
-                  </div>
                 </div>
               </div>
-            ))}
-          </div>
-        )}
+            </div>
+          ))}
+        </div>
 
         <div className="flex items-center gap-3">
           <button
