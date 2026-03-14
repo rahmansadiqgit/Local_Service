@@ -117,14 +117,14 @@ export default function PostCard({
         <button
           type="button"
           onClick={() => onAction?.(post, post.post_type === 'Demand' ? 'apply' : 'book')}
-          className="rounded-full bg-brand-500 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-brand-600"
+          className="rounded-full border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 hover:border-brand-300 hover:text-brand-500"
         >
           {post.post_type === 'Demand' ? 'Apply' : 'Book'}
         </button>
         <button
           type="button"
           onClick={() => setExpanded((prev) => !prev)}
-          className="rounded-full border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 hover:border-brand-300 hover:text-brand-500 dark:border-slate-700 dark:text-slate-300"
+          className="rounded-full border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 hover:border-brand-300 hover:text-brand-500"
         >
           {expanded ? 'Hide Details' : 'View Details'}
         </button>

@@ -43,7 +43,7 @@ export default function SkillTable({ skills = [] }) {
               </button>
             </th>
             <th className="px-4 py-2">
-              <button type="button" onClick={() => handleSort('unit')}>Unit</button>
+              <button type="button" onClick={() => handleSort('unit')}>Cost Unit</button>
             </th>
             <th className="px-4 py-2">
               <button type="button" onClick={() => handleSort('cost_per_unit')}>
