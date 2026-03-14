@@ -312,9 +312,9 @@ export default function HomeFeed() {
           </div>
         </div>
 
-        <div className="card grid gap-4 lg:grid-cols-6">
+       
 
-          <div>
+          <div className="lg:col-span-2">
             <label className="text-xs font-semibold text-slate-500">Location</label>
             <input
               name="location"
@@ -458,8 +458,5 @@ export default function HomeFeed() {
         </section>
 
       </div>
-
-    </div>
-
   )
 }
