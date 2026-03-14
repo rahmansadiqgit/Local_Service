@@ -74,9 +74,16 @@ export default function PostCard({
           <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
             {post.post_type}
           </span>
-          <span className="rounded-full bg-brand-100 px-3 py-1 text-xs font-semibold text-brand-600">
-            {post.service_type}
-          </span>
+          {skills && skills.length > 0 && (
+            <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-600">
+              Skills
+            </span>
+          )}
+          {products && products.length > 0 && (
+            <span className="rounded-full bg-green-100 px-3 py-1 text-xs font-semibold text-green-600">
+              Products
+            </span>
+          )}
         </div>
       </div>
 
