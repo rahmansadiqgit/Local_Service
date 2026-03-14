@@ -196,28 +196,34 @@ export default function HomeFeed() {
 
       {/* HOME FEED SECTION */}
       <section className="space-y-6">
-        {/* Filters */}
-        <div className="bg-white rounded-2xl p-6 shadow-sm">
-          <h2 className="text-xl font-semibold mb-4">Filter Services</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            <input
-              type="text"
-              name="search"
-              placeholder="Search posts..."
-              value={filters.search}
-              onChange={handleFilterChange}
-              className="px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500"
-            />
-            <select
-              name="postType"
-              value={filters.postType}
-              onChange={handleFilterChange}
-              className="px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500"
-            >
-              <option value="">All Types</option>
-              <option value="Supply">Supply</option>
-              <option value="Demand">Demand</option>
-            </select>
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <h5 className="text-2xl font-semibold">Browse the latest supply & demand posts</h5>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {['All', 'Demand', 'Supply'].map((type) => (
+              <button
+                key={type}
+                type="button"
+                onClick={() =>
+                  setFilters((prev) => ({ ...prev, postType: type === 'All' ? '' : type }))
+                }
+                className={`rounded-full px-3 py-1 text-xs font-semibold transition ${
+                  (filters.postType === '' && type === 'All') || filters.postType === type
+                    ? 'bg-brand-500 text-white'
+                    : 'border border-slate-200 text-slate-600'
+                }`}
+              >
+                {type}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="card grid gap-4 lg:grid-cols-6">
+
+          <div>
+            <label className="text-xs font-semibold text-slate-500">Location</label>
             <input
               type="text"
               name="location"
@@ -280,10 +286,16 @@ export default function HomeFeed() {
                 rating={ratingByPost[post.id]}
                 onAction={handleAction}
               />
-            ))}
-          </div>
-        )}
-      </section>
+
+            ))
+
+          )}
+
+        </section>
+
+      </div>
+
     </div>
+
   )
 }

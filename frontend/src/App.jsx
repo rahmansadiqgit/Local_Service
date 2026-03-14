@@ -39,6 +39,10 @@ export default function App() {
           </Routes>
         </main>
       </div>
+<<<<<<< HEAD
+=======
+
+>>>>>>> 62444553748aefc9aee16ccb57f39d34a66292d2
       <Footer />
     </div>
   )
