@@ -14,6 +14,25 @@ export default function PostCard({
 }) {
   const [expanded, setExpanded] = useState(false)
 
+  const backendOrigin = useMemo(() => {
+    const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api'
+    return apiBase.replace(/\/api\/?$/, '')
+  }, [])
+
+  const toMediaUrl = (value) => {
+    if (!value) return ''
+    if (/^https?:\/\//i.test(value) || value.startsWith('data:') || value.startsWith('blob:')) {
+      return value
+    }
+    if (value.startsWith('/')) {
+      return `${backendOrigin}${value}`
+    }
+    return `${backendOrigin}/${value}`
+  }
+
+  const profilePhotoSrc = toMediaUrl(profile?.photo) || defaultAvatar
+  const postImageSrc = toMediaUrl(post?.image)
+
   const statusLabels = useMemo(() => {
     const raw = post?.post_type === 'Supply' ? profile?.supplyStatus : profile?.demandStatus
     const tokens = raw
@@ -55,7 +74,7 @@ export default function PostCard({
         <div className="flex items-start gap-3">
           <div className="h-10 w-10 overflow-hidden rounded-full border border-slate-200 bg-white">
             <img
-              src={profile?.photo || defaultAvatar}
+              src={profilePhotoSrc}
               alt={profile?.name || 'Profile'}
               className="h-full w-full object-cover"
             />
@@ -101,9 +120,9 @@ export default function PostCard({
         ))}
       </div>
 
-      {post.image ? (
+      {postImageSrc ? (
         <img
-          src={post.image}
+          src={postImageSrc}
           alt={post.post_name}
           className="h-44 w-full rounded-2xl object-cover"
         />
