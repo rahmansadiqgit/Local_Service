@@ -13,13 +13,16 @@ import PostCard from '../components/PostCard'
 import useAuth from '../context/useAuth'
 
 export default function HomeFeed() {
+
   const navigate = useNavigate()
   const { isAuthenticated } = useAuth()
+
   const [posts, setPosts] = useState([])
   const [skills, setSkills] = useState([])
   const [products, setProducts] = useState([])
   const [ratings, setRatings] = useState([])
   const [loading, setLoading] = useState(true)
+
   const [filters, setFilters] = useState({
     search: '',
     postType: '',
@@ -28,12 +31,14 @@ export default function HomeFeed() {
     maxCost: '',
     rating: '',
   })
+
   const [actionMessage, setActionMessage] = useState('')
 
   useEffect(() => {
     let active = true
     const load = async () => {
       try {
+
         const postRes = await api.get('/posts/')
         if (!active) return
         setPosts(postRes.data)
@@ -54,6 +59,7 @@ export default function HomeFeed() {
     }
 
     load()
+
     const handlePostCreated = () => load()
     window.addEventListener('post-created', handlePostCreated)
 
@@ -61,6 +67,7 @@ export default function HomeFeed() {
       active = false
       window.removeEventListener('post-created', handlePostCreated)
     }
+
   }, [isAuthenticated])
 
   const skillsByPost = useMemo(() => {
@@ -79,6 +86,8 @@ export default function HomeFeed() {
     }, {})
   }, [products])
 
+
+
   const ratingByPost = useMemo(() => {
     return ratings.reduce((acc, rating) => {
       acc[rating.post] = rating
@@ -86,8 +95,12 @@ export default function HomeFeed() {
     }, {})
   }, [ratings])
 
+
+
   const costSummaryByPost = useMemo(() => {
+
     const map = {}
+
     posts.forEach((post) => {
       const skillCosts = (skillsByPost[post.id] || []).map((item) =>
         Number(item.cost_per_unit || 0)
@@ -95,50 +108,82 @@ export default function HomeFeed() {
       const productCosts = (productsByPost[post.id] || []).map((item) =>
         Number(item.cost_per_unit || 0)
       )
+
       const allCosts = [...skillCosts, ...productCosts]
+
       const min = allCosts.length ? Math.min(...allCosts) : 0
       const max = allCosts.length ? Math.max(...allCosts) : 0
+
       map[post.id] = { min, max }
+
     })
+
     return map
+
   }, [posts, productsByPost, skillsByPost])
 
   const filteredPosts = useMemo(() => {
+
     return posts.filter((post) => {
+
       if (filters.postType && post.post_type !== filters.postType) return false
       if (filters.location && !post.location?.toLowerCase().includes(filters.location.toLowerCase())) return false
       if (filters.search) {
+
         const query = filters.search.toLowerCase()
-        const haystack = `${post.post_name} ${post.brand_company_name || ''} ${post.description || ''}`.toLowerCase()
+
+        const haystack =
+          `${post.post_name} ${post.brand_company_name || ''} ${post.description || ''}`
+          .toLowerCase()
+
         if (!haystack.includes(query)) return false
       }
       const cost = costSummaryByPost[post.id] || { min: 0, max: 0 }
+
       if (filters.minCost && cost.min < Number(filters.minCost)) return false
       if (filters.maxCost && cost.max > Number(filters.maxCost)) return false
       const ratingValue = ratingByPost[post.id]?.rating_value || 0
+
       if (filters.rating && ratingValue < Number(filters.rating)) return false
+
       return true
     })
+
   }, [posts, filters, costSummaryByPost, ratingByPost])
 
+
+
   const handleFilterChange = (event) => {
+
     const { name, value } = event.target
-    setFilters((prev) => ({ ...prev, [name]: value }))
+
+    setFilters(prev => ({
+      ...prev,
+      [name]: value
+    }))
   }
 
+
+
   const handleAction = async (post, actionType) => {
+
     setActionMessage('')
+
     if (!isAuthenticated) {
       navigate('/login')
       return
     }
+
     try {
+
       const cost = costSummaryByPost[post.id] || { min: 0 }
+
       const erpPayload = {
         category: post.post_type === 'Supply' ? 'Provided' : 'Received',
         post: post.id,
         total_cost: cost.min,
       }
+
       await api.post('/erp/', erpPayload)
       const title = actionType === 'apply' ? 'New Application' : 'New Booking'
       await api.post('/notifications/', {
@@ -147,10 +192,16 @@ export default function HomeFeed() {
       })
       setActionMessage('Action sent. ERP task created and notification triggered.')
     } catch (error) {
+
       console.error(error)
+
       setActionMessage('Action failed. Please try again.')
+
     }
+
   }
+
+
 
   return (
     <div className="space-y-6">
@@ -293,49 +344,122 @@ export default function HomeFeed() {
               className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm "
             />
           </div>
-          <div>
-            <label className="text-xs font-semibold text-slate-500">Rating</label>
-            <select
-              name="rating"
-              value={filters.rating}
-              onChange={handleFilterChange}
-              className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm "
-            >
-              <option value="">Any</option>
-              <option value="5">5+</option>
-              <option value="4">4+</option>
-              <option value="3">3+</option>
-              <option value="2">2+</option>
-              <option value="1">1+</option>
-            </select>
+
+
+
+          <div className="card grid gap-4 lg:grid-cols-6">
+
+            <div className="lg:col-span-2">
+              <label className="text-xs font-semibold text-slate-500">Search</label>
+              <input
+                name="search"
+                value={filters.search}
+                onChange={handleFilterChange}
+                placeholder="Post name or brand"
+                className="mt-1 w-full rounded-xl border px-3 py-2 text-sm"
+              />
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold text-slate-500">Location</label>
+              <input
+                name="location"
+                value={filters.location}
+                onChange={handleFilterChange}
+                placeholder="City"
+                className="mt-1 w-full rounded-xl border px-3 py-2 text-sm"
+              />
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold text-slate-500">Min Cost</label>
+              <input
+                name="minCost"
+                type="number"
+                value={filters.minCost}
+                onChange={handleFilterChange}
+                className="mt-1 w-full rounded-xl border px-3 py-2 text-sm"
+              />
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold text-slate-500">Max Cost</label>
+              <input
+                name="maxCost"
+                type="number"
+                value={filters.maxCost}
+                onChange={handleFilterChange}
+                className="mt-1 w-full rounded-xl border px-3 py-2 text-sm"
+              />
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold text-slate-500">Rating</label>
+              <select
+                name="rating"
+                value={filters.rating}
+                onChange={handleFilterChange}
+                className="mt-1 w-full rounded-xl border px-3 py-2 text-sm"
+              >
+                <option value="">Any</option>
+                <option value="5">5+</option>
+                <option value="4">4+</option>
+                <option value="3">3+</option>
+                <option value="2">2+</option>
+                <option value="1">1+</option>
+              </select>
+            </div>
+
           </div>
-        </div>
 
-        {actionMessage && <div className="card text-sm text-slate-500">{actionMessage}</div>}
 
-        {loading ? (
-          <div className="card">Loading feed...</div>
-        ) : filteredPosts.length === 0 ? (
-          <div className="card">No posts match your filters.</div>
-        ) : (
-          filteredPosts.map((post) => (
-            <PostCard
-              key={post.id}
-              post={post}
-              skills={skillsByPost[post.id] || []}
-              products={productsByPost[post.id] || []}
-              rating={ratingByPost[post.id]}
-              profile={{
-                name: post.owner_name || post.brand_company_name || 'Localix Member',
-                supplyStatus: post.owner_supply_status || '',
-                demandStatus: post.owner_demand_status || '',
-                photo: post.owner_profile_photo || '',
-              }}
-              onAction={handleAction}
-            />
-          ))
-        )}
-      </section>
+
+          {actionMessage && (
+            <div className="card text-sm text-slate-500">
+              {actionMessage}
+            </div>
+          )}
+
+
+
+          {loading ? (
+
+            <div className="card">Loading feed...</div>
+
+          ) : filteredPosts.length === 0 ? (
+
+            <div className="card">No posts match your filters.</div>
+
+          ) : (
+
+            filteredPosts.map(post => (
+
+              <PostCard
+                key={post.id}
+                post={post}
+                skills={skillsByPost[post.id] || []}
+                products={productsByPost[post.id] || []}
+                rating={ratingByPost[post.id]}
+                profile={{
+                  name: post.owner_name ||
+                        post.brand_company_name ||
+                        'Localix Member',
+                  supplyStatus: post.owner_supply_status || '',
+                  demandStatus: post.owner_demand_status || '',
+                  photo: post.owner_profile_photo || '',
+                }}
+                onAction={handleAction}
+              />
+
+            ))
+
+          )}
+
+        </section>
+
+      </div>
+
     </div>
+
   )
 }
