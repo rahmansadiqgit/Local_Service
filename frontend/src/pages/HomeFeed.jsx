@@ -186,7 +186,17 @@ export default function HomeFeed() {
   return (
     <div className="space-y-6">
       {/* HERO BANNER SECTION */}
-      <section className="relative bg-gradient-to-r from-brand-600 via-brand-700 to-brand-800 rounded-3xl overflow-hidden shadow-lg">
+      <section 
+        className="relative rounded-3xl overflow-hidden shadow-lg"
+        style={{
+          backgroundImage: `url(/images/hero.png)`,
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+        }}
+      >
+        {/* Overlay for better text readability */}
+        <div className="absolute inset-0 bg-gradient-to-r from-brand-600/30 via-brand-700/30 to-brand-800/30"></div>
+        
         {/* Background pattern overlay */}
         <div className="absolute inset-0 opacity-20">
           <svg className="w-full h-full" viewBox="0 0 1200 400" preserveAspectRatio="none">
@@ -208,7 +218,7 @@ export default function HomeFeed() {
               <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-white drop-shadow-lg">
                 Find Trusted Local Services Near You
               </h1>
-              <p className="text-lg sm:text-xl lg:text-2xl text-slate-100">
+              <p className="text-lg sm:text-xl lg:text-2xl text-white font-bold drop-shadow-xl" style={{textShadow: '0 2px 8px rgba(0, 0, 0, 0.8)'}}>
                 Connect with plumbers, electricians, cleaners, and other professionals in your area.
               </p>
             </div>
@@ -256,8 +266,7 @@ export default function HomeFeed() {
       <section className="space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
-            <h2 className="text-2xl font-semibold">Home Feed</h2>
-            <p className="text-sm text-slate-500">Browse the latest supply & demand posts.</p>
+            <h5 className="text-2xl font-semibold">Browse the latest supply & demand posts</h5>
           </div>
           <div className="flex flex-wrap gap-2">
             {['All', 'Demand', 'Supply'].map((type) => (
