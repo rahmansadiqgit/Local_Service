@@ -248,18 +248,18 @@ export default function HomeFeed() {
             </div>
 
             {/* Search Bar */}
-            <div className="flex flex-col sm:flex-row gap-3">
+            <div className="flex flex-col sm:flex-row gap-3 justify-center">
               <input
                 type="text"
                 placeholder="Search services..."
                 value={filters.search}
                 onChange={handleFilterChange}
                 name="search"
-                className="flex-1 px-6 py-3 rounded-full text-lg bg-white text-slate-900 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-300 shadow-lg"
+                className="w-80 px-4 py-2 rounded-full text-base bg-white text-slate-900 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-300 shadow-lg"
               />
               <button
                 type="button"
-                className="px-8 py-3 rounded-full font-bold text-lg bg-yellow-400 text-slate-900 hover:bg-yellow-500 transition shadow-lg whitespace-nowrap"
+                className="px-6 py-2 rounded-full font-bold text-base bg-yellow-400 text-slate-900 hover:bg-yellow-500 transition shadow-lg whitespace-nowrap"
               >
                 Search
               </button>
@@ -270,13 +270,13 @@ export default function HomeFeed() {
               <button
                 type="button"
                 onClick={() => setFilters((prev) => ({ ...prev, postType: '' }))}
-                className="px-8 py-3 rounded-full font-bold text-lg bg-yellow-400 text-slate-900 hover:bg-yellow-500 transition shadow-lg"
+                className="px-6 py-2 rounded-full font-bold text-base bg-yellow-400 text-slate-900 hover:bg-yellow-500 transition shadow-lg"
               >
                 Browse Services
               </button>
               <Link
                 to={isAuthenticated ? '/create-post' : '/register'}
-                className="px-8 py-3 rounded-full font-bold text-lg border-2 border-white text-white hover:bg-white/10 transition shadow-lg text-center"
+                className="px-6 py-2 rounded-full font-bold text-base bg-yellow-400 text-slate-900 hover:bg-yellow-500 transition shadow-lg text-center"
               >
                 Make Supply or Demand
               </Link>
@@ -290,7 +290,7 @@ export default function HomeFeed() {
       <section className="space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
-            <h5 className="text-2xl font-semibold">Browse the latest supply & demand posts</h5>
+            <h2 className="text-2xl font-bold">Browse the latest available & demand service posts</h2>
           </div>
           <div className="flex flex-wrap gap-2">
             {['All', 'Demand', 'Supply'].map((type) => (
