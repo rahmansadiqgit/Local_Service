@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from 'react-router-dom'
 import Footer from './components/Footer'
 import Header from './components/Header'
 import ProtectedRoute from './components/ProtectedRoute'
+
 import Connections from './pages/Connections'
 import CreatePost from './pages/CreatePost'
 import Dashboard from './pages/Dashboard'
@@ -17,9 +18,14 @@ import ResetPasswordConfirm from './pages/ResetPasswordConfirm'
 export default function App() {
   return (
     <div className="min-h-screen text-slate-900 dark:bg-slate-950 dark:text-slate-100">
+      
+      {/* Header */}
       <Header />
+
+      {/* Main Container */}
       <div className="mx-auto flex w-full max-w-screen-2xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-10">
         <main className="space-y-6">
+
           <Routes>
             <Route path="/" element={<HomeFeed />} />
             <Route path="/login" element={<Login />} />
@@ -39,11 +45,12 @@ export default function App() {
 
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
-        </main>
-      </div>
 
+        </main>
+      </div>     
+      {/* Footer */}
       <Footer />
+
     </div>
   )
 }
-
