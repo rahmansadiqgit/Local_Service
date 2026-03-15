@@ -46,8 +46,8 @@ export default function CreatePost() {
         headers: { 'Content-Type': 'multipart/form-data' },
       })
 
-      const validSkills = skills.filter((item) => item.skill_name)
-      const validProducts = products.filter((item) => item.product_name)
+      const validSkills = skills.filter((item) => item.skill_name && item.cost_per_unit)
+      const validProducts = products.filter((item) => item.product_name && item.cost_per_unit)
 
       await Promise.all([
         ...validSkills.map((item) => api.post('/skills/', { ...item, post: createdPost.id })),
@@ -62,7 +62,8 @@ export default function CreatePost() {
       navigate('/')
     } catch (error) {
       console.error(error)
-      setMessage('Failed to create post. Check console for details.')
+      const errorMessage = error.response?.data?.detail || error.response?.data?.message || error.message || 'Unknown error'
+      setMessage(`Failed to create post: ${errorMessage}`)
     } finally {
       setSaving(false)
     }

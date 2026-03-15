@@ -408,5 +408,6 @@ export default function HomeFeed() {
       </section>
 
     </div>
+
   )
 }
