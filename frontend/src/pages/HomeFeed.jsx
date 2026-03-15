@@ -312,41 +312,6 @@ export default function HomeFeed() {
           </div>
         </div>
 
-       
-
-          <div className="lg:col-span-2">
-            <label className="text-xs font-semibold text-slate-500">Location</label>
-            <input
-              name="location"
-              value={filters.location}
-              onChange={handleFilterChange}
-              placeholder="City"
-              className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm "
-            />
-          </div>
-          <div>
-            <label className="text-xs font-semibold text-slate-500">Min Cost</label>
-            <input
-              name="minCost"
-              type="number"
-              value={filters.minCost}
-              onChange={handleFilterChange}
-              className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm "
-            />
-          </div>
-          <div>
-            <label className="text-xs font-semibold text-slate-500">Max Cost</label>
-            <input
-              name="maxCost"
-              type="number"
-              value={filters.maxCost}
-              onChange={handleFilterChange}
-              className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm "
-            />
-          </div>
-
-
-
           <div className="card grid gap-4 lg:grid-cols-6">
 
             <div className="lg:col-span-2">
