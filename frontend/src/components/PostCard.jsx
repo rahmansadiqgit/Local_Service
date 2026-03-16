@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import defaultAvatar from '../assets/default-avatar.svg'
 import ProductTable from './ProductTable'
 import RatingCard from './RatingCard'
@@ -12,6 +13,7 @@ export default function PostCard({
   profile,
   onAction,
 }) {
+  const navigate = useNavigate()
   const [expanded, setExpanded] = useState(false)
 
   const backendOrigin = useMemo(() => {
@@ -76,7 +78,13 @@ export default function PostCard({
       }}
     >
       <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="flex items-start gap-3">
+        <div 
+          className="flex items-start gap-3 cursor-pointer hover:opacity-80 transition-opacity" 
+          onClick={() => navigate(`/dashboard/${profile?.id}`)}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => e.key === 'Enter' && navigate(`/dashboard/${profile?.id}`)}
+        >
           <div className="h-10 w-10 overflow-hidden rounded-full border border-slate-200 bg-white">
             <img
               src={profilePhotoSrc}

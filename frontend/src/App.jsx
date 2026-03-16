@@ -34,8 +34,10 @@ export default function App() {
             <Route path="/reset-password/confirm" element={<ResetPasswordConfirm />} />
 
             <Route element={<ProtectedRoute />}>
-              <Route path="/dashboard" element={<Dashboard />} />
-              <Route path="/profile" element={<Profile />} />
+                <Route path="/dashboard" element={<Dashboard />} />
+                <Route path="/dashboard/:id" element={<Dashboard />} />
+                <Route path="/profile" element={<Profile />} />
+                <Route path="/profile/:id" element={<Profile />} />
               <Route path="/create-post" element={<CreatePost />} />
               <Route path="/manage-post" element={<ManagePost />} />
               <Route path="/manage-post/:id" element={<ManagePost />} />

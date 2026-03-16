@@ -1,7 +1,9 @@
-import { useEffect, useState } from 'react'
-import api from '../api/client'
+import { useEffect, useState } from 'react';
+import { useParams } from 'react-router-dom';
+import api from '../api/client';
 
 export default function Profile() {
+  const { id } = useParams();
   const [profile, setProfile] = useState(null)
   const [form, setForm] = useState({
     name: '',
@@ -27,16 +29,24 @@ export default function Profile() {
   useEffect(() => {
     const load = async () => {
       try {
-        const { data } = await api.get('/users/profile/')
-        setProfile(data)
+        let data;
+        if (id) {
+          // Fetch other user's profile
+          const res = await api.get(`/users/${id}/`);
+          data = res.data;
+        } else {
+          // Fetch current user's profile
+          const res = await api.get('/users/profile/');
+          data = res.data;
+        }
+        setProfile(data);
         const parseStatus = (value) =>
           value
             ? value
                 .split(',')
                 .map((item) => item.trim())
                 .filter(Boolean)
-            : []
-
+            : [];
         setForm({
           name: data.name || '',
           phone: data.phone || '',
@@ -47,19 +57,18 @@ export default function Profile() {
           experience: data.experience || '',
           facebook_link: data.facebook_link || '',
           whatsapp_link: data.whatsapp_link || '',
-        })
-
+        });
         // Load preview from localStorage
-        const storedPreview = localStorage.getItem('profilePhotoPreview')
+        const storedPreview = localStorage.getItem('profilePhotoPreview');
         if (storedPreview) {
-          setPreviewUrl(storedPreview)
+          setPreviewUrl(storedPreview);
         }
       } catch (error) {
-        console.error(error)
+        console.error(error);
       }
-    }
-    load()
-  }, [])
+    };
+    load();
+  }, [id]);
 
   useEffect(() => {
     if (photoFile) {

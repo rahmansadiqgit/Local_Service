@@ -1,44 +1,66 @@
-import { useEffect, useMemo, useState } from 'react'
-import api from '../api/client'
+import { useEffect, useMemo, useState } from 'react';
+import { useParams } from 'react-router-dom';
+import api from '../api/client';
 
 export default function Dashboard() {
+  const { id } = useParams();
   const [profile, setProfile] = useState(null)
   const [posts, setPosts] = useState([])
   const [ratings, setRatings] = useState([])
   const [skills, setSkills] = useState([])
   const [products, setProducts] = useState([])
   const [expandedPostId, setExpandedPostId] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
 
   useEffect(() => {
-    let active = true
-
+    let active = true;
     const load = async () => {
       try {
-        const [postRes, ratingRes, skillRes, productRes, profileRes] =
-          await Promise.all([
-            api.get('/posts/'),
-            api.get('/ratings/'),
-            api.get('/skills/'),
-            api.get('/products/'),
-            api.get('/users/profile/'),
-          ])
-        if (!active) return
-        setPosts(postRes.data)
-        setRatings(ratingRes.data)
-        setSkills(skillRes.data)
-        setProducts(productRes.data)
-        setProfile(profileRes.data)
+        setLoading(true);
+        setError(null);
+        let profileData;
+        if (id) {
+          // Fetch specific user's profile
+          try {
+            const profileRes = await api.get(`/users/${id}/`);
+            profileData = profileRes.data;
+          } catch (err) {
+            console.error('Failed to fetch user profile:', err);
+            setError('Unable to load user profile');
+            return;
+          }
+        } else {
+          // Fetch current user's profile
+          const profileRes = await api.get('/users/profile/');
+          profileData = profileRes.data;
+        }
+        
+        const [postRes, ratingRes, skillRes, productRes] = await Promise.all([
+          api.get('/posts/'),
+          api.get('/ratings/'),
+          api.get('/skills/'),
+          api.get('/products/'),
+        ]);
+        
+        if (!active) return;
+        setPosts(postRes.data);
+        setRatings(ratingRes.data);
+        setSkills(skillRes.data);
+        setProducts(productRes.data);
+        setProfile(profileData);
       } catch (error) {
-        console.error(error)
+        console.error('Dashboard load error:', error);
+        setError('Failed to load dashboard');
+      } finally {
+        setLoading(false);
       }
-    }
-
-    load()
-
+    };
+    load();
     return () => {
-      active = false
-    }
-  }, [])
+      active = false;
+    };
+  }, [id]);
 
   const ratingsByPost = useMemo(() => {
     return ratings.reduce((acc, rating) => {
@@ -106,9 +128,25 @@ export default function Dashboard() {
   return (
     <div className="space-y-6">
       <div className="card">
-        <h2 className="text-2xl font-semibold">Dashboard</h2>
-        <p className="text-sm text-slate-500">Overview of your Localix activity.</p>
+        <h2 className="text-2xl font-semibold">
+          {id ? `${profile?.name || 'User'}'s Dashboard` : 'Dashboard'}
+        </h2>
+        <p className="text-sm text-slate-500">
+          {id ? `Overview of ${profile?.name || 'their'} Localix activity.` : 'Overview of your Localix activity.'}
+        </p>
       </div>
+
+      {loading && (
+        <div className="card bg-blue-50 border border-blue-200">
+          <p className="text-sm text-blue-600">Loading dashboard...</p>
+        </div>
+      )}
+
+      {error && (
+        <div className="card bg-red-50 border border-red-200">
+          <p className="text-sm text-red-600">{error}</p>
+        </div>
+      )}
 
       <div className="card">
         <h3 className="text-lg font-semibold">User Info</h3>
