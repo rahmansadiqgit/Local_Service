@@ -11,11 +11,7 @@ body {
   min-height: 100vh;
 }
 
-/* Dark mode body */
-.dark body {
-  background: linear-gradient(to bottom, #DC143C, #4B0082); /* darker pink-purple gradient for dark mode */
-  color: #f8fafc;
-}
+
 
 /* Form elements */
 input,
@@ -28,13 +24,7 @@ textarea {
   padding: 0.5rem;
 }
 
-.dark input,
-.dark select,
-.dark textarea {
-  color: #f8fafc;
-  background-color: #1e293b;
-  border: 1px solid #334155;
-}
+
 
 /* Card style */
 .card {
@@ -46,11 +36,7 @@ textarea {
   box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08);
 }
 
-.dark .card {
-  border-color: #334155;
-  background-color: #0f172a;
-  color: #f8fafc;
-}
+
 
 /* Links */
 a {

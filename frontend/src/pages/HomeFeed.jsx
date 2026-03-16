@@ -423,6 +423,7 @@ export default function HomeFeed() {
                 products={productsByPost[post.id] || []}
                 rating={ratingByPost[post.id]}
                 profile={{
+                  id: post.owner_id,
                   name: post.owner_name ||
                         post.brand_company_name ||
                         'Localix Member',
