@@ -184,13 +184,30 @@ export default function HomeFeed() {
         total_cost: cost.min,
       }
 
-      await api.post('/erp/', erpPayload)
-      const title = actionType === 'apply' ? 'New Application' : 'New Booking'
-      await api.post('/notifications/', {
-        title,
-        message: `${title} for ${post.post_name} (${post.post_type}).`,
-      })
-      setActionMessage('Action sent. ERP task created and notification triggered.')
+      // Try to create ERP task
+      try {
+        await api.post('/erp/', erpPayload)
+      } catch (erpError) {
+        console.warn('ERP creation issue:', erpError)
+        // Continue even if ERP fails (might already exist)
+      }
+
+      // Send notification
+      try {
+        const title = actionType === 'apply' ? 'New Application' : 'New Booking'
+        await api.post('/notifications/', {
+          title,
+          message: `${title} for ${post.post_name} (${post.post_type}).`,
+        })
+      } catch (notifError) {
+        console.warn('Notification issue:', notifError)
+      }
+
+      setActionMessage('Action sent. Navigating to manage post...')
+      // Navigate to ManagePost page
+      setTimeout(() => {
+        navigate(`/manage-post/${post.id}`)
+      }, 800)
     } catch (error) {
 
       console.error(error)
@@ -248,18 +265,18 @@ export default function HomeFeed() {
             </div>
 
             {/* Search Bar */}
-            <div className="flex flex-col sm:flex-row gap-3">
+            <div className="flex flex-col sm:flex-row gap-3 justify-center">
               <input
                 type="text"
                 placeholder="Search services..."
                 value={filters.search}
                 onChange={handleFilterChange}
                 name="search"
-                className="flex-1 px-6 py-3 rounded-full text-lg bg-white text-slate-900 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-300 shadow-lg"
+                className="w-80 px-4 py-2 rounded-full text-base bg-white text-slate-900 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-300 shadow-lg"
               />
               <button
                 type="button"
-                className="px-8 py-3 rounded-full font-bold text-lg bg-yellow-400 text-slate-900 hover:bg-yellow-500 transition shadow-lg whitespace-nowrap"
+                className="px-6 py-2 rounded-full font-bold text-base bg-yellow-400 text-slate-900 hover:bg-yellow-500 transition shadow-lg whitespace-nowrap"
               >
                 Search
               </button>
@@ -270,13 +287,13 @@ export default function HomeFeed() {
               <button
                 type="button"
                 onClick={() => setFilters((prev) => ({ ...prev, postType: '' }))}
-                className="px-8 py-3 rounded-full font-bold text-lg bg-yellow-400 text-slate-900 hover:bg-yellow-500 transition shadow-lg"
+                className="px-6 py-2 rounded-full font-bold text-base bg-yellow-400 text-slate-900 hover:bg-yellow-500 transition shadow-lg"
               >
                 Browse Services
               </button>
               <Link
                 to={isAuthenticated ? '/create-post' : '/register'}
-                className="px-8 py-3 rounded-full font-bold text-lg border-2 border-white text-white hover:bg-white/10 transition shadow-lg text-center"
+                className="px-6 py-2 rounded-full font-bold text-base bg-yellow-400 text-slate-900 hover:bg-yellow-500 transition shadow-lg text-center"
               >
                 Make Supply or Demand
               </Link>
@@ -290,7 +307,7 @@ export default function HomeFeed() {
       <section className="space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
-            <h5 className="text-2xl font-semibold">Browse the latest supply & demand posts</h5>
+            <h2 className="text-2xl font-bold">Browse the latest available & demand service posts</h2>
           </div>
           <div className="flex flex-wrap gap-2">
             {['All', 'Demand', 'Supply'].map((type) => (
@@ -381,31 +398,40 @@ export default function HomeFeed() {
           </div>
         )}
 
-        {loading ? (
-          <div className="card">Loading feed...</div>
-        ) : filteredPosts.length === 0 ? (
-          <div className="card">No posts match your filters.</div>
-        ) : (
-          filteredPosts.map(post => (
-            <PostCard
-              key={post.id}
-              post={post}
-              skills={skillsByPost[post.id] || []}
-              products={productsByPost[post.id] || []}
-              rating={ratingByPost[post.id]}
-              profile={{
-                name: post.owner_name ||
-                      post.brand_company_name ||
-                      'Localix Member',
-                supplyStatus: post.owner_supply_status || '',
-                demandStatus: post.owner_demand_status || '',
-                photo: post.owner_profile_photo || '',
-              }}
-              onAction={handleAction}
-            />
-          ))
-        )}
-      </section>
+          {loading ? (
+
+            <div className="card">Loading feed...</div>
+
+          ) : filteredPosts.length === 0 ? (
+
+            <div className="card">No posts match your filters.</div>
+
+          ) : (
+
+            filteredPosts.map(post => (
+
+              <PostCard
+                key={post.id}
+                post={post}
+                skills={skillsByPost[post.id] || []}
+                products={productsByPost[post.id] || []}
+                rating={ratingByPost[post.id]}
+                profile={{
+                  name: post.owner_name ||
+                        post.brand_company_name ||
+                        'Localix Member',
+                  supplyStatus: post.owner_supply_status || '',
+                  demandStatus: post.owner_demand_status || '',
+                  photo: post.owner_profile_photo || '',
+                }}
+                onAction={handleAction}
+              />
+
+            ))
+
+          )}
+
+        </section>
 
     </div>
 

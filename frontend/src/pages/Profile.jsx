@@ -1,7 +1,9 @@
-import { useEffect, useState } from 'react'
-import api from '../api/client'
+import { useEffect, useState } from 'react';
+import { useParams } from 'react-router-dom';
+import api from '../api/client';
 
 export default function Profile() {
+  const { id } = useParams();
   const [profile, setProfile] = useState(null)
   const [form, setForm] = useState({
     name: '',
@@ -15,6 +17,7 @@ export default function Profile() {
     whatsapp_link: '',
   })
   const [photoFile, setPhotoFile] = useState(null)
+  const [previewUrl, setPreviewUrl] = useState(null)
   const [saving, setSaving] = useState(false)
   const [passwordForm, setPasswordForm] = useState({
     old_password: '',
@@ -26,16 +29,24 @@ export default function Profile() {
   useEffect(() => {
     const load = async () => {
       try {
-        const { data } = await api.get('/users/profile/')
-        setProfile(data)
+        let data;
+        if (id) {
+          // Fetch other user's profile
+          const res = await api.get(`/users/${id}/`);
+          data = res.data;
+        } else {
+          // Fetch current user's profile
+          const res = await api.get('/users/profile/');
+          data = res.data;
+        }
+        setProfile(data);
         const parseStatus = (value) =>
           value
             ? value
                 .split(',')
                 .map((item) => item.trim())
                 .filter(Boolean)
-            : []
-
+            : [];
         setForm({
           name: data.name || '',
           phone: data.phone || '',
@@ -46,13 +57,30 @@ export default function Profile() {
           experience: data.experience || '',
           facebook_link: data.facebook_link || '',
           whatsapp_link: data.whatsapp_link || '',
-        })
+        });
+        // Load preview from localStorage
+        const storedPreview = localStorage.getItem('profilePhotoPreview');
+        if (storedPreview) {
+          setPreviewUrl(storedPreview);
+        }
       } catch (error) {
-        console.error(error)
+        console.error(error);
       }
+    };
+    load();
+  }, [id]);
+
+  useEffect(() => {
+    if (photoFile) {
+      const reader = new FileReader()
+      reader.onload = () => {
+        const base64 = reader.result
+        setPreviewUrl(base64)
+        localStorage.setItem('profilePhotoPreview', base64)
+      }
+      reader.readAsDataURL(photoFile)
     }
-    load()
-  }, [])
+  }, [photoFile])
 
   const handleChange = (event) => {
     const { name, value } = event.target
@@ -92,6 +120,8 @@ export default function Profile() {
       })
       setProfile(data)
       setProfileMessage('Profile updated successfully.')
+      // Clear photoFile after save, but keep preview
+      setPhotoFile(null)
     } catch (error) {
       console.error(error)
       setProfileMessage('Failed to update profile.')
@@ -141,7 +171,13 @@ export default function Profile() {
         <div className="mt-6 grid gap-6 lg:grid-cols-[220px_1fr]">
           <div className="flex flex-col items-center gap-3">
             <div className="h-32 w-32 overflow-hidden rounded-full border border-slate-200 bg-slate-100 ">
-              {profile?.profile_photo ? (
+              {previewUrl ? (
+                <img
+                  src={previewUrl}
+                  alt="Preview"
+                  className="h-full w-full object-cover"
+                />
+              ) : profile?.profile_photo ? (
                 <img
                   src={profile.profile_photo}
                   alt={profile?.name || 'Profile'}

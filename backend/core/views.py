@@ -232,6 +232,9 @@ class ERPViewSet(viewsets.ModelViewSet):
     serializer_class = ERPSerializer
     permission_classes = [permissions.IsAuthenticated]
 
+    def perform_create(self, serializer):
+        serializer.save(provider=self.request.user)
+
     @action(detail=True, methods=["patch"])
     def update_stage(self, request, pk=None):
         erp = self.get_object()
