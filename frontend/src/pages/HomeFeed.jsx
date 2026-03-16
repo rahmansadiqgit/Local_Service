@@ -184,13 +184,30 @@ export default function HomeFeed() {
         total_cost: cost.min,
       }
 
-      await api.post('/erp/', erpPayload)
-      const title = actionType === 'apply' ? 'New Application' : 'New Booking'
-      await api.post('/notifications/', {
-        title,
-        message: `${title} for ${post.post_name} (${post.post_type}).`,
-      })
-      setActionMessage('Action sent. ERP task created and notification triggered.')
+      // Try to create ERP task
+      try {
+        await api.post('/erp/', erpPayload)
+      } catch (erpError) {
+        console.warn('ERP creation issue:', erpError)
+        // Continue even if ERP fails (might already exist)
+      }
+
+      // Send notification
+      try {
+        const title = actionType === 'apply' ? 'New Application' : 'New Booking'
+        await api.post('/notifications/', {
+          title,
+          message: `${title} for ${post.post_name} (${post.post_type}).`,
+        })
+      } catch (notifError) {
+        console.warn('Notification issue:', notifError)
+      }
+
+      setActionMessage('Action sent. Navigating to manage post...')
+      // Navigate to ManagePost page
+      setTimeout(() => {
+        navigate(`/manage-post/${post.id}`)
+      }, 800)
     } catch (error) {
 
       console.error(error)
