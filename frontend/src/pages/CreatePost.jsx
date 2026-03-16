@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import api from '../api/client'
 
@@ -13,6 +13,7 @@ const initialPost = {
 
 export default function CreatePost() {
   const navigate = useNavigate()
+  const imageInputRef = useRef(null)
   const [post, setPost] = useState(initialPost)
   const [imageFile, setImageFile] = useState(null)
   const [skills, setSkills] = useState([
@@ -151,6 +152,7 @@ export default function CreatePost() {
               <label className="inline-block cursor-pointer rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 transition">
                 Choose File
                 <input
+                  ref={imageInputRef}
                   type="file"
                   accept="image/*"
                   onChange={(event) => setImageFile(event.target.files?.[0] || null)}
@@ -158,7 +160,22 @@ export default function CreatePost() {
                 />
               </label>
               {imageFile && (
-                <span className="ml-3 text-sm text-slate-600">{imageFile.name}</span>
+                <span className="ml-3 inline-flex items-center gap-2 text-sm text-slate-600">
+                  {imageFile.name}
+                  <button
+                    type="button"
+                    aria-label="Remove selected image"
+                    onClick={() => {
+                      setImageFile(null)
+                      if (imageInputRef.current) {
+                        imageInputRef.current.value = ''
+                      }
+                    }}
+                    className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-slate-300 text-xs font-bold text-slate-600 hover:bg-slate-100"
+                  >
+                    x
+                  </button>
+                </span>
               )}
             </div>
           </div>
