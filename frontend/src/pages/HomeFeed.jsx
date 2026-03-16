@@ -329,80 +329,74 @@ export default function HomeFeed() {
           </div>
         </div>
 
-          <div className="card grid gap-4 lg:grid-cols-6">
-
-            <div className="lg:col-span-2">
-              <label className="text-xs font-semibold text-slate-500">Search</label>
-              <input
-                name="search"
-                value={filters.search}
-                onChange={handleFilterChange}
-                placeholder="Post name or brand"
-                className="mt-1 w-full rounded-xl border px-3 py-2 text-sm"
-              />
-            </div>
-
-            <div>
-              <label className="text-xs font-semibold text-slate-500">Location</label>
-              <input
-                name="location"
-                value={filters.location}
-                onChange={handleFilterChange}
-                placeholder="City"
-                className="mt-1 w-full rounded-xl border px-3 py-2 text-sm"
-              />
-            </div>
-
-            <div>
-              <label className="text-xs font-semibold text-slate-500">Min Cost</label>
-              <input
-                name="minCost"
-                type="number"
-                value={filters.minCost}
-                onChange={handleFilterChange}
-                className="mt-1 w-full rounded-xl border px-3 py-2 text-sm"
-              />
-            </div>
-
-            <div>
-              <label className="text-xs font-semibold text-slate-500">Max Cost</label>
-              <input
-                name="maxCost"
-                type="number"
-                value={filters.maxCost}
-                onChange={handleFilterChange}
-                className="mt-1 w-full rounded-xl border px-3 py-2 text-sm"
-              />
-            </div>
-
-            <div>
-              <label className="text-xs font-semibold text-slate-500">Rating</label>
-              <select
-                name="rating"
-                value={filters.rating}
-                onChange={handleFilterChange}
-                className="mt-1 w-full rounded-xl border px-3 py-2 text-sm"
-              >
-                <option value="">Any</option>
-                <option value="5">5+</option>
-                <option value="4">4+</option>
-                <option value="3">3+</option>
-                <option value="2">2+</option>
-                <option value="1">1+</option>
-              </select>
-            </div>
-
+        <div className="card grid gap-4 lg:grid-cols-6">
+          <div className="lg:col-span-2">
+            <label className="text-xs font-semibold text-slate-500">Search</label>
+            <input
+              name="search"
+              value={filters.search}
+              onChange={handleFilterChange}
+              placeholder="Post name or brand"
+              className="mt-1 w-full rounded-xl border px-3 py-2 text-sm"
+            />
           </div>
 
+          <div>
+            <label className="text-xs font-semibold text-slate-500">Location</label>
+            <input
+              name="location"
+              value={filters.location}
+              onChange={handleFilterChange}
+              placeholder="City"
+              className="mt-1 w-full rounded-xl border px-3 py-2 text-sm"
+            />
+          </div>
 
+          <div>
+            <label className="text-xs font-semibold text-slate-500">Min Cost</label>
+            <input
+              name="minCost"
+              type="number"
+              value={filters.minCost}
+              onChange={handleFilterChange}
+              className="mt-1 w-full rounded-xl border px-3 py-2 text-sm"
+            />
+          </div>
 
-          {actionMessage && (
-            <div className="card text-sm text-slate-500">
-              {actionMessage}
-            </div>
-          )}
+          <div>
+            <label className="text-xs font-semibold text-slate-500">Max Cost</label>
+            <input
+              name="maxCost"
+              type="number"
+              value={filters.maxCost}
+              onChange={handleFilterChange}
+              className="mt-1 w-full rounded-xl border px-3 py-2 text-sm"
+            />
+          </div>
 
+          <div>
+            <label className="text-xs font-semibold text-slate-500">Rating</label>
+            <select
+              name="rating"
+              value={filters.rating}
+              onChange={handleFilterChange}
+              className="mt-1 w-full rounded-xl border px-3 py-2 text-sm"
+            >
+              <option value="">Any</option>
+              <option value="5">5+</option>
+              <option value="4">4+</option>
+              <option value="3">3+</option>
+              <option value="2">2+</option>
+              <option value="1">1+</option>
+            </select>
+          </div>
+        </div>
 
+        {actionMessage && (
+          <div className="card text-sm text-slate-500">
+            {actionMessage}
+          </div>
+        )}
 
           {loading ? (
 
@@ -423,7 +417,6 @@ export default function HomeFeed() {
                 products={productsByPost[post.id] || []}
                 rating={ratingByPost[post.id]}
                 profile={{
-                  id: post.owner_id,
                   name: post.owner_name ||
                         post.brand_company_name ||
                         'Localix Member',
@@ -440,6 +433,7 @@ export default function HomeFeed() {
 
         </section>
 
-      </div>
+    </div>
+
   )
 }
