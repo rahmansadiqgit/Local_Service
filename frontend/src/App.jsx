@@ -17,7 +17,7 @@ import ResetPasswordConfirm from './pages/ResetPasswordConfirm'
 
 export default function App() {
   return (
-    <div className="min-h-screen text-slate-900 dark:bg-slate-950 dark:text-slate-100">
+    <div className="min-h-screen text-slate-900 ">
       
       {/* Header */}
       <Header />
