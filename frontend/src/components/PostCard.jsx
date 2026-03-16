@@ -68,6 +68,22 @@ export default function PostCard({
     return parsed.toLocaleString()
   }, [post])
 
+  const selectedCategory = (post?.post_name || '').toLowerCase()
+  const isExpertiseCategory = selectedCategory === 'expertise'
+  const isServicesCategory = selectedCategory === 'services'
+  const isProductCategory = selectedCategory === 'product'
+
+  const selectedCategoryTitle = isExpertiseCategory
+    ? 'Expertise'
+    : isServicesCategory
+      ? 'Services'
+      : isProductCategory
+        ? 'Products'
+        : 'Details'
+
+  const selectedCategoryItems = isProductCategory ? products : skills
+  const hasSelectedCategoryDetails = selectedCategoryItems && selectedCategoryItems.length > 0
+
   if (!post) return null
 
   return (
@@ -104,7 +120,7 @@ export default function PostCard({
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
-            {post.post_type}
+            {post.post_type === 'Supply' ? 'Available' : post.post_type}
           </span>
           {skills && skills.length > 0 && (
             <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-600">
@@ -119,8 +135,8 @@ export default function PostCard({
         </div>
       </div>
 
-      <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-        <h3 className="text-lg font-semibold text-black">
+      <div className="inline-flex w-fit max-w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+        <h3 className="text-sm font-semibold text-black">
           {post.post_name}
         </h3>
       </div>
@@ -191,18 +207,20 @@ export default function PostCard({
       </div>
 
       {expanded && (
-        <div className="grid gap-4 rounded-2xl border border-slate-200 bg-white px-4 py-4 lg:grid-cols-2">
+        <div className="rounded-2xl border border-slate-200 bg-white px-4 py-4">
           <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
             <p className="mb-2 text-sm font-semibold text-slate-600 dark:text-slate-300">
-              Skills
+              {selectedCategoryTitle}
             </p>
-            <SkillTable skills={skills} />
-          </div>
-          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
-            <p className="mb-2 text-sm font-semibold text-slate-600 dark:text-slate-300">
-              Products
-            </p>
-            <ProductTable products={products} />
+            {hasSelectedCategoryDetails ? (
+              isProductCategory ? (
+                <ProductTable products={products} />
+              ) : (
+                <SkillTable skills={skills} />
+              )
+            ) : (
+              <p className="text-sm text-slate-400">No detail listed.</p>
+            )}
           </div>
         </div>
       )}
