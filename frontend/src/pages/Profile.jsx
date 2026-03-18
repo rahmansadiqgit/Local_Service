@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import api from '../api/client';
+import useAuth from '../context/useAuth';
 
 export default function Profile() {
   const { id } = useParams();
+  const { refreshUser } = useAuth();
   const [profile, setProfile] = useState(null)
   const [form, setForm] = useState({
     name: '',
@@ -58,11 +60,6 @@ export default function Profile() {
           facebook_link: data.facebook_link || '',
           whatsapp_link: data.whatsapp_link || '',
         });
-        // Load preview from localStorage
-        const storedPreview = localStorage.getItem('profilePhotoPreview');
-        if (storedPreview) {
-          setPreviewUrl(storedPreview);
-        }
       } catch (error) {
         console.error(error);
       }
@@ -74,9 +71,7 @@ export default function Profile() {
     if (photoFile) {
       const reader = new FileReader()
       reader.onload = () => {
-        const base64 = reader.result
-        setPreviewUrl(base64)
-        localStorage.setItem('profilePhotoPreview', base64)
+        setPreviewUrl(reader.result)
       }
       reader.readAsDataURL(photoFile)
     }
@@ -119,9 +114,11 @@ export default function Profile() {
         headers: { 'Content-Type': 'multipart/form-data' },
       })
       setProfile(data)
+      setPreviewUrl(data.profile_photo || null)
       setProfileMessage('Profile updated successfully.')
       // Clear photoFile after save, but keep preview
       setPhotoFile(null)
+      await refreshUser(data)
     } catch (error) {
       console.error(error)
       setProfileMessage('Failed to update profile.')
