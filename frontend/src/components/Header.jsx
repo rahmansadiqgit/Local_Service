@@ -13,6 +13,31 @@ export default function Header() {
     setOpenDropdown(null)
   }, [location])
 
+  useEffect(() => {
+    const handleDocumentMouseDown = (event) => {
+      const target = event.target
+      if (!(target instanceof Element)) return
+
+      if (!target.closest("[data-header-dropdown]")) {
+        setOpenDropdown(null)
+      }
+    }
+
+    const handleEscape = (event) => {
+      if (event.key === "Escape") {
+        setOpenDropdown(null)
+      }
+    }
+
+    document.addEventListener("mousedown", handleDocumentMouseDown)
+    document.addEventListener("keydown", handleEscape)
+
+    return () => {
+      document.removeEventListener("mousedown", handleDocumentMouseDown)
+      document.removeEventListener("keydown", handleEscape)
+    }
+  }, [])
+
   const handleLogout = () => {
     logout()
     navigate("/login")
@@ -62,7 +87,7 @@ export default function Header() {
         <div className="flex items-center gap-3">
           {/* Notifications */}
           {isAuthenticated && (
-            <div className="relative">
+            <div className="relative" data-header-dropdown>
               <button
                 onClick={() => toggleDropdown("notif")}
                 className="rounded-full bg-white/90 p-2 shadow-md hover:bg-yellow-100 transition"
@@ -80,7 +105,7 @@ export default function Header() {
 
           {/* User Dropdown with Avatar */}
           {isAuthenticated ? (
-            <div className="relative">
+            <div className="relative" data-header-dropdown>
               <button
                 onClick={() => toggleDropdown("user")}
                 className="h-10 w-10 overflow-hidden rounded-full bg-white/90 shadow-md hover:bg-yellow-100 transition flex items-center justify-center"
@@ -140,7 +165,7 @@ export default function Header() {
 
           {/* Hamburger */}
           {isAuthenticated && (
-            <div className="relative">
+            <div className="relative" data-header-dropdown>
               <button
                 onClick={() => toggleDropdown("menu")}
                 className="rounded-full bg-white/90 p-2 shadow-md hover:bg-yellow-100 transition"
