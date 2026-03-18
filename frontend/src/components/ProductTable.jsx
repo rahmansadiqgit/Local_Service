@@ -39,20 +39,20 @@ export default function ProductTable({ products = [] }) {
           <tr>
             <th className="px-4 py-2">
               <button type="button" onClick={() => handleSort('product_name')}>
-                Product
+                Product Name
               </button>
             </th>
             <th className="px-4 py-2">
-              <button type="button" onClick={() => handleSort('unit')}>Cost Unit</button>
+              <button type="button" onClick={() => handleSort('unit')}>Unit</button>
             </th>
             <th className="px-4 py-2">
               <button type="button" onClick={() => handleSort('cost_per_unit')}>
-                Cost
+                Cost per Unit
               </button>
             </th>
             <th className="px-4 py-2">
               <button type="button" onClick={() => handleSort('available_units')}>
-                Units
+                Available Units
               </button>
             </th>
           </tr>

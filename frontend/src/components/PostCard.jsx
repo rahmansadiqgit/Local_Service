@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import defaultAvatar from '../assets/default-avatar.svg'
 import ProductTable from './ProductTable'
 import RatingCard from './RatingCard'
+import ServiceTable from './ServiceTable'
 import SkillTable from './SkillTable'
 
 export default function PostCard({
@@ -68,40 +69,81 @@ export default function PostCard({
     return parsed.toLocaleString()
   }, [post])
 
-  const selectedCategory = (post?.post_name || '').toLowerCase()
-  const isExpertiseCategory = selectedCategory === 'expertise'
-  const isServicesCategory = selectedCategory === 'services'
-  const isProductCategory = selectedCategory === 'product'
+  const selectedCategories = useMemo(
+    () =>
+      (post?.post_name || '')
+        .split(',')
+        .map((item) => item.trim().toLowerCase())
+        .filter(Boolean),
+    [post?.post_name],
+  )
 
-  const selectedCategoryTitle = isExpertiseCategory
-    ? 'Expertise'
-    : isServicesCategory
-      ? 'Services'
-      : isProductCategory
-        ? 'Products'
-        : 'Details'
+  const hasExpertiseCategory = selectedCategories.includes('expertise')
+  const hasServicesCategory = selectedCategories.includes('services')
+  const hasProductCategory = selectedCategories.includes('product')
 
-  const selectedCategoryItems = isProductCategory ? products : skills
-  const hasSelectedCategoryDetails = selectedCategoryItems && selectedCategoryItems.length > 0
+  const stripCategoryPrefix = (value) =>
+    String(value || '')
+      .replace(/^__expertise__::/i, '')
+      .replace(/^__service__::/i, '')
+      .trim()
+
+  const expertiseRows = useMemo(() => {
+    const tagged = skills
+      .filter((item) => /^__expertise__::/i.test(String(item.skill_name || '')))
+      .map((item) => ({ ...item, skill_name: stripCategoryPrefix(item.skill_name) }))
+
+    if (tagged.length > 0) return tagged
+
+    if (hasExpertiseCategory && !hasServicesCategory) {
+      return skills
+        .filter((item) => !/^__service__::/i.test(String(item.skill_name || '')))
+        .map((item) => ({ ...item, skill_name: stripCategoryPrefix(item.skill_name) }))
+    }
+
+    return []
+  }, [hasExpertiseCategory, hasServicesCategory, skills])
+
+  const serviceRows = useMemo(() => {
+    const tagged = skills
+      .filter((item) => /^__service__::/i.test(String(item.skill_name || '')))
+      .map((item) => ({
+        ...item,
+        service_name: stripCategoryPrefix(item.skill_name),
+      }))
+
+    if (tagged.length > 0) return tagged
+
+    if (hasServicesCategory && !hasExpertiseCategory) {
+      return skills.map((item) => ({
+        ...item,
+        service_name: stripCategoryPrefix(item.skill_name),
+      }))
+    }
+
+    return []
+  }, [hasExpertiseCategory, hasServicesCategory, skills])
+
+  const productRows = products
 
   if (!post) return null
 
   return (
     <div
-      className="card space-y-6 border border-slate-200 text-black shadow-sm transition-shadow hover:shadow-lg"
+      className="card space-y-3 p-4 sm:p-5 border border-slate-200 text-black shadow-sm transition-shadow hover:shadow-lg"
       style={{
         background: 'linear-gradient(135deg, #f8fafc 0%, #e3d5e5 45%, #8763ac 100%)',
       }}
     >
-      <div className="flex flex-wrap items-start justify-between gap-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div 
-          className="flex items-start gap-3 cursor-pointer hover:opacity-80 transition-opacity" 
+          className="flex items-start gap-4 cursor-pointer hover:opacity-80 transition-opacity" 
           onClick={() => navigate(`/dashboard/${profile?.id}`)}
           role="button"
           tabIndex={0}
           onKeyDown={(e) => e.key === 'Enter' && navigate(`/dashboard/${profile?.id}`)}
         >
-          <div className="h-10 w-10 overflow-hidden rounded-full border border-slate-200 bg-white">
+          <div className="h-12 w-12 overflow-hidden rounded-full border border-slate-200 bg-white">
             <img
               src={profilePhotoSrc}
               alt={profile?.name || 'Profile'}
@@ -109,7 +151,7 @@ export default function PostCard({
             />
           </div>
           <div>
-            <p className="font-semibold text-black">
+            <p className="text-base font-semibold text-black sm:text-lg">
               {profile?.name || 'Localix Member'}
             </p>
             <p className="text-xs text-slate-500">
@@ -122,26 +164,16 @@ export default function PostCard({
           <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
             {post.post_type === 'Supply' ? 'Available' : post.post_type}
           </span>
-          {skills && skills.length > 0 && (
-            <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-600">
-              Skills
-            </span>
-          )}
-          {products && products.length > 0 && (
-            <span className="rounded-full bg-green-100 px-3 py-1 text-xs font-semibold text-green-600">
-              Products
-            </span>
-          )}
         </div>
       </div>
 
-      <div className="inline-flex w-fit max-w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+      <div className="inline-flex w-fit max-w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-1.5">
         <h3 className="text-sm font-semibold text-black">
           {post.post_name}
         </h3>
       </div>
 
-      <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+      <div className="rounded-2xl border border-slate-200 bg-white px-4 py-2.5">
         {post.description ? (
           <p className="text-sm leading-6 text-slate-700">{post.description}</p>
         ) : (
@@ -162,20 +194,20 @@ export default function PostCard({
       </div>
 
       {postImageSrc ? (
-        <div className="flex items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 p-4 shadow-inner">
+        <div className="flex items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 p-2.5 shadow-inner">
           <img
             src={postImageSrc}
             alt={post.post_name}
-            className="max-h-[320px] w-auto max-w-[92%] rounded-2xl object-contain"
+            className="max-h-[270px] w-auto max-w-[90%] rounded-2xl object-contain"
           />
         </div>
       ) : (
-        <div className="flex h-44 items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-slate-100 text-sm text-slate-400 dark:bg-slate-800">
+        <div className="flex h-40 items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-slate-100 text-sm text-slate-400 dark:bg-slate-800">
           No image provided
         </div>
       )}
 
-      <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+      <div className="flex flex-wrap items-center gap-2.5 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2.5">
         <button
           type="button"
           onClick={() => onAction?.(post, post.post_type === 'Demand' ? 'apply' : 'book')}
@@ -207,20 +239,46 @@ export default function PostCard({
       </div>
 
       {expanded && (
-        <div className="rounded-2xl border border-slate-200 bg-white px-4 py-4">
-          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
-            <p className="mb-2 text-sm font-semibold text-slate-600 dark:text-slate-300">
-              {selectedCategoryTitle}
-            </p>
-            {hasSelectedCategoryDetails ? (
-              isProductCategory ? (
-                <ProductTable products={products} />
-              ) : (
-                <SkillTable skills={skills} />
-              )
-            ) : (
-              <p className="text-sm text-slate-400">No detail listed.</p>
-            )}
+        <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-2.5">
+            <div className="space-y-3">
+              {hasExpertiseCategory && (
+                <div className="space-y-2">
+                  <p className="text-sm font-semibold text-slate-600 dark:text-slate-300">Expertise</p>
+                  {expertiseRows.length ? (
+                    <SkillTable skills={expertiseRows} category="Expertise" />
+                  ) : (
+                    <p className="text-sm text-slate-400">No expertise detail listed.</p>
+                  )}
+                </div>
+              )}
+
+              {hasServicesCategory && (
+                <div className="space-y-2">
+                  <p className="text-sm font-semibold text-slate-600 dark:text-slate-300">Services</p>
+                  {serviceRows.length ? (
+                    <ServiceTable services={serviceRows} />
+                  ) : (
+                    <p className="text-sm text-slate-400">No services detail listed.</p>
+                  )}
+                </div>
+              )}
+
+              {hasProductCategory && (
+                <div className="space-y-2">
+                  <p className="text-sm font-semibold text-slate-600 dark:text-slate-300">Products</p>
+                  {productRows.length ? (
+                    <ProductTable products={productRows} />
+                  ) : (
+                    <p className="text-sm text-slate-400">No product detail listed.</p>
+                  )}
+                </div>
+              )}
+
+              {!hasExpertiseCategory && !hasServicesCategory && !hasProductCategory && (
+                <p className="text-sm text-slate-400">No detail listed.</p>
+              )}
+            </div>
           </div>
         </div>
       )}

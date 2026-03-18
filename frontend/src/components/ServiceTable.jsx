@@ -1,11 +1,11 @@
 import { useMemo, useState } from 'react'
 
-export default function SkillTable({ skills = [], category = 'Expertise' }) {
-  const [sortKey, setSortKey] = useState('skill_name')
+export default function ServiceTable({ services = [] }) {
+  const [sortKey, setSortKey] = useState('service_name')
   const [sortDir, setSortDir] = useState('asc')
 
   const sorted = useMemo(() => {
-    const copy = [...skills]
+    const copy = [...services]
     copy.sort((a, b) => {
       const aValue = a[sortKey] ?? ''
       const bValue = b[sortKey] ?? ''
@@ -17,7 +17,7 @@ export default function SkillTable({ skills = [], category = 'Expertise' }) {
         : String(bValue).localeCompare(String(aValue))
     })
     return copy
-  }, [skills, sortDir, sortKey])
+  }, [services, sortDir, sortKey])
 
   const handleSort = (key) => {
     if (sortKey === key) {
@@ -28,15 +28,8 @@ export default function SkillTable({ skills = [], category = 'Expertise' }) {
     }
   }
 
-  // Determine headers based on category
-  const isExpertise = category.toLowerCase() === 'expertise'
-  const nameHeader = isExpertise ? 'Expertise Name' : 'Service Name'
-  const unitHeader = isExpertise ? 'Experience' : 'Service Duration'
-  const costHeader = isExpertise ? 'Charge ($)' : 'Service Cost'
-  const workersHeader = isExpertise ? 'Available Person' : 'Available Workers'
-
-  if (!skills.length) {
-    return <p className="text-sm text-slate-500">No skills listed.</p>
+  if (!services.length) {
+    return <p className="text-sm text-slate-500">No services listed.</p>
   }
 
   return (
@@ -45,37 +38,36 @@ export default function SkillTable({ skills = [], category = 'Expertise' }) {
         <thead className="bg-slate-50 text-slate-600 dark:bg-slate-900 dark:text-slate-300">
           <tr>
             <th className="px-4 py-2">
-              <button type="button" onClick={() => handleSort('skill_name')}>
-                {nameHeader}
+              <button type="button" onClick={() => handleSort('service_name')}>
+                Service Name
               </button>
             </th>
             <th className="px-4 py-2">
-              <button type="button" onClick={() => handleSort('unit')}>{unitHeader}</button>
+              <button type="button" onClick={() => handleSort('unit')}>
+                Service Duration
+              </button>
             </th>
             <th className="px-4 py-2">
               <button type="button" onClick={() => handleSort('cost_per_unit')}>
-                {costHeader}
+                Service Cost
               </button>
             </th>
             <th className="px-4 py-2">
               <button type="button" onClick={() => handleSort('available_workers')}>
-                {workersHeader}
+                Available Workers
               </button>
             </th>
           </tr>
         </thead>
-        <tbody>
-          {sorted.map((skill, index) => (
-            <tr
-              key={skill.id}
-              className={`border-t border-slate-200 dark:border-slate-800 ${
-                index % 2 === 1 ? 'bg-slate-50 dark:bg-slate-900/40' : ''
-              }`}
-            >
-              <td className="px-4 py-2 font-medium">{skill.skill_name}</td>
-              <td className="px-4 py-2">{skill.unit}</td>
-              <td className="px-4 py-2">${skill.cost_per_unit}</td>
-              <td className="px-4 py-2">{skill.available_workers}</td>
+        <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
+          {sorted.map((row, idx) => (
+            <tr key={idx} className={idx % 2 === 0 ? 'bg-white dark:bg-slate-950' : 'bg-slate-50 dark:bg-slate-900'}>
+              <td className="px-4 py-2 text-slate-900 dark:text-slate-100">{row.service_name || '-'}</td>
+              <td className="px-4 py-2 text-slate-900 dark:text-slate-100">{row.unit || '-'}</td>
+              <td className="px-4 py-2 text-slate-900 dark:text-slate-100">
+                ${!isNaN(parseFloat(row.cost_per_unit)) ? parseFloat(row.cost_per_unit).toFixed(2) : '0.00'}
+              </td>
+              <td className="px-4 py-2 text-slate-900 dark:text-slate-100">{row.available_workers || 0}</td>
             </tr>
           ))}
         </tbody>
