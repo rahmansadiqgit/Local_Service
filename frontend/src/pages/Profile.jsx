@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import api from '../api/client';
+import useAuth from '../context/useAuth';
 
 export default function Profile() {
   const { id } = useParams();
+  const { refreshUser } = useAuth();
   const [profile, setProfile] = useState(null)
   const [form, setForm] = useState({
     name: '',
@@ -25,6 +27,19 @@ export default function Profile() {
   })
   const [passwordMessage, setPasswordMessage] = useState('')
   const [profileMessage, setProfileMessage] = useState('')
+
+  const resolveMediaUrl = (value) => {
+    if (!value) return ''
+    if (/^https?:\/\//i.test(value) || value.startsWith('data:') || value.startsWith('blob:')) {
+      return value
+    }
+
+    const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api'
+    const backendOrigin = apiBase.replace(/\/api\/?$/, '')
+    return value.startsWith('/') ? `${backendOrigin}${value}` : `${backendOrigin}/${value}`
+  }
+
+  const profilePhotoSrc = resolveMediaUrl(previewUrl || profile?.profile_photo || '')
 
   useEffect(() => {
     const load = async () => {
@@ -58,11 +73,6 @@ export default function Profile() {
           facebook_link: data.facebook_link || '',
           whatsapp_link: data.whatsapp_link || '',
         });
-        // Load preview from localStorage
-        const storedPreview = localStorage.getItem('profilePhotoPreview');
-        if (storedPreview) {
-          setPreviewUrl(storedPreview);
-        }
       } catch (error) {
         console.error(error);
       }
@@ -74,9 +84,7 @@ export default function Profile() {
     if (photoFile) {
       const reader = new FileReader()
       reader.onload = () => {
-        const base64 = reader.result
-        setPreviewUrl(base64)
-        localStorage.setItem('profilePhotoPreview', base64)
+        setPreviewUrl(reader.result)
       }
       reader.readAsDataURL(photoFile)
     }
@@ -119,9 +127,11 @@ export default function Profile() {
         headers: { 'Content-Type': 'multipart/form-data' },
       })
       setProfile(data)
+      setPreviewUrl(data.profile_photo || null)
       setProfileMessage('Profile updated successfully.')
       // Clear photoFile after save, but keep preview
       setPhotoFile(null)
+      await refreshUser(data)
     } catch (error) {
       console.error(error)
       setProfileMessage('Failed to update profile.')
@@ -171,16 +181,10 @@ export default function Profile() {
         <div className="mt-6 grid gap-6 lg:grid-cols-[220px_1fr]">
           <div className="flex flex-col items-center gap-3">
             <div className="h-32 w-32 overflow-hidden rounded-full border border-slate-200 bg-slate-100 ">
-              {previewUrl ? (
+              {profilePhotoSrc ? (
                 <img
-                  src={previewUrl}
+                  src={profilePhotoSrc}
                   alt="Preview"
-                  className="h-full w-full object-cover"
-                />
-              ) : profile?.profile_photo ? (
-                <img
-                  src={profile.profile_photo}
-                  alt={profile?.name || 'Profile'}
                   className="h-full w-full object-cover"
                 />
               ) : (

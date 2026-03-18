@@ -7,13 +7,36 @@ export default function Header() {
   const navigate = useNavigate()
   const location = useLocation()
 
-  // "notif" | "user" | "menu" | null
   const [openDropdown, setOpenDropdown] = useState(null)
 
-  // Close dropdowns on route change
   useEffect(() => {
     setOpenDropdown(null)
   }, [location])
+
+  useEffect(() => {
+    const handleDocumentMouseDown = (event) => {
+      const target = event.target
+      if (!(target instanceof Element)) return
+
+      if (!target.closest("[data-header-dropdown]")) {
+        setOpenDropdown(null)
+      }
+    }
+
+    const handleEscape = (event) => {
+      if (event.key === "Escape") {
+        setOpenDropdown(null)
+      }
+    }
+
+    document.addEventListener("mousedown", handleDocumentMouseDown)
+    document.addEventListener("keydown", handleEscape)
+
+    return () => {
+      document.removeEventListener("mousedown", handleDocumentMouseDown)
+      document.removeEventListener("keydown", handleEscape)
+    }
+  }, [])
 
   const handleLogout = () => {
     logout()
@@ -24,80 +47,113 @@ export default function Header() {
     setOpenDropdown(openDropdown === name ? null : name)
   }
 
+  const resolveMediaUrl = (value) => {
+    if (!value) return ""
+    if (/^https?:\/\//i.test(value) || value.startsWith("data:") || value.startsWith("blob:")) {
+      return value
+    }
+
+    const apiBase = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api"
+    const backendOrigin = apiBase.replace(/\/api\/?$/, "")
+    return value.startsWith("/") ? `${backendOrigin}${value}` : `${backendOrigin}/${value}`
+  }
+
+  const avatarUrl = resolveMediaUrl(user?.profile_photo)
+  const avatarSrc = avatarUrl
+    ? `${avatarUrl}${avatarUrl.includes("?") ? "&" : "?"}v=${user?._avatarVersion || 0}`
+    : ""
+
+  const iconButtonClass =
+    "rounded-full bg-white/90 p-2 shadow-md hover:bg-yellow-100 hover:scale-105 hover:shadow-lg transition-all duration-200"
+
+  const avatarButtonClass =
+    "h-10 w-10 shrink-0 overflow-hidden rounded-full shadow-md hover:scale-105 hover:shadow-lg transition-all duration-200 flex items-center justify-center"
+
+  const dropdownPanelClass =
+    "absolute right-0 mt-3 rounded-2xl border border-white/60 bg-white/95 p-2 shadow-2xl backdrop-blur-sm"
+
+  const dropdownItemClass =
+    "block rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-100 hover:text-slate-900"
+
   return (
     <header className="sticky top-0 z-40 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 shadow-lg">
       <div className="relative mx-auto flex max-w-7xl items-center justify-between px-4 py-4">
-
-        {/* Logo Left */}
+        {/* Logo */}
         <Link to="/" className="flex items-center gap-2 group">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white text-indigo-600 font-extrabold shadow-md transition-transform group-hover:scale-110">
             LX
           </div>
         </Link>
 
-        {/* Center Title */}
+        {/* Title */}
         <div className="absolute left-1/2 transform -translate-x-1/2 text-center">
           <Link to="/" className="cursor-pointer">
-            <p className="text-3xl md:text-4xl font-extrabold text-white tracking-wide drop-shadow-lg hover:text-yellow-300 transition">
+            <p className="text-4xl md:text-5xl font-extrabold text-white tracking-wide drop-shadow-lg hover:text-yellow-300 transition">
               Localix
             </p>
-            <p className="text-xs md:text-sm text-white/80">
-              Local services marketplace
-            </p>
+            <p className="text-sm md:text-base text-white/85">Local services marketplace</p>
           </Link>
         </div>
 
-        {/* Right Section */}
+        {/* Right */}
         <div className="flex items-center gap-3">
-
           {/* Notifications */}
           {isAuthenticated && (
-            <div className="relative">
+            <div className="relative" data-header-dropdown>
               <button
                 onClick={() => toggleDropdown("notif")}
-                className="rounded-full bg-white/90 p-2 shadow-md hover:bg-yellow-100 transition"
+                className={iconButtonClass}
               >
                 🔔
               </button>
-
               {openDropdown === "notif" && (
-                <div className="absolute right-0 mt-3 w-72 rounded-xl bg-white shadow-xl p-4">
-                  <p className="font-semibold text-slate-700 mb-2">Notifications</p>
-                  <p className="text-sm text-slate-500">No new notifications</p>
+                <div className={`${dropdownPanelClass} w-72`}>
+                  <p className="mb-2 px-2 text-xs font-bold uppercase tracking-wide text-slate-500">Notifications</p>
+                  <div className="rounded-xl bg-slate-50 px-3 py-3 text-sm text-slate-600">
+                    No new notifications
+                  </div>
                 </div>
               )}
             </div>
           )}
 
-          {/* User Dropdown */}
+          {/* User Dropdown with Avatar */}
           {isAuthenticated ? (
-            <div className="relative">
+            <div className="relative" data-header-dropdown>
               <button
                 onClick={() => toggleDropdown("user")}
-                className="rounded-full bg-white/90 px-4 py-2 text-sm font-semibold text-indigo-600 shadow-md hover:bg-yellow-100 transition"
+                className={`${avatarButtonClass} ${avatarSrc ? "" : "bg-white/90 hover:bg-yellow-100"}`}
               >
-                {user?.username || "Account"}
+                {avatarSrc ? (
+                  <img
+                    src={avatarSrc}
+                    alt="Profile"
+                    className="block h-full w-full rounded-full object-cover object-center"
+                  />
+                ) : (
+                  <span className="text-lg leading-none">👤</span>
+                )}
               </button>
 
               {openDropdown === "user" && (
-                <div className="absolute right-0 mt-3 w-44 rounded-xl bg-white shadow-xl">
+                <div className={`${dropdownPanelClass} w-48`}>
                   <Link
                     to="/profile"
                     onClick={() => setOpenDropdown(null)}
-                    className="block px-4 py-2 hover:bg-slate-100"
+                    className={dropdownItemClass}
                   >
                     Profile
                   </Link>
                   <Link
                     to="/dashboard"
                     onClick={() => setOpenDropdown(null)}
-                    className="block px-4 py-2 hover:bg-slate-100"
+                    className={dropdownItemClass}
                   >
                     Dashboard
                   </Link>
                   <button
                     onClick={handleLogout}
-                    className="w-full text-left px-4 py-2 text-red-600 hover:bg-red-50"
+                    className="w-full rounded-xl px-4 py-2.5 text-left text-sm font-semibold text-red-600 transition hover:bg-red-50 hover:text-red-700"
                   >
                     Logout
                   </button>
@@ -121,29 +177,28 @@ export default function Header() {
             </>
           )}
 
-          {/* Hamburger Menu */}
+          {/* Hamburger */}
           {isAuthenticated && (
-            <div className="relative">
+            <div className="relative" data-header-dropdown>
               <button
                 onClick={() => toggleDropdown("menu")}
-                className="rounded-full bg-white/90 p-2 shadow-md hover:bg-yellow-100 transition"
+                className={iconButtonClass}
               >
                 ☰
               </button>
-
               {openDropdown === "menu" && (
-                <div className="absolute right-0 mt-3 w-52 rounded-xl bg-white shadow-xl">
+                <div className={`${dropdownPanelClass} w-56`}>
                   <Link
                     to="/connections"
                     onClick={() => setOpenDropdown(null)}
-                    className="block px-4 py-2 hover:bg-slate-100"
+                    className={dropdownItemClass}
                   >
                     Connections
                   </Link>
                   <Link
                     to="/erp"
                     onClick={() => setOpenDropdown(null)}
-                    className="block px-4 py-2 hover:bg-slate-100"
+                    className={dropdownItemClass}
                   >
                     ERP
                   </Link>
@@ -151,7 +206,6 @@ export default function Header() {
               )}
             </div>
           )}
-
         </div>
       </div>
     </header>

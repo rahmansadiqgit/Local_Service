@@ -163,8 +163,6 @@ export default function HomeFeed() {
     }))
   }
 
-
-
   const handleAction = async (post, actionType) => {
 
     setActionMessage('')
@@ -256,10 +254,10 @@ export default function HomeFeed() {
 
             {/* Heading */}
             <div className="space-y-4">
-              <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-white drop-shadow-lg">
+              <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-yellow-200" style={{ textShadow: '0 4px 12px rgba(0, 0, 0, 0.9)' }}>
                 Find Trusted Local Services Near You
               </h1>
-              <p className="text-lg sm:text-xl lg:text-2xl text-white font-bold drop-shadow-xl" style={{ textShadow: '0 2px 8px rgba(0, 0, 0, 0.8)' }}>
+              <p className="text-lg sm:text-xl lg:text-2xl text-amber-100 font-bold" style={{ textShadow: '0 3px 10px rgba(0, 0, 0, 0.9)' }}>
                 Connect with plumbers, electricians, cleaners, and other professionals in your area.
               </p>
             </div>
@@ -408,26 +406,28 @@ export default function HomeFeed() {
 
           ) : (
 
-            filteredPosts.map(post => (
+            <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+              {filteredPosts.map(post => (
 
-              <PostCard
-                key={post.id}
-                post={post}
-                skills={skillsByPost[post.id] || []}
-                products={productsByPost[post.id] || []}
-                rating={ratingByPost[post.id]}
-                profile={{
-                  name: post.owner_name ||
-                        post.brand_company_name ||
-                        'Localix Member',
-                  supplyStatus: post.owner_supply_status || '',
-                  demandStatus: post.owner_demand_status || '',
-                  photo: post.owner_profile_photo || '',
-                }}
-                onAction={handleAction}
-              />
+                <PostCard
+                  key={post.id}
+                  post={post}
+                  skills={skillsByPost[post.id] || []}
+                  products={productsByPost[post.id] || []}
+                  rating={ratingByPost[post.id]}
+                  profile={{
+                    name: post.owner_name ||
+                          post.brand_company_name ||
+                          'Localix Member',
+                    supplyStatus: post.owner_supply_status || '',
+                    demandStatus: post.owner_demand_status || '',
+                    photo: post.owner_profile_photo || '',
+                  }}
+                  onAction={handleAction}
+                />
 
-            ))
+              ))}
+            </div>
 
           )}
 
