@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 
-export default function SkillTable({ skills = [] }) {
+export default function SkillTable({ skills = [], category = 'Expertise' }) {
   const [sortKey, setSortKey] = useState('skill_name')
   const [sortDir, setSortDir] = useState('asc')
 
@@ -28,6 +28,13 @@ export default function SkillTable({ skills = [] }) {
     }
   }
 
+  // Determine headers based on category
+  const isExpertise = category.toLowerCase() === 'expertise'
+  const nameHeader = isExpertise ? 'Expertise Name' : 'Service Name'
+  const unitHeader = isExpertise ? 'Experience' : 'Service Duration'
+  const costHeader = isExpertise ? 'Charge ($)' : 'Service Cost'
+  const workersHeader = isExpertise ? 'Available Person' : 'Available Workers'
+
   if (!skills.length) {
     return <p className="text-sm text-slate-500">No skills listed.</p>
   }
@@ -39,20 +46,20 @@ export default function SkillTable({ skills = [] }) {
           <tr>
             <th className="px-4 py-2">
               <button type="button" onClick={() => handleSort('skill_name')}>
-                Skill
+                {nameHeader}
               </button>
             </th>
             <th className="px-4 py-2">
-              <button type="button" onClick={() => handleSort('unit')}>Cost Unit</button>
+              <button type="button" onClick={() => handleSort('unit')}>{unitHeader}</button>
             </th>
             <th className="px-4 py-2">
               <button type="button" onClick={() => handleSort('cost_per_unit')}>
-                Cost
+                {costHeader}
               </button>
             </th>
             <th className="px-4 py-2">
               <button type="button" onClick={() => handleSort('available_workers')}>
-                Workers
+                {workersHeader}
               </button>
             </th>
           </tr>
