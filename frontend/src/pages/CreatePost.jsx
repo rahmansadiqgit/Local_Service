@@ -2,6 +2,8 @@ import { useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import api from '../api/client'
 
+const CATEGORY_OPTIONS = ['Expertise', 'Services', 'Product']
+
 const initialPost = {
   post_type: 'Supply',
   post_name: '',
@@ -15,6 +17,8 @@ export default function CreatePost() {
   const navigate = useNavigate()
   const imageInputRef = useRef(null)
   const [post, setPost] = useState(initialPost)
+  const [selectedCategories, setSelectedCategories] = useState([])
+  const [showCategoryMenu, setShowCategoryMenu] = useState(false)
   const [imageFile, setImageFile] = useState(null)
   const [skills, setSkills] = useState([
     { skill_name: '', unit: '', cost_per_unit: '', available_workers: 0 },
@@ -33,10 +37,32 @@ export default function CreatePost() {
     setPost((prev) => ({ ...prev, [name]: value }))
   }
 
+  const toggleCategory = (category) => {
+    setSelectedCategories((prev) => {
+      const next = prev.includes(category)
+        ? prev.filter((item) => item !== category)
+        : [...prev, category]
+
+      setPost((current) => ({
+        ...current,
+        post_name: next.join(', '),
+      }))
+
+      return next
+    })
+  }
+
   const handleSubmit = async (event) => {
     event.preventDefault()
     setSaving(true)
     setMessage('')
+
+    if (selectedCategories.length === 0) {
+      setMessage('Please select at least one post category.')
+      setSaving(false)
+      return
+    }
+
     try {
       const payload = new FormData()
       Object.entries(post).forEach(([key, value]) => {
@@ -55,12 +81,28 @@ export default function CreatePost() {
       const validProducts = products.filter((item) => item.product_name && item.cost_per_unit)
 
       await Promise.all([
-        ...validSkills.map((item) => api.post('/skills/', { ...item, post: createdPost.id })),
-        ...validServices.map((item) => api.post('/skills/', { skill_name: item.service_name, unit: item.unit, cost_per_unit: item.cost_per_unit, available_workers: item.available_workers, post: createdPost.id })),
+        ...validSkills.map((item) =>
+          api.post('/skills/', {
+            ...item,
+            skill_name: `__expertise__::${item.skill_name}`,
+            post: createdPost.id,
+          }),
+        ),
+        ...validServices.map((item) =>
+          api.post('/skills/', {
+            skill_name: `__service__::${item.service_name}`,
+            unit: item.unit,
+            cost_per_unit: item.cost_per_unit,
+            available_workers: item.available_workers,
+            post: createdPost.id,
+          }),
+        ),
         ...validProducts.map((item) => api.post('/products/', { ...item, post: createdPost.id })),
       ])
       setMessage('Post created successfully.')
       setPost(initialPost)
+      setSelectedCategories([])
+      setShowCategoryMenu(false)
       setImageFile(null)
       setSkills([{ skill_name: '', unit: '', cost_per_unit: '', available_workers: 0 }])
       setServices([{ service_name: '', unit: '', cost_per_unit: '', available_workers: 0 }])
@@ -76,16 +118,16 @@ export default function CreatePost() {
     }
   }
 
-  const showAllSections = post.post_name === ''
-  const showExpertiseSection = showAllSections || post.post_name === 'Expertise'
-  const showServicesSection = showAllSections || post.post_name === 'Services'
-  const showProductsSection = showAllSections || post.post_name === 'Product'
+  const showAllSections = selectedCategories.length === 0
+  const showExpertiseSection = showAllSections || selectedCategories.includes('Expertise')
+  const showServicesSection = showAllSections || selectedCategories.includes('Services')
+  const showProductsSection = showAllSections || selectedCategories.includes('Product')
 
   return (
     <div className="space-y-6">
       <div className="card">
         <h2 className="text-2xl font-bold">Create Post</h2>
-        <p className="text-sm text-slate-500">Publish a new supply or demand listing.</p>
+        <p className="text-sm text-slate-500">Publish a new available or demand listing.</p>
       </div>
 
       <form onSubmit={handleSubmit} className="card space-y-6">
@@ -104,18 +146,43 @@ export default function CreatePost() {
           </div>
           <div>
             <label className="text-xs font-semibold text-black">Post Categories</label>
-            <select
-              name="post_name"
-              value={post.post_name}
-              onChange={handleChange}
-              required
-              className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
-            >
-              <option value="">Select a category</option>
-              <option value="Expertise">Expertise</option>
-              <option value="Services">Services</option>
-              <option value="Product">Product</option>
-            </select>
+            <div className="relative mt-1">
+              <button
+                type="button"
+                onClick={() => setShowCategoryMenu((prev) => !prev)}
+                className="flex w-full items-center justify-between rounded-xl border border-slate-200 px-3 py-2 text-sm text-left"
+              >
+                <span className={selectedCategories.length ? 'text-slate-900' : 'text-slate-500'}>
+                  {selectedCategories.length ? selectedCategories.join(', ') : 'Select one or multiple categories'}
+                </span>
+                <span className="text-slate-500">▾</span>
+              </button>
+
+              {showCategoryMenu && (
+                <div className="absolute z-20 mt-1 w-full rounded-xl border border-slate-200 bg-white shadow-lg">
+                  {CATEGORY_OPTIONS.map((category) => {
+                    const checked = selectedCategories.includes(category)
+                    return (
+                      <label
+                        key={category}
+                        className="flex cursor-pointer items-center justify-between px-3 py-2 text-sm hover:bg-slate-50"
+                      >
+                        <span>{category}</span>
+                        <span className={`text-base font-bold ${checked ? 'text-blue-600' : 'text-slate-300'}`}>
+                          {checked ? '✓' : '○'}
+                        </span>
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => toggleCategory(category)}
+                          className="hidden"
+                        />
+                      </label>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
           </div>
           <div className="lg:col-span-2">
             <label className="text-xs font-semibold text-black">Description</label>
@@ -212,7 +279,7 @@ export default function CreatePost() {
               <div>
                 <label className="text-xs font-semibold text-black">Expertise Name</label>
                 <input
-                  placeholder="Expertise Name"
+                  placeholder="Expertise Name (e.g., Electrical, Teacher)"
                   value={row.skill_name}
                   onChange={(event) =>
                     setSkills((prev) =>
@@ -225,9 +292,9 @@ export default function CreatePost() {
                 />
               </div>
               <div>
-                <label className="text-xs font-semibold text-black">Unit</label>
+                <label className="text-xs font-semibold text-black">Experience</label>
                 <input
-                  placeholder="e.g., Hours, Days"
+                  placeholder="e.g., Months, Years"
                   value={row.unit}
                   onChange={(event) =>
                     setSkills((prev) =>
@@ -238,10 +305,11 @@ export default function CreatePost() {
                 />
               </div>
               <div>
-                <label className="text-xs font-semibold text-black">Cost per Unit</label>
+                <label className="text-xs font-semibold text-black">Charge ($)</label>
                 <input
-                  type="number"
-                  placeholder="Cost per Unit"
+                  type="text"
+                  inputMode="decimal"
+                  placeholder="Enter charge amount ($)"
                   value={row.cost_per_unit}
                   onChange={(event) =>
                     setSkills((prev) =>
@@ -254,11 +322,12 @@ export default function CreatePost() {
                 />
               </div>
               <div>
-                <label className="text-xs font-semibold text-black">Available Workers</label>
+                <label className="text-xs font-semibold text-black">Available Person</label>
                 <div className="flex gap-2">
                   <input
-                    type="number"
-                    placeholder="Workers"
+                    type="text"
+                    inputMode="numeric"
+                    placeholder="Enter available persons"
                     value={row.available_workers}
                     onChange={(event) =>
                       setSkills((prev) =>
@@ -307,7 +376,7 @@ export default function CreatePost() {
               <div>
                 <label className="text-xs font-semibold text-black">Service Name</label>
                 <input
-                  placeholder="Service Name"
+                  placeholder="Service Name(e.g., Plumbing, Tutoring)"
                   value={row.service_name}
                   onChange={(event) =>
                     setServices((prev) =>
@@ -320,7 +389,7 @@ export default function CreatePost() {
                 />
               </div>
               <div>
-                <label className="text-xs font-semibold text-black">Unit</label>
+                <label className="text-xs font-semibold text-black">Service Duration</label>
                 <input
                   placeholder="e.g., Hours, Days"
                   value={row.unit}
@@ -333,10 +402,11 @@ export default function CreatePost() {
                 />
               </div>
               <div>
-                <label className="text-xs font-semibold text-black">Cost per Unit</label>
+                <label className="text-xs font-semibold text-black">Service Cost</label>
                 <input
-                  type="number"
-                  placeholder="Cost per Unit"
+                  type="text"
+                  inputMode="decimal"
+                  placeholder="Enter service cost ($)"
                   value={row.cost_per_unit}
                   onChange={(event) =>
                     setServices((prev) =>
@@ -352,8 +422,9 @@ export default function CreatePost() {
                 <label className="text-xs font-semibold text-black">Available Workers</label>
                 <div className="flex gap-2">
                   <input
-                    type="number"
-                    placeholder="Workers"
+                    type="text"
+                    inputMode="numeric"
+                    placeholder="Enter available workers"
                     value={row.available_workers}
                     onChange={(event) =>
                       setServices((prev) =>
@@ -400,7 +471,7 @@ export default function CreatePost() {
               <div>
                 <label className="text-xs font-semibold text-black">Product Name</label>
                 <input
-                  placeholder="Product Name"
+                  placeholder="Product Name (e.g., Laptop, Book)"
                   value={row.product_name}
                   onChange={(event) =>
                     setProducts((prev) =>
@@ -428,8 +499,9 @@ export default function CreatePost() {
               <div>
                 <label className="text-xs font-semibold text-black">Cost per Unit</label>
                 <input
-                  type="number"
-                  placeholder="Cost per Unit"
+                  type="text"
+                  inputMode="decimal"
+                  placeholder="Enter cost per unit ($)"
                   value={row.cost_per_unit}
                   onChange={(event) =>
                     setProducts((prev) =>
@@ -445,8 +517,9 @@ export default function CreatePost() {
                 <label className="text-xs font-semibold text-black">Available Units</label>
                 <div className="flex gap-2">
                   <input
-                    type="number"
-                    placeholder="Units"
+                    type="text"
+                    inputMode="numeric"
+                    placeholder="Enter available units"
                     value={row.available_units}
                     onChange={(event) =>
                       setProducts((prev) =>
