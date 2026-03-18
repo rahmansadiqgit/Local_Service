@@ -178,7 +178,7 @@ export default function Dashboard() {
       <div className="grid gap-6 lg:grid-cols-2">
         <div className="card">
           <h3 className="mb-4 text-lg font-semibold">Demand Posts</h3>
-          <div className="space-y-3">
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
             {demandPosts.length === 0 ? (
               <p className="text-sm text-slate-500">No demand posts.</p>
             ) : (
@@ -235,7 +235,7 @@ export default function Dashboard() {
 
         <div className="card">
           <h3 className="mb-4 text-lg font-semibold">Supply Posts</h3>
-          <div className="space-y-3">
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
             {supplyPosts.length === 0 ? (
               <p className="text-sm text-slate-500">No supply posts.</p>
             ) : (

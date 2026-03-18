@@ -408,26 +408,28 @@ export default function HomeFeed() {
 
           ) : (
 
-            filteredPosts.map(post => (
+            <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+              {filteredPosts.map(post => (
 
-              <PostCard
-                key={post.id}
-                post={post}
-                skills={skillsByPost[post.id] || []}
-                products={productsByPost[post.id] || []}
-                rating={ratingByPost[post.id]}
-                profile={{
-                  name: post.owner_name ||
-                        post.brand_company_name ||
-                        'Localix Member',
-                  supplyStatus: post.owner_supply_status || '',
-                  demandStatus: post.owner_demand_status || '',
-                  photo: post.owner_profile_photo || '',
-                }}
-                onAction={handleAction}
-              />
+                <PostCard
+                  key={post.id}
+                  post={post}
+                  skills={skillsByPost[post.id] || []}
+                  products={productsByPost[post.id] || []}
+                  rating={ratingByPost[post.id]}
+                  profile={{
+                    name: post.owner_name ||
+                          post.brand_company_name ||
+                          'Localix Member',
+                    supplyStatus: post.owner_supply_status || '',
+                    demandStatus: post.owner_demand_status || '',
+                    photo: post.owner_profile_photo || '',
+                  }}
+                  onAction={handleAction}
+                />
 
-            ))
+              ))}
+            </div>
 
           )}
 
