@@ -33,24 +33,24 @@ export default function ProductTable({ products = [] }) {
   }
 
   return (
-    <div className="overflow-hidden rounded-xl border border-slate-200 dark:border-slate-800">
-      <table className="w-full text-left text-sm">
+    <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800">
+      <table className="min-w-[560px] w-full text-left text-xs sm:text-sm">
         <thead className="bg-slate-50 text-slate-600 dark:bg-slate-900 dark:text-slate-300">
           <tr>
-            <th className="px-4 py-2">
+            <th className="px-3 py-2 whitespace-nowrap">
               <button type="button" onClick={() => handleSort('product_name')}>
                 Product Name
               </button>
             </th>
-            <th className="px-4 py-2">
+            <th className="px-3 py-2 whitespace-nowrap">
               <button type="button" onClick={() => handleSort('unit')}>Unit</button>
             </th>
-            <th className="px-4 py-2">
+            <th className="px-3 py-2 whitespace-nowrap">
               <button type="button" onClick={() => handleSort('cost_per_unit')}>
                 Cost per Unit
               </button>
             </th>
-            <th className="px-4 py-2">
+            <th className="px-3 py-2 whitespace-nowrap">
               <button type="button" onClick={() => handleSort('available_units')}>
                 Available Units
               </button>
@@ -65,10 +65,10 @@ export default function ProductTable({ products = [] }) {
                 index % 2 === 1 ? 'bg-slate-50 dark:bg-slate-900/40' : ''
               }`}
             >
-              <td className="px-4 py-2 font-medium">{product.product_name}</td>
-              <td className="px-4 py-2">{product.unit}</td>
-              <td className="px-4 py-2">${product.cost_per_unit}</td>
-              <td className="px-4 py-2">{product.available_units}</td>
+              <td className="px-3 py-2 font-medium whitespace-nowrap">{product.product_name}</td>
+              <td className="px-3 py-2 whitespace-nowrap">{product.unit}</td>
+              <td className="px-3 py-2 whitespace-nowrap">${product.cost_per_unit}</td>
+              <td className="px-3 py-2 whitespace-nowrap">{product.available_units}</td>
             </tr>
           ))}
         </tbody>
