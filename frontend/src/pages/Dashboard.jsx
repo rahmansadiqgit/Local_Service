@@ -112,11 +112,15 @@ export default function Dashboard() {
     }, {})
   }, [products])
 
-  // Filter posts belonging to the logged-in user using their profile ID
-  const userPosts = useMemo(
-    () => posts.filter((post) => post.owner_id === profile?.id),
-    [posts, profile],
-  )
+  // Filter posts for the selected profile; support owner_id/owner and string/number IDs.
+  const userPosts = useMemo(() => {
+    const targetId = profile?.id
+    if (targetId == null) return []
+    return posts.filter((post) => {
+      const ownerId = post.owner_id ?? post.owner
+      return String(ownerId) === String(targetId)
+    })
+  }, [posts, profile?.id])
 
   const supplyPosts = useMemo(
     () =>
