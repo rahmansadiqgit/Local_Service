@@ -61,12 +61,15 @@ export default function Connections() {
     }
   }
 
+  const profileLikeBoxClass =
+    'card relative overflow-hidden border border-violet-200/70 bg-gradient-to-br from-white/55 via-violet-100/45 to-fuchsia-100/40 shadow-xl backdrop-blur-md'
+
   const renderCard = (person, type) => (
     <button
       key={person.id}
       type="button"
       onClick={() => setSelected({ ...person, type })}
-      className="card text-left transition hover:border-brand-300"
+      className={`${profileLikeBoxClass} text-left transition hover:border-violet-300`}
     >
       <div className="flex items-center gap-3">
         <div className="flex h-12 w-12 items-center justify-center rounded-full bg-brand-100 text-brand-600">
@@ -93,9 +96,18 @@ export default function Connections() {
 
   return (
     <div className="space-y-6">
-      <div className="card">
-        <h2 className="text-2xl font-semibold">Connections</h2>
-        <p className="text-sm text-slate-500">Manage your Localix network.</p>
+      <div className="card relative overflow-hidden border-0 bg-gradient-to-r from-[#c9b6ff] via-[#e6d7ff] to-[#f2eaff] p-0 text-slate-800 shadow-lg">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.45),transparent_58%)]" />
+        <div className="absolute -right-8 -top-8 h-20 w-20 rounded-full bg-white/30 blur-xl" />
+        <div className="relative px-6 py-3.5 sm:px-8 sm:py-4">
+          <h2
+            className="text-xl font-extrabold tracking-tight text-violet-900 sm:text-3xl"
+            style={{ fontFamily: "'Sora', 'Trebuchet MS', sans-serif" }}
+          >
+            Connections
+          </h2>
+          <p className="mt-0.5 text-xs text-violet-800/80 sm:text-sm">Manage your Localix network.</p>
+        </div>
       </div>
 
       <div className="space-y-4">
@@ -118,7 +130,7 @@ export default function Connections() {
         </div>
       </div>
 
-      <div className="card">
+      <div className={profileLikeBoxClass}>
         <h3 className="text-lg font-semibold">Connection Details</h3>
         {!selected ? (
           <p className="mt-3 text-sm text-slate-500">Select a connection to view profile details.</p>
