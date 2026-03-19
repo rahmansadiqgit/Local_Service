@@ -61,11 +61,14 @@ export default function HomeFeed() {
     load()
 
     const handlePostCreated = () => load()
+    const handlePostDeleted = () => load()
     window.addEventListener('post-created', handlePostCreated)
+    window.addEventListener('post-deleted', handlePostDeleted)
 
     return () => {
       active = false
       window.removeEventListener('post-created', handlePostCreated)
+      window.removeEventListener('post-deleted', handlePostDeleted)
     }
 
   }, [isAuthenticated])
