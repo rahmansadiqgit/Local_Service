@@ -1,9 +1,10 @@
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import useAuth from '../context/useAuth'
 
 export default function Login() {
   const navigate = useNavigate()
+  const location = useLocation()
   const { login } = useAuth()
   const [form, setForm] = useState({ email: '', password: '' })
   const [message, setMessage] = useState('')
@@ -20,7 +21,10 @@ export default function Login() {
     setMessage('')
     try {
       await login(form)
-      navigate('/')
+      const params = new URLSearchParams(location.search)
+      const nextPath = params.get('next')
+      const safeNextPath = nextPath && nextPath.startsWith('/') ? nextPath : '/'
+      navigate(safeNextPath)
     } catch (error) {
       console.error(error)
       setMessage('Login failed. Check your credentials.')

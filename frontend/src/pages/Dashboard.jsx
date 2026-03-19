@@ -4,9 +4,11 @@ import api from '../api/client';
 import ProductTable from '../components/ProductTable';
 import ServiceTable from '../components/ServiceTable';
 import SkillTable from '../components/SkillTable';
+import useAuth from '../context/useAuth';
 
 export default function Dashboard() {
   const { id } = useParams();
+  const { user } = useAuth()
   const [profile, setProfile] = useState(null)
   const [posts, setPosts] = useState([])
   const [ratings, setRatings] = useState([])
@@ -15,6 +17,7 @@ export default function Dashboard() {
   const [expandedPostId, setExpandedPostId] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [deleteMessage, setDeleteMessage] = useState('')
 
   useEffect(() => {
     let active = true;
@@ -112,11 +115,15 @@ export default function Dashboard() {
     }, {})
   }, [products])
 
-  // Filter posts belonging to the logged-in user using their profile ID
-  const userPosts = useMemo(
-    () => posts.filter((post) => post.owner_id === profile?.id),
-    [posts, profile],
-  )
+  // Filter posts for the selected profile; support owner_id/owner and string/number IDs.
+  const userPosts = useMemo(() => {
+    const targetId = profile?.id
+    if (targetId == null) return []
+    return posts.filter((post) => {
+      const ownerId = post.owner_id ?? post.owner
+      return String(ownerId) === String(targetId)
+    })
+  }, [posts, profile?.id])
 
   const supplyPosts = useMemo(
     () =>
@@ -224,6 +231,31 @@ export default function Dashboard() {
     return { categories, hasExpertise, hasServices, hasProduct, expertiseRows, serviceRows, productRows }
   }
 
+  const canDeletePosts = useMemo(() => {
+    if (!user?.id || !profile?.id) return false
+    return String(user.id) === String(profile.id)
+  }, [user?.id, profile?.id])
+
+  const handleDeletePost = async (postId) => {
+    const confirmed = window.confirm('Are you sure you want to delete this post?')
+    if (!confirmed) return
+
+    setDeleteMessage('')
+    try {
+      await api.delete(`/posts/${postId}/`)
+      setPosts((prev) => prev.filter((post) => post.id !== postId))
+      setSkills((prev) => prev.filter((item) => item.post !== postId))
+      setProducts((prev) => prev.filter((item) => item.post !== postId))
+      setRatings((prev) => prev.filter((item) => item.post !== postId))
+      setExpandedPostId((prev) => (prev === postId ? null : prev))
+      setDeleteMessage('Post deleted successfully.')
+      window.dispatchEvent(new Event('post-deleted'))
+    } catch (deleteError) {
+      console.error(deleteError)
+      setDeleteMessage('Failed to delete post.')
+    }
+  }
+
   const renderMiniPostCard = (post, sectionType) => {
     const postImageSrc = toMediaUrl(post.image)
     const isDemand = sectionType === 'Demand'
@@ -297,7 +329,18 @@ export default function Dashboard() {
             </div>
 
             <p className="mt-1 text-xs text-slate-600">{toSnippet(post.description)}</p>
-            <div className="mt-1 flex items-center justify-end gap-2">
+            <div className="mt-1 flex items-center justify-between gap-2">
+              <div>
+                {canDeletePosts && (
+                  <button
+                    type="button"
+                    onClick={() => handleDeletePost(post.id)}
+                    className="rounded-full border border-red-300 bg-red-600 px-3 py-1 text-[11px] font-semibold text-white transition hover:bg-red-700"
+                  >
+                    Delete
+                  </button>
+                )}
+              </div>
               <button
                 type="button"
                 onClick={() => setExpandedPostId((prev) => (prev === post.id ? null : post.id))}
@@ -380,6 +423,12 @@ export default function Dashboard() {
       {error && (
         <div className="card bg-red-50 border border-red-200">
           <p className="text-sm text-red-600">{error}</p>
+        </div>
+      )}
+
+      {deleteMessage && (
+        <div className="card border border-slate-200 bg-slate-50">
+          <p className="text-sm text-slate-600">{deleteMessage}</p>
         </div>
       )}
 
