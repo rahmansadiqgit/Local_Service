@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import api from '../api/client';
+import ProductTable from '../components/ProductTable';
+import ServiceTable from '../components/ServiceTable';
+import SkillTable from '../components/SkillTable';
 
 export default function Dashboard() {
   const { id } = useParams();
@@ -115,25 +118,257 @@ export default function Dashboard() {
     [posts, profile],
   )
 
-  const demandPosts = useMemo(
-    () => userPosts.filter((post) => post.post_type === 'Demand'),
+  const supplyPosts = useMemo(
+    () =>
+      userPosts
+        .filter((post) => post.post_type === 'Supply')
+        .sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0)),
     [userPosts],
   )
 
-  const supplyPosts = useMemo(
-    () => userPosts.filter((post) => post.post_type === 'Supply'),
+  const demandPosts = useMemo(
+    () =>
+      userPosts
+        .filter((post) => post.post_type === 'Demand')
+        .sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0)),
     [userPosts],
   )
+
+  const backendOrigin = useMemo(() => {
+    const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api'
+    return apiBase.replace(/\/api\/?$/, '')
+  }, [])
+
+  const toMediaUrl = (value) => {
+    if (!value) return ''
+    if (/^https?:\/\//i.test(value) || value.startsWith('data:') || value.startsWith('blob:')) {
+      return value
+    }
+    if (value.startsWith('/')) return `${backendOrigin}${value}`
+    return `${backendOrigin}/${value}`
+  }
+
+  const formatPostDate = (value) => {
+    if (!value) return 'Just now'
+    const parsed = new Date(value)
+    if (Number.isNaN(parsed.getTime())) return 'Just now'
+    return parsed.toLocaleString()
+  }
+
+  const toSnippet = (value, max = 95) => {
+    const text = String(value || '').trim()
+    if (!text) return 'No description added yet.'
+    return text.length > max ? `${text.slice(0, max)}...` : text
+  }
+
+  const availableStatus = String(profile?.supply_status || '').trim() || 'None'
+  const demandStatus = String(profile?.demand_status || '').trim() || 'None'
+
+  const normalizeCategoryLabel = (value) => {
+    const normalized = String(value || '').trim().toLowerCase()
+    if (normalized === 'expertise') return 'Expertise'
+    if (normalized === 'services' || normalized === 'service') return 'Services'
+    if (normalized === 'product' || normalized === 'products') return 'Product'
+    return ''
+  }
+
+  const parsePostCategories = (value) =>
+    String(value || '')
+      .split(',')
+      .map((item) => normalizeCategoryLabel(item))
+      .filter(Boolean)
+
+  const stripCategoryPrefix = (value) =>
+    String(value || '')
+      .replace(/^__expertise__::/i, '')
+      .replace(/^__service__::/i, '')
+      .trim()
+
+  const buildCategoryRows = (post) => {
+    const categories = parsePostCategories(post?.post_name)
+    const hasExpertise = categories.includes('Expertise')
+    const hasServices = categories.includes('Services')
+    const hasProduct = categories.includes('Product')
+    const rawSkills = skillsByPost[post.id] || []
+    const rawProducts = productsByPost[post.id] || []
+
+    const expertiseTagged = rawSkills
+      .filter((item) => /^__expertise__::/i.test(String(item.skill_name || '')))
+      .map((item) => ({ ...item, skill_name: stripCategoryPrefix(item.skill_name) }))
+
+    const serviceTagged = rawSkills
+      .filter((item) => /^__service__::/i.test(String(item.skill_name || '')))
+      .map((item) => ({
+        ...item,
+        service_name: stripCategoryPrefix(item.skill_name),
+      }))
+
+    const expertiseRows =
+      expertiseTagged.length > 0
+        ? expertiseTagged
+        : hasExpertise && !hasServices
+          ? rawSkills
+              .filter((item) => !/^__service__::/i.test(String(item.skill_name || '')))
+              .map((item) => ({ ...item, skill_name: stripCategoryPrefix(item.skill_name) }))
+          : []
+
+    const serviceRows =
+      serviceTagged.length > 0
+        ? serviceTagged
+        : hasServices && !hasExpertise
+          ? rawSkills.map((item) => ({ ...item, service_name: stripCategoryPrefix(item.skill_name) }))
+          : []
+
+    const productRows = hasProduct ? rawProducts : []
+
+    return { categories, hasExpertise, hasServices, hasProduct, expertiseRows, serviceRows, productRows }
+  }
+
+  const renderMiniPostCard = (post, sectionType) => {
+    const postImageSrc = toMediaUrl(post.image)
+    const isDemand = sectionType === 'Demand'
+    const rating = Number(averageRatingByPost[post.id] || 0).toFixed(2)
+    const { categories, hasExpertise, hasServices, hasProduct, expertiseRows, serviceRows, productRows } =
+      buildCategoryRows(post)
+    const isExpanded = expandedPostId === post.id
+
+    return (
+      <article
+        key={post.id}
+        className={`rounded-2xl border p-3 shadow-sm backdrop-blur-sm ${
+          isDemand ? 'border-blue-200/70 bg-white/75' : 'border-emerald-200/70 bg-white/75'
+        }`}
+      >
+        <div className="flex items-start gap-3">
+          {postImageSrc ? (
+            <img
+              src={postImageSrc}
+              alt={post.post_name}
+              className={`h-16 w-16 rounded-xl border object-cover ${
+                isDemand ? 'border-blue-100' : 'border-emerald-100'
+              }`}
+            />
+          ) : (
+            <div
+              className={`flex h-16 w-16 items-center justify-center rounded-xl border border-dashed text-[10px] font-semibold ${
+                isDemand
+                  ? 'border-blue-200 bg-blue-50 text-blue-400'
+                  : 'border-emerald-200 bg-emerald-50 text-emerald-400'
+              }`}
+            >
+              No image
+            </div>
+          )}
+
+          <div className="min-w-0 flex-1">
+            <div className="flex items-start justify-between gap-2">
+              <p className="truncate font-semibold text-slate-900">{post.post_name}</p>
+              <span
+                className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${
+                  isDemand
+                    ? 'border-rose-200 bg-rose-50 text-rose-700'
+                    : 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                }`}
+              >
+                {sectionType}
+              </span>
+            </div>
+
+            <p className="mt-1 text-[11px] text-slate-400">{formatPostDate(post.created_at)}</p>
+
+            <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-500">
+              <span>{post.location || 'Remote'}</span>
+              <span>Rating: {rating}</span>
+            </div>
+
+            <div className="mt-1 flex flex-wrap gap-1.5">
+              {categories.length > 0 ? (
+                categories.map((item) => (
+                  <span
+                    key={`${post.id}-${item}`}
+                    className="rounded-full border border-violet-200 bg-violet-50 px-2 py-0.5 text-[10px] font-semibold text-violet-700"
+                  >
+                    {item}
+                  </span>
+                ))
+              ) : (
+                <span className="text-[11px] text-slate-400">No category</span>
+              )}
+            </div>
+
+            <p className="mt-1 text-xs text-slate-600">{toSnippet(post.description)}</p>
+            <div className="mt-1 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setExpandedPostId((prev) => (prev === post.id ? null : post.id))}
+                className="rounded-full border border-violet-200 bg-violet-50 px-3 py-1 text-[11px] font-semibold text-violet-700 transition hover:bg-violet-100"
+              >
+                {isExpanded ? 'Hide Details' : 'View Details'}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {isExpanded && (
+          <div className="mt-3 space-y-3 rounded-xl border border-violet-200/70 bg-white/70 p-3">
+            {hasExpertise && (
+              <div className="space-y-2">
+                <p className="text-sm font-semibold text-slate-700">Expertise</p>
+                {expertiseRows.length ? (
+                  <SkillTable skills={expertiseRows} category="Expertise" />
+                ) : (
+                  <p className="text-sm text-slate-400">No expertise detail listed.</p>
+                )}
+              </div>
+            )}
+
+            {hasServices && (
+              <div className="space-y-2">
+                <p className="text-sm font-semibold text-slate-700">Services</p>
+                {serviceRows.length ? (
+                  <ServiceTable services={serviceRows} />
+                ) : (
+                  <p className="text-sm text-slate-400">No services detail listed.</p>
+                )}
+              </div>
+            )}
+
+            {hasProduct && (
+              <div className="space-y-2">
+                <p className="text-sm font-semibold text-slate-700">Product</p>
+                {productRows.length ? (
+                  <ProductTable products={productRows} />
+                ) : (
+                  <p className="text-sm text-slate-400">No product detail listed.</p>
+                )}
+              </div>
+            )}
+
+            {!hasExpertise && !hasServices && !hasProduct && (
+              <p className="text-sm text-slate-400">No detail listed.</p>
+            )}
+          </div>
+        )}
+      </article>
+    )
+  }
 
   return (
     <div className="space-y-6">
-      <div className="card">
-        <h2 className="text-2xl font-semibold">
-          {id ? `${profile?.name || 'User'}'s Dashboard` : 'Dashboard'}
-        </h2>
-        <p className="text-sm text-slate-500">
-          {id ? `Overview of ${profile?.name || 'their'} Localix activity.` : 'Overview of your Localix activity.'}
-        </p>
+      <div className="card relative overflow-hidden border-0 bg-gradient-to-r from-[#c9b6ff] via-[#e6d7ff] to-[#f2eaff] p-0 text-slate-800 shadow-lg">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.45),transparent_58%)]" />
+        <div className="absolute -right-8 -top-8 h-10 w-16 rounded-full bg-white/30 blur-xl" />
+        <div className="relative px-6 py-1 sm:px-8 sm:py-1">
+          <h2
+            className="text-lg font-extrabold tracking-tight text-violet-900 sm:text-3xl"
+            style={{ fontFamily: "'Sora', 'Trebuchet MS', sans-serif" }}
+          >
+            {id ? `${profile?.name || 'User'}'s Dashboard` : 'Dashboard'}
+          </h2>
+          <p className="mt-0.5 text-xs text-violet-800/80">
+            {id ? `Overview of ${profile?.name || 'their'} Localix activity.` : 'Overview of your Localix activity.'}
+          </p>
+        </div>
       </div>
 
       {loading && (
@@ -148,173 +383,96 @@ export default function Dashboard() {
         </div>
       )}
 
-      <div className="card">
-        <h3 className="text-lg font-semibold">User Info</h3>
-        <div className="mt-4 grid gap-4 text-sm sm:grid-cols-2 lg:grid-cols-3">
-          <div>
-            <p className="text-xs uppercase text-slate-500">Name</p>
-            <p className="font-semibold">{profile?.name || profile?.username || 'User'}</p>
+      <div className="card relative overflow-hidden border border-violet-300/80 bg-gradient-to-br from-[#e4cfff] via-[#d7c0ff] to-[#f1ccff] shadow-lg">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255, 255, 255, 0.35),transparent_80%)]" />
+        <div className="absolute -right-16 -top-16 h-40 w-40 rounded-full bg-fuchsia-300/45 blur-3xl" />
+        <div className="relative">
+          <div className="mb-4 border-b border-violet-200/70 pb-3">
+            <h3 className="text-xl font-bold text-violet-900">User Info</h3>
           </div>
-          <div>
-            <p className="text-xs uppercase text-slate-500">Email</p>
-            <p className="font-semibold">{profile?.email || '-'}</p>
-          </div>
-          <div>
-            <p className="text-xs uppercase text-slate-500">Phone</p>
-            <p className="font-semibold">{profile?.phone || '-'}</p>
-          </div>
-          {/* Role removed */}
-          <div>
-            <p className="text-xs uppercase text-slate-500">Location</p>
-            <p className="font-semibold">{profile?.location || '-'}</p>
-          </div>
-          <div>
-            <p className="text-xs uppercase text-slate-500">Status</p>
-            <p className="font-semibold">{profile?.status || '-'}</p>
+          <div className="rounded-2xl border border-violet-300/70 bg-gradient-to-br from-[#f7edff]/80 to-[#ecd8ff]/70 px-4 py-3 backdrop-blur-sm">
+            <div className="grid gap-x-8 gap-y-4 text-sm sm:grid-cols-2">
+              <div className="border-b border-violet-100 pb-3">
+                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-violet-600">Name</p>
+                <p className="mt-1 text-xl font-semibold text-slate-900">{profile?.name || profile?.username || 'User'}</p>
+              </div>
+              <div className="border-b border-violet-100 pb-3">
+                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-violet-600">Email</p>
+                <p className="mt-1 text-xl font-semibold text-slate-900">{profile?.email || '-'}</p>
+              </div>
+              <div className="border-b border-violet-100 pb-3">
+                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-violet-600">Phone</p>
+                <p className="mt-1 text-xl font-semibold text-slate-900">{profile?.phone || '-'}</p>
+              </div>
+              <div className="border-b border-violet-100 pb-3">
+                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-violet-600">Location</p>
+                <p className="mt-1 text-xl font-semibold text-slate-900">{profile?.location || '-'}</p>
+              </div>
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-violet-600">Available Status</p>
+                <p className="mt-1 inline-flex rounded-full border border-violet-500 bg-violet-600 px-3 py-1 text-sm font-semibold text-white shadow-sm">
+                  {availableStatus}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-violet-600">Demand Status</p>
+                <p className="mt-1 inline-flex rounded-full border border-fuchsia-500 bg-fuchsia-600 px-3 py-1 text-sm font-semibold text-white shadow-sm">
+                  {demandStatus}
+                </p>
+              </div>
+            </div>
           </div>
         </div>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
-        <div className="card">
-          <h3 className="mb-4 text-lg font-semibold">Demand Posts</h3>
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+        <div className="card border border-blue-200/70 bg-gradient-to-br from-[#e8f3ff] via-[#dcecff] to-[#eef5ff] shadow-lg">
+          <h3 className="mb-4 text-lg font-semibold text-blue-900">Demand Posts</h3>
+          <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
             {demandPosts.length === 0 ? (
               <p className="text-sm text-slate-500">No demand posts.</p>
             ) : (
-              demandPosts.map((post) => (
-                  <div key={post.id} className="rounded-2xl border border-slate-200 p-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="font-semibold">{post.post_name}</p>
-                      <p className="text-xs text-slate-500">
-                        Avg rating: {Number(averageRatingByPost[post.id] || 0).toFixed(2)}
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setExpandedPostId((prev) => (prev === post.id ? null : post.id))
-                      }
-                      className="text-xs font-semibold text-brand-500"
-                    >
-                      {expandedPostId === post.id ? 'Hide' : 'View'}
-                    </button>
-                  </div>
-                  {expandedPostId === post.id && (
-                    <div className="mt-3 grid gap-3 text-sm text-slate-500">
-                      <p>Location: {post.location || '-'}</p>
-                      <p>Service: {post.service_type}</p>
-                      <div>
-                        <p className="font-semibold text-slate-600 dark:text-slate-300">Skills</p>
-                        <ul className="mt-2 space-y-1">
-                          {(skillsByPost[post.id] || []).map((skill) => (
-                            <li key={skill.id}>
-                              {skill.skill_name} • {skill.unit} • ${skill.cost_per_unit} • {skill.available_workers}
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                      <div>
-                        <p className="font-semibold text-slate-600 dark:text-slate-300">Products</p>
-                        <ul className="mt-2 space-y-1">
-                          {(productsByPost[post.id] || []).map((product) => (
-                            <li key={product.id}>
-                              {product.product_name} • {product.unit} • ${product.cost_per_unit} • {product.available_units}
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              ))
+              demandPosts.map((post) => renderMiniPostCard(post, 'Demand'))
             )}
           </div>
         </div>
 
-        <div className="card">
-          <h3 className="mb-4 text-lg font-semibold">Supply Posts</h3>
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+        <div className="card border border-emerald-200/70 bg-gradient-to-br from-[#eafff5] via-[#ddf7ec] to-[#f0fff8] shadow-lg">
+          <h3 className="mb-4 text-lg font-semibold text-emerald-900">Available Posts</h3>
+          <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
             {supplyPosts.length === 0 ? (
-              <p className="text-sm text-slate-500">No supply posts.</p>
+              <p className="text-sm text-slate-500">No available posts.</p>
             ) : (
-              supplyPosts.map((post) => (
-                <div key={post.id} className="rounded-2xl border border-slate-200 p-4 dark:border-slate-800">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="font-semibold">{post.post_name}</p>
-                      <p className="text-xs text-slate-500">
-                        Avg rating: {Number(averageRatingByPost[post.id] || 0).toFixed(2)}
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setExpandedPostId((prev) => (prev === post.id ? null : post.id))
-                      }
-                      className="text-xs font-semibold text-brand-500"
-                    >
-                      {expandedPostId === post.id ? 'Hide' : 'View'}
-                    </button>
-                  </div>
-                  {expandedPostId === post.id && (
-                    <div className="mt-3 grid gap-3 text-sm text-slate-500">
-                      <p>Location: {post.location || '-'}</p>
-                      <p>Service: {post.service_type}</p>
-                      <div>
-                        <p className="font-semibold text-slate-600 dark:text-slate-300">Skills</p>
-                        <ul className="mt-2 space-y-1">
-                          {(skillsByPost[post.id] || []).map((skill) => (
-                            <li key={skill.id}>
-                              {skill.skill_name} • {skill.unit} • ${skill.cost_per_unit} • {skill.available_workers}
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                      <div>
-                        <p className="font-semibold text-slate-600 dark:text-slate-300">Products</p>
-                        <ul className="mt-2 space-y-1">
-                          {(productsByPost[post.id] || []).map((product) => (
-                            <li key={product.id}>
-                              {product.product_name} • {product.unit} • ${product.cost_per_unit} • {product.available_units}
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              ))
+              supplyPosts.map((post) => renderMiniPostCard(post, 'Available'))
             )}
           </div>
         </div>
       </div>
 
-      <div className="card">
-        <h3 className="mb-4 text-lg font-semibold">Ratings Summary</h3>
-        <div className="overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-800">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-slate-50 text-slate-600 dark:bg-slate-900 dark:text-slate-300">
+      <div className="card border border-violet-300/80 bg-gradient-to-br from-[#f4e9ff] via-[#ecd9ff] to-[#f7ecff] shadow-lg">
+        <h3 className="mb-4 text-lg font-semibold text-violet-900">Ratings Summary</h3>
+        <div className="overflow-hidden rounded-2xl border-2 border-violet-300 bg-white/75 backdrop-blur-sm">
+          <table className="w-full border-collapse text-left text-sm">
+            <thead className="bg-violet-200/70 text-violet-900">
               <tr>
-                <th className="px-4 py-2">Provider ID</th>
-                <th className="px-4 py-2">Average Rating</th>
-                <th className="px-4 py-2">Total Reviews</th>
+                <th className="border border-violet-300 px-4 py-2">Provider ID</th>
+                <th className="border border-violet-300 px-4 py-2">Average Rating</th>
+                <th className="border border-violet-300 px-4 py-2">Total Reviews</th>
               </tr>
             </thead>
             <tbody>
               {ratingsSummary.length === 0 ? (
                 <tr>
-                  <td className="px-4 py-3 text-slate-500" colSpan={3}>
+                  <td className="border border-violet-300 px-4 py-3 text-slate-600" colSpan={3}>
                     No ratings yet.
                   </td>
                 </tr>
               ) : (
                 ratingsSummary.map((row) => (
-                  <tr key={row.providerId} className="border-t border-slate-200 dark:border-slate-800">
-                    <td className="px-4 py-2 font-medium">{row.providerId}</td>
-                    <td className="px-4 py-2">{row.average}</td>
-                    <td className="px-4 py-2">{row.count}</td>
+                  <tr key={row.providerId} className="odd:bg-white/70 even:bg-violet-50/70">
+                    <td className="border border-violet-300 px-4 py-2 font-medium">{row.providerId}</td>
+                    <td className="border border-violet-300 px-4 py-2">{row.average}</td>
+                    <td className="border border-violet-300 px-4 py-2">{row.count}</td>
                   </tr>
                 ))
               )}

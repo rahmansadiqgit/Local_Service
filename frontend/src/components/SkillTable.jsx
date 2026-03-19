@@ -40,24 +40,24 @@ export default function SkillTable({ skills = [], category = 'Expertise' }) {
   }
 
   return (
-    <div className="overflow-hidden rounded-xl border border-slate-200 dark:border-slate-800">
-      <table className="w-full text-left text-sm">
+    <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800">
+      <table className="min-w-[560px] w-full text-left text-xs sm:text-sm">
         <thead className="bg-slate-50 text-slate-600 dark:bg-slate-900 dark:text-slate-300">
           <tr>
-            <th className="px-4 py-2">
+            <th className="px-3 py-2 whitespace-nowrap">
               <button type="button" onClick={() => handleSort('skill_name')}>
                 {nameHeader}
               </button>
             </th>
-            <th className="px-4 py-2">
+            <th className="px-3 py-2 whitespace-nowrap">
               <button type="button" onClick={() => handleSort('unit')}>{unitHeader}</button>
             </th>
-            <th className="px-4 py-2">
+            <th className="px-3 py-2 whitespace-nowrap">
               <button type="button" onClick={() => handleSort('cost_per_unit')}>
                 {costHeader}
               </button>
             </th>
-            <th className="px-4 py-2">
+            <th className="px-3 py-2 whitespace-nowrap">
               <button type="button" onClick={() => handleSort('available_workers')}>
                 {workersHeader}
               </button>
@@ -72,10 +72,10 @@ export default function SkillTable({ skills = [], category = 'Expertise' }) {
                 index % 2 === 1 ? 'bg-slate-50 dark:bg-slate-900/40' : ''
               }`}
             >
-              <td className="px-4 py-2 font-medium">{skill.skill_name}</td>
-              <td className="px-4 py-2">{skill.unit}</td>
-              <td className="px-4 py-2">${skill.cost_per_unit}</td>
-              <td className="px-4 py-2">{skill.available_workers}</td>
+              <td className="px-3 py-2 font-medium whitespace-nowrap">{skill.skill_name}</td>
+              <td className="px-3 py-2 whitespace-nowrap">{skill.unit}</td>
+              <td className="px-3 py-2 whitespace-nowrap">${skill.cost_per_unit}</td>
+              <td className="px-3 py-2 whitespace-nowrap">{skill.available_workers}</td>
             </tr>
           ))}
         </tbody>

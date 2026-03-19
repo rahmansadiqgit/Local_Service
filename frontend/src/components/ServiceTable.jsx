@@ -33,26 +33,26 @@ export default function ServiceTable({ services = [] }) {
   }
 
   return (
-    <div className="overflow-hidden rounded-xl border border-slate-200 dark:border-slate-800">
-      <table className="w-full text-left text-sm">
+    <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800">
+      <table className="min-w-[560px] w-full text-left text-xs sm:text-sm">
         <thead className="bg-slate-50 text-slate-600 dark:bg-slate-900 dark:text-slate-300">
           <tr>
-            <th className="px-4 py-2">
+            <th className="px-3 py-2 whitespace-nowrap">
               <button type="button" onClick={() => handleSort('service_name')}>
                 Service Name
               </button>
             </th>
-            <th className="px-4 py-2">
+            <th className="px-3 py-2 whitespace-nowrap">
               <button type="button" onClick={() => handleSort('unit')}>
                 Service Duration
               </button>
             </th>
-            <th className="px-4 py-2">
+            <th className="px-3 py-2 whitespace-nowrap">
               <button type="button" onClick={() => handleSort('cost_per_unit')}>
                 Service Cost
               </button>
             </th>
-            <th className="px-4 py-2">
+            <th className="px-3 py-2 whitespace-nowrap">
               <button type="button" onClick={() => handleSort('available_workers')}>
                 Available Workers
               </button>
@@ -62,12 +62,12 @@ export default function ServiceTable({ services = [] }) {
         <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
           {sorted.map((row, idx) => (
             <tr key={idx} className={idx % 2 === 0 ? 'bg-white dark:bg-slate-950' : 'bg-slate-50 dark:bg-slate-900'}>
-              <td className="px-4 py-2 text-slate-900 dark:text-slate-100">{row.service_name || '-'}</td>
-              <td className="px-4 py-2 text-slate-900 dark:text-slate-100">{row.unit || '-'}</td>
-              <td className="px-4 py-2 text-slate-900 dark:text-slate-100">
+              <td className="px-3 py-2 text-slate-900 dark:text-slate-100 whitespace-nowrap">{row.service_name || '-'}</td>
+              <td className="px-3 py-2 text-slate-900 dark:text-slate-100 whitespace-nowrap">{row.unit || '-'}</td>
+              <td className="px-3 py-2 text-slate-900 dark:text-slate-100 whitespace-nowrap">
                 ${!isNaN(parseFloat(row.cost_per_unit)) ? parseFloat(row.cost_per_unit).toFixed(2) : '0.00'}
               </td>
-              <td className="px-4 py-2 text-slate-900 dark:text-slate-100">{row.available_workers || 0}</td>
+              <td className="px-3 py-2 text-slate-900 dark:text-slate-100 whitespace-nowrap">{row.available_workers || 0}</td>
             </tr>
           ))}
         </tbody>
