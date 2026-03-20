@@ -160,10 +160,17 @@ export default function ManagePost() {
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-100 dark:from-slate-950 dark:via-slate-900 dark:to-slate-900 py-8 px-4">
         <div className="max-w-7xl mx-auto space-y-6">
           {/* Page Header */}
-          <div className="card bg-gradient-to-r from-blue-600 to-brand-600 dark:from-blue-800 dark:to-brand-800 shadow-xl rounded-3xl overflow-hidden">
-            <div className="p-8 text-white">
-              <h1 className="text-4xl sm:text-5xl font-bold mb-2">📋 Manage Your Posts</h1>
-              <p className="text-blue-100 text-lg">Easily adjust workers for skills and units for products. Real-time cost calculation!</p>
+          <div className="card relative overflow-hidden border-0 bg-gradient-to-r from-[#c9b6ff] via-[#e6d7ff] to-[#f2eaff] p-0 text-slate-800 shadow-lg">
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.45),transparent_58%)]" />
+            <div className="absolute -right-8 -top-8 h-20 w-20 rounded-full bg-white/30 blur-xl" />
+            <div className="relative px-6 py-3.5 sm:px-8 sm:py-4">
+              <h1
+                className="text-2xl font-extrabold tracking-tight text-violet-900 sm:text-3xl"
+                style={{ fontFamily: "'Sora', 'Trebuchet MS', sans-serif" }}
+              >
+                Manage Your Posts
+              </h1>
+              <p className="mt-0.5 text-xs text-violet-800/80 sm:text-sm">Easily adjust workers for skills and units for products. Real-time cost calculation!</p>
             </div>
           </div>
 

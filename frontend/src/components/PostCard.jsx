@@ -126,6 +126,13 @@ export default function PostCard({
 
   const productRows = products
 
+  const profileId = profile?.id ?? post?.owner_id ?? post?.owner
+
+  const handleProfileNavigate = () => {
+    if (!profileId) return
+    navigate(`/dashboard/${profileId}`)
+  }
+
   if (!post) return null
 
   return (
@@ -138,10 +145,10 @@ export default function PostCard({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div 
           className="flex items-start gap-4 cursor-pointer hover:opacity-80 transition-opacity" 
-          onClick={() => navigate(`/dashboard/${profile?.id}`)}
+          onClick={handleProfileNavigate}
           role="button"
           tabIndex={0}
-          onKeyDown={(e) => e.key === 'Enter' && navigate(`/dashboard/${profile?.id}`)}
+          onKeyDown={(e) => e.key === 'Enter' && handleProfileNavigate()}
         >
           <div className="h-12 w-12 overflow-hidden rounded-full border border-slate-200 bg-white">
             <img

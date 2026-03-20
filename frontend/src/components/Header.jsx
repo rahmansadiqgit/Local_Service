@@ -164,13 +164,13 @@ export default function Header() {
             <>
               <Link
                 to="/login"
-                className="rounded-full bg-white/90 px-4 py-2 text-sm font-semibold text-indigo-600 shadow-md hover:bg-yellow-100 transition"
+                className="rounded-full border border-white/50 bg-white/95 px-5 py-2 text-sm font-semibold text-indigo-600 shadow-md transition-all duration-200 hover:-translate-y-0.5 hover:bg-yellow-100 hover:shadow-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-yellow-200 focus-visible:ring-offset-2 focus-visible:ring-offset-indigo-500"
               >
                 Login
               </Link>
               <Link
                 to="/register"
-                className="rounded-full bg-pink-600 px-4 py-2 text-sm font-semibold text-white shadow-md hover:bg-pink-700 transition"
+                className="rounded-full border border-yellow-300 bg-yellow-400 px-5 py-2 text-sm font-bold text-slate-900 shadow-lg transition-all duration-200 hover:-translate-y-0.5 hover:bg-yellow-500 hover:shadow-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-yellow-200 focus-visible:ring-offset-2 focus-visible:ring-offset-indigo-500"
               >
                 Register
               </Link>

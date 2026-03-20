@@ -61,11 +61,14 @@ export default function HomeFeed() {
     load()
 
     const handlePostCreated = () => load()
+    const handlePostDeleted = () => load()
     window.addEventListener('post-created', handlePostCreated)
+    window.addEventListener('post-deleted', handlePostDeleted)
 
     return () => {
       active = false
       window.removeEventListener('post-created', handlePostCreated)
+      window.removeEventListener('post-deleted', handlePostDeleted)
     }
 
   }, [isAuthenticated])
@@ -216,6 +219,10 @@ export default function HomeFeed() {
 
   }
 
+  const filterLabelClass = 'text-[11px] font-semibold uppercase tracking-[0.14em] text-orange-900/90'
+  const filterInputClass =
+    'mt-1.5 w-full rounded-xl border border-white/50 bg-white/45 px-3 py-2 text-sm text-slate-800 shadow-sm transition placeholder:text-slate-500 focus:border-orange-300 focus:outline-none focus:ring-2 focus:ring-orange-200/80'
+
 
 
   return (
@@ -262,39 +269,20 @@ export default function HomeFeed() {
               </p>
             </div>
 
-            {/* Search Bar */}
-            <div className="flex flex-col sm:flex-row gap-3 justify-center">
-              <input
-                type="text"
-                placeholder="Search services..."
-                value={filters.search}
-                onChange={handleFilterChange}
-                name="search"
-                className="w-80 px-4 py-2 rounded-full text-base bg-white text-slate-900 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-300 shadow-lg"
-              />
-              <button
-                type="button"
-                className="px-6 py-2 rounded-full font-bold text-base bg-yellow-400 text-slate-900 hover:bg-yellow-500 transition shadow-lg whitespace-nowrap"
-              >
-                Search
-              </button>
-            </div>
-
-            {/* Action Buttons */}
-            <div className="flex flex-col sm:flex-row gap-4 justify-center pt-4">
-              <button
-                type="button"
-                onClick={() => setFilters((prev) => ({ ...prev, postType: '' }))}
-                className="px-6 py-2 rounded-full font-bold text-base bg-yellow-400 text-slate-900 hover:bg-yellow-500 transition shadow-lg"
-              >
-                Browse Services
-              </button>
-              <Link
-                to={isAuthenticated ? '/create-post' : '/register'}
-                className="px-6 py-2 rounded-full font-bold text-base bg-yellow-400 text-slate-900 hover:bg-yellow-500 transition shadow-lg text-center"
-              >
-                Make Supply or Demand
-              </Link>
+            {/* Hero CTA */}
+            <div className="space-y-2 text-center">
+              <div className="flex justify-center">
+                <Link
+                  to={isAuthenticated ? '/create-post' : '/login?next=%2Fcreate-post'}
+                  className="h-11 rounded-xl bg-yellow-400 px-8 text-center text-base font-bold text-black shadow-md transition hover:bg-yellow-500 hover:shadow-lg whitespace-nowrap inline-flex items-center justify-center"
+                  style={{ color: '#000000' }}
+                >
+                  Create post
+                </Link>
+              </div>
+              <p className="text-sm font-semibold text-amber-100" style={{ textShadow: '0 2px 8px rgba(0, 0, 0, 0.7)' }}>
+                Request your Demand or Offer a Service
+              </p>
             </div>
 
           </div>
@@ -327,66 +315,76 @@ export default function HomeFeed() {
           </div>
         </div>
 
-        <div className="card grid gap-4 lg:grid-cols-6">
+        <div className="relative overflow-hidden rounded-3xl border border-white/45 bg-gradient-to-r from-orange-200/45 via-amber-100/35 to-orange-300/35 p-4 shadow-[0_14px_30px_rgba(251,146,60,0.22)] sm:p-5">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.45),transparent_52%)]" />
+          <div className="absolute -left-10 -top-10 h-24 w-24 rounded-full bg-white/35 blur-2xl" />
+          <div className="absolute -right-10 -bottom-10 h-24 w-24 rounded-full bg-orange-200/45 blur-2xl" />
+          <div className="relative mb-4 flex items-center justify-between gap-3 border-b border-white/45 pb-3">
+            <p className="text-sm font-extrabold tracking-wide text-orange-900">Search & Filters</p>
+            <p className="text-xs text-slate-600">Use filters to quickly narrow service posts</p>
+          </div>
+
+          <div className="relative grid gap-4 lg:grid-cols-6">
           <div className="lg:col-span-2">
-            <label className="text-xs font-semibold text-slate-500">Search</label>
+            <label className={filterLabelClass}>Search</label>
             <input
               name="search"
               value={filters.search}
               onChange={handleFilterChange}
               placeholder="Post name or brand"
-              className="mt-1 w-full rounded-xl border px-3 py-2 text-sm"
+              className={filterInputClass}
             />
           </div>
 
           <div>
-            <label className="text-xs font-semibold text-slate-500">Location</label>
+            <label className={filterLabelClass}>Location</label>
             <input
               name="location"
               value={filters.location}
               onChange={handleFilterChange}
               placeholder="City"
-              className="mt-1 w-full rounded-xl border px-3 py-2 text-sm"
+              className={filterInputClass}
             />
           </div>
 
           <div>
-            <label className="text-xs font-semibold text-slate-500">Min Cost</label>
+            <label className={filterLabelClass}>Min Cost</label>
             <input
               name="minCost"
               type="number"
               value={filters.minCost}
               onChange={handleFilterChange}
-              className="mt-1 w-full rounded-xl border px-3 py-2 text-sm"
+              className={filterInputClass}
             />
           </div>
 
           <div>
-            <label className="text-xs font-semibold text-slate-500">Max Cost</label>
+            <label className={filterLabelClass}>Max Cost</label>
             <input
               name="maxCost"
               type="number"
               value={filters.maxCost}
               onChange={handleFilterChange}
-              className="mt-1 w-full rounded-xl border px-3 py-2 text-sm"
+              className={filterInputClass}
             />
           </div>
 
           <div>
-            <label className="text-xs font-semibold text-slate-500">Rating</label>
+            <label className={filterLabelClass}>Rating</label>
             <select
               name="rating"
               value={filters.rating}
               onChange={handleFilterChange}
-              className="mt-1 w-full rounded-xl border px-3 py-2 text-sm"
+              className={filterInputClass}
             >
               <option value="">Any</option>
-              <option value="5">5+</option>
-              <option value="4">4+</option>
-              <option value="3">3+</option>
-              <option value="2">2+</option>
-              <option value="1">1+</option>
+              <option value="5">5⭐</option>
+              <option value="4">4⭐</option>
+              <option value="3">3⭐</option>
+              <option value="2">2⭐</option>
+              <option value="1">1⭐</option>
             </select>
+          </div>
           </div>
         </div>
 
@@ -416,6 +414,7 @@ export default function HomeFeed() {
                   products={productsByPost[post.id] || []}
                   rating={ratingByPost[post.id]}
                   profile={{
+                    id: post.owner_id || post.owner || null,
                     name: post.owner_name ||
                           post.brand_company_name ||
                           'Localix Member',

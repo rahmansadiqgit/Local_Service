@@ -8,12 +8,15 @@ import CreatePost from './pages/CreatePost'
 import Dashboard from './pages/Dashboard'
 import ERP from './pages/ERP'
 import HomeFeed from './pages/HomeFeed'
+import About from './pages/About'
 import Login from './pages/Login'
 import ManagePost from './pages/ManagePost'
 import Profile from './pages/Profile'
+import ReportProblem from './pages/ReportProblem'
 import Register from './pages/Register'
 import ResetPassword from './pages/ResetPassword'
 import ResetPasswordConfirm from './pages/ResetPasswordConfirm'
+import Services from './pages/Services'
 
 export default function App() {
   return (
@@ -28,6 +31,10 @@ export default function App() {
 
           <Routes>
             <Route path="/" element={<HomeFeed />} />
+            <Route path="/feed" element={<HomeFeed />} />
+            <Route path="/services" element={<Services />} />
+            <Route path="/about" element={<About />} />
+            <Route path="/report" element={<ReportProblem />} />
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
             <Route path="/reset-password" element={<ResetPassword />} />

@@ -1,9 +1,10 @@
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import useAuth from '../context/useAuth'
 
 export default function Login() {
   const navigate = useNavigate()
+  const location = useLocation()
   const { login } = useAuth()
   const [form, setForm] = useState({ email: '', password: '' })
   const [message, setMessage] = useState('')
@@ -20,7 +21,10 @@ export default function Login() {
     setMessage('')
     try {
       await login(form)
-      navigate('/')
+      const params = new URLSearchParams(location.search)
+      const nextPath = params.get('next')
+      const safeNextPath = nextPath && nextPath.startsWith('/') ? nextPath : '/'
+      navigate(safeNextPath)
     } catch (error) {
       console.error(error)
       setMessage('Login failed. Check your credentials.')
@@ -31,9 +35,18 @@ export default function Login() {
 
   return (
     <div className="mx-auto w-full max-w-md space-y-6">
-      <div className="card">
-        <h2 className="text-2xl font-semibold">Login</h2>
-        <p className="text-sm text-slate-500">Access your Localix account.</p>
+      <div className="card relative overflow-hidden border-0 bg-gradient-to-r from-[#c9b6ff] via-[#e6d7ff] to-[#f2eaff] p-0 text-slate-800 shadow-lg">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.45),transparent_58%)]" />
+        <div className="absolute -right-8 -top-8 h-20 w-20 rounded-full bg-white/30 blur-xl" />
+        <div className="relative px-6 py-3.5 sm:px-8 sm:py-4">
+          <h2
+            className="text-xl font-extrabold tracking-tight text-violet-900 sm:text-3xl"
+            style={{ fontFamily: "'Sora', 'Trebuchet MS', sans-serif" }}
+          >
+            Login
+          </h2>
+          <p className="mt-0.5 text-xs text-violet-800/80 sm:text-sm">Access your Localix account.</p>
+        </div>
       </div>
 
       <form onSubmit={handleSubmit} className="card space-y-4">

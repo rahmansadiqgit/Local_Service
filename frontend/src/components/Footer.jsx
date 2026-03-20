@@ -32,7 +32,7 @@ export default function Footer() {
             <ul className="space-y-2 text-sm">
               <li>
                 <Link
-                  to="/feed"
+                  to="/"
                   className="text-white drop-shadow hover:text-yellow-300 transition"
                 >
                   Feed

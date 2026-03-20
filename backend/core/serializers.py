@@ -4,7 +4,7 @@ from django.core.exceptions import ValidationError
 from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
-from .models import ERP, Notification, Post, Product, Rating, Skill
+from .models import ERP, Notification, Post, ProblemReport, Product, Rating, Skill
 
 User = get_user_model()
 
@@ -211,3 +211,26 @@ class NotificationSerializer(serializers.ModelSerializer):
         model = Notification
         fields = ("id", "user", "title", "message", "is_read", "created_at")
         read_only_fields = ("created_at",)
+
+
+class ProblemReportSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ProblemReport
+        fields = (
+            "id",
+            "user",
+            "subject",
+            "details",
+            "reporter_name",
+            "reporter_email",
+            "reporter_phone",
+            "created_at",
+        )
+        read_only_fields = (
+            "id",
+            "user",
+            "reporter_name",
+            "reporter_email",
+            "reporter_phone",
+            "created_at",
+        )

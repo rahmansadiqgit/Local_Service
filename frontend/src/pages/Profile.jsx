@@ -445,43 +445,47 @@ export default function Profile() {
         </div>
       </div>
 
-      <div className="card border border-violet-200/70 bg-gradient-to-br from-white/65 to-fuchsia-50/45 shadow-lg backdrop-blur-md">
-        <h3 className="text-lg font-semibold">Change Password</h3>
+      <div className="card relative overflow-hidden border border-violet-200/80 bg-gradient-to-br from-[#efe6ff]/85 via-[#e7dcff]/78 to-[#f3e9ff]/80 shadow-lg backdrop-blur-sm">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.42),transparent_52%)]" />
+        <div className="absolute -right-10 -bottom-10 h-28 w-28 rounded-full bg-violet-200/35 blur-2xl" />
+        <div className="relative">
+        <h3 className="text-lg font-semibold text-violet-900">Change Password</h3>
         <form onSubmit={handlePasswordChange} className="mt-4 grid gap-4 sm:grid-cols-2">
           <div>
-            <label className="text-xs font-semibold text-slate-500">Old Password</label>
+            <label className="text-xs font-semibold uppercase tracking-[0.12em] text-violet-700">Old Password</label>
             <input
               type="password"
               value={passwordForm.old_password}
               onChange={(event) =>
                 setPasswordForm((prev) => ({ ...prev, old_password: event.target.value }))
               }
-              className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm "
+              className="mt-1.5 w-full rounded-xl border border-violet-200 bg-white/90 px-3 py-2 text-sm text-slate-800 shadow-sm focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-200"
             />
           </div>
           <div>
-            <label className="text-xs font-semibold text-slate-500">New Password</label>
+            <label className="text-xs font-semibold uppercase tracking-[0.12em] text-violet-700">New Password</label>
             <input
               type="password"
               value={passwordForm.new_password}
               onChange={(event) =>
                 setPasswordForm((prev) => ({ ...prev, new_password: event.target.value }))
               }
-              className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm "
+              className="mt-1.5 w-full rounded-xl border border-violet-200 bg-white/90 px-3 py-2 text-sm text-slate-800 shadow-sm focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-200"
             />
           </div>
           <div className="sm:col-span-2">
             <button
               type="submit"
-              className="px-6 py-2 rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-700 active:scale-95 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="rounded-xl bg-gradient-to-r from-violet-600 to-fuchsia-600 px-6 py-2 text-sm font-semibold text-white shadow-sm transition hover:from-violet-700 hover:to-fuchsia-700 active:scale-95 duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Update Password
             </button>
             {passwordMessage && (
-              <p className="mt-2 text-sm text-slate-500">{passwordMessage}</p>
+              <p className="mt-2 text-sm text-slate-600">{passwordMessage}</p>
             )}
           </div>
         </form>
+        </div>
       </div>
     </div>
   )

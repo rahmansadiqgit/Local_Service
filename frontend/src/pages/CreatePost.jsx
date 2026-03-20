@@ -122,12 +122,23 @@ export default function CreatePost() {
   const showExpertiseSection = showAllSections || selectedCategories.includes('Expertise')
   const showServicesSection = showAllSections || selectedCategories.includes('Services')
   const showProductsSection = showAllSections || selectedCategories.includes('Product')
+  const profileLikeInputClass =
+    'mt-1.5 w-full rounded-xl border border-violet-200 bg-gradient-to-br from-white/85 to-violet-50/70 px-3 py-2.5 text-sm shadow-sm transition placeholder:text-slate-400 focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-200'
 
   return (
     <div className="space-y-6">
-      <div className="card">
-        <h2 className="text-2xl font-bold">Create Post</h2>
-        <p className="text-sm text-slate-500">Publish a new available or demand listing.</p>
+      <div className="card relative overflow-hidden border-0 bg-gradient-to-r from-[#c9b6ff] via-[#e6d7ff] to-[#f2eaff] p-0 text-slate-800 shadow-lg">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.45),transparent_58%)]" />
+        <div className="absolute -right-8 -top-8 h-20 w-20 rounded-full bg-white/30 blur-xl" />
+        <div className="relative px-6 py-3.5 sm:px-8 sm:py-4">
+          <h2
+            className="text-xl font-extrabold tracking-tight text-violet-900 sm:text-3xl"
+            style={{ fontFamily: "'Sora', 'Trebuchet MS', sans-serif" }}
+          >
+            Create Post
+          </h2>
+          <p className="mt-0.5 text-xs text-violet-800/80 sm:text-sm">Publish a new available or demand listing.</p>
+        </div>
       </div>
 
       <form onSubmit={handleSubmit} className="card space-y-6">
@@ -138,7 +149,7 @@ export default function CreatePost() {
               name="post_type"
               value={post.post_type}
               onChange={handleChange}
-              className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+              className={profileLikeInputClass}
             >
               <option value="Supply">Available</option>
               <option value="Demand">Demand</option>
@@ -150,7 +161,7 @@ export default function CreatePost() {
               <button
                 type="button"
                 onClick={() => setShowCategoryMenu((prev) => !prev)}
-                className="flex w-full items-center justify-between rounded-xl border border-slate-200 px-3 py-2 text-sm text-left"
+                className={`${profileLikeInputClass} flex items-center justify-between text-left`}
               >
                 <span className={selectedCategories.length ? 'text-slate-900' : 'text-slate-500'}>
                   {selectedCategories.length ? selectedCategories.join(', ') : 'Select one or multiple categories'}
@@ -191,7 +202,7 @@ export default function CreatePost() {
               value={post.description}
               onChange={handleChange}
               rows={3}
-              className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm "
+              className={profileLikeInputClass}
             />
           </div>
           <div>
@@ -200,7 +211,7 @@ export default function CreatePost() {
               name="brand_company_name"
               value={post.brand_company_name}
               onChange={handleChange}
-              className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm "
+              className={profileLikeInputClass}
             />
           </div>
           <div>
@@ -210,7 +221,7 @@ export default function CreatePost() {
               value={post.location}
               onChange={handleChange}
               required
-              className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm "
+              className={profileLikeInputClass}
             />
           </div>
           <div>
@@ -252,7 +263,7 @@ export default function CreatePost() {
               name="website_link"
               value={post.website_link}
               onChange={handleChange}
-              className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm "
+              className={profileLikeInputClass}
             />
           </div>
         </div>
@@ -288,7 +299,7 @@ export default function CreatePost() {
                       ),
                     )
                   }
-                  className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm  "
+                  className={profileLikeInputClass}
                 />
               </div>
               <div>
@@ -301,7 +312,7 @@ export default function CreatePost() {
                       prev.map((item, i) => (i === index ? { ...item, unit: event.target.value } : item)),
                     )
                   }
-                  className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm "
+                  className={profileLikeInputClass}
                 />
               </div>
               <div>
@@ -318,7 +329,7 @@ export default function CreatePost() {
                       ),
                     )
                   }
-                  className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm "
+                  className={profileLikeInputClass}
                 />
               </div>
               <div>
@@ -338,7 +349,7 @@ export default function CreatePost() {
                         ),
                       )
                     }
-                    className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm "
+                    className={profileLikeInputClass}
                   />
                   <button
                     type="button"
@@ -385,7 +396,7 @@ export default function CreatePost() {
                       ),
                     )
                   }
-                  className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                  className={profileLikeInputClass}
                 />
               </div>
               <div>
@@ -398,7 +409,7 @@ export default function CreatePost() {
                       prev.map((item, i) => (i === index ? { ...item, unit: event.target.value } : item)),
                     )
                   }
-                  className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                  className={profileLikeInputClass}
                 />
               </div>
               <div>
@@ -415,7 +426,7 @@ export default function CreatePost() {
                       ),
                     )
                   }
-                  className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                  className={profileLikeInputClass}
                 />
               </div>
               <div>
@@ -433,7 +444,7 @@ export default function CreatePost() {
                         ),
                       )
                     }
-                    className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                    className={profileLikeInputClass}
                   />
                   <button
                     type="button"
@@ -480,7 +491,7 @@ export default function CreatePost() {
                       ),
                     )
                   }
-                  className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm "
+                  className={profileLikeInputClass}
                 />
               </div>
               <div>
@@ -493,7 +504,7 @@ export default function CreatePost() {
                       prev.map((item, i) => (i === index ? { ...item, unit: event.target.value } : item)),
                     )
                   }
-                  className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm "
+                  className={profileLikeInputClass}
                 />
               </div>
               <div>
@@ -510,7 +521,7 @@ export default function CreatePost() {
                       ),
                     )
                   }
-                  className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm "
+                  className={profileLikeInputClass}
                 />
               </div>
               <div>
@@ -528,7 +539,7 @@ export default function CreatePost() {
                         ),
                       )
                     }
-                    className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm "
+                    className={profileLikeInputClass}
                   />
                   <button
                     type="button"

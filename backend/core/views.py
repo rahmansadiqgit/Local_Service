@@ -9,6 +9,7 @@ from django.db.models import Avg, DecimalField, Max, Min
 from django.db.models.functions import Coalesce
 from django.utils.encoding import force_bytes, force_str
 from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
+from django.utils import timezone
 from rest_framework import permissions, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied
@@ -20,7 +21,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 
-from .models import ERP, Notification, Post, Product, Rating, Skill
+from .models import ERP, Notification, Post, ProblemReport, Product, Rating, Skill
 from .serializers import (
     ChangePasswordSerializer,
     EmailTokenObtainPairSerializer,
@@ -29,6 +30,7 @@ from .serializers import (
     PasswordResetConfirmSerializer,
     PasswordResetRequestSerializer,
     PostSerializer,
+    ProblemReportSerializer,
     ProductSerializer,
     RatingSerializer,
     SkillSerializer,
@@ -144,6 +146,46 @@ class PasswordResetConfirmView(APIView):
         user.set_password(new_password)
         user.save()
         return Response({"detail": "Password reset successful."})
+
+
+class ReportProblemView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        subject = str(request.data.get("subject", "")).strip()
+        details = str(request.data.get("details", "")).strip()
+
+        if not subject or not details:
+            return Response(
+                {"detail": "Both subject and details are required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        user_label = request.user.get_full_name() or request.user.username
+        user_email = str(request.user.email or "").strip()
+        if not user_email:
+            return Response(
+                {"detail": "Your account must have an email to submit a report."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        report = ProblemReport.objects.create(
+            user=request.user,
+            subject=subject,
+            details=details,
+            reporter_name=(request.user.name or user_label),
+            reporter_email=user_email,
+            reporter_phone=str(request.user.phone or "").strip(),
+        )
+
+        serializer = ProblemReportSerializer(report)
+        return Response(
+            {
+                "detail": "Report submitted successfully.",
+                "report": serializer.data,
+            },
+            status=status.HTTP_201_CREATED,
+        )
 """
 ModelViewSet automatically gives you:
 
