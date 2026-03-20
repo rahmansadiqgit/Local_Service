@@ -9,6 +9,7 @@ from django.db.models import Avg, DecimalField, Max, Min
 from django.db.models.functions import Coalesce
 from django.utils.encoding import force_bytes, force_str
 from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
+from django.utils import timezone
 from rest_framework import permissions, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied
@@ -144,6 +145,67 @@ class PasswordResetConfirmView(APIView):
         user.set_password(new_password)
         user.save()
         return Response({"detail": "Password reset successful."})
+
+
+class ReportProblemView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        subject = str(request.data.get("subject", "")).strip()
+        details = str(request.data.get("details", "")).strip()
+
+        if not subject or not details:
+            return Response(
+                {"detail": "Both subject and details are required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        user_label = request.user.get_full_name() or request.user.username
+        user_email = str(request.user.email or "").strip()
+        if not user_email:
+            return Response(
+                {"detail": "Your account must have an email to submit a report."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if settings.EMAIL_BACKEND == "django.core.mail.backends.console.EmailBackend":
+            return Response(
+                {
+                    "detail": (
+                        "Email service is not configured. "
+                        "Set SMTP values (EMAIL_BACKEND, EMAIL_HOST, EMAIL_HOST_USER, EMAIL_HOST_PASSWORD)."
+                    )
+                },
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
+        timestamp = timezone.now().isoformat()
+        message = (
+            "New Localix problem report submitted.\n\n"
+            f"Subject: {subject}\n"
+            f"Reported by: {user_label}\n"
+            f"Reporter email: {user_email}\n"
+            f"Time (UTC): {timestamp}\n\n"
+            "Details:\n"
+            f"{details}\n"
+        )
+
+        try:
+            send_mail(
+                subject=f"[Localix Report] {subject}",
+                message=message,
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                recipient_list=["antu2305341317@diu.edu.bd"],
+                reply_to=[user_email],
+                fail_silently=False,
+            )
+        except Exception as send_error:
+            return Response(
+                {"detail": f"Failed to send email: {send_error}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+        return Response({"detail": "Report submitted successfully."}, status=status.HTTP_201_CREATED)
 """
 ModelViewSet automatically gives you:
 

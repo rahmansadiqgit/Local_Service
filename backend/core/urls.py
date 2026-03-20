@@ -10,6 +10,7 @@ from .views import (
     PasswordResetConfirmView,
     PasswordResetRequestView,
     ProfileView,
+    ReportProblemView,
     RegisterView,
     ERPViewSet,
     NotificationViewSet,
@@ -78,5 +79,6 @@ urlpatterns = [
     path("auth/me/", MeView.as_view(), name="me"),
     path("users/profile/", ProfileView.as_view(), name="profile"),
     path("users/change-password/", ChangePasswordView.as_view(), name="change_password"),
+    path("report-problem/", ReportProblemView.as_view(), name="report_problem"),
     path("", include(router.urls)),
 ]
