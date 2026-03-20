@@ -258,16 +258,6 @@ export default function ERPTaskCard({
             </div>
           </div>
 
-          {erp.pdf_slip && (
-            <a
-              href={toMediaUrl(erp.pdf_slip)}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex text-brand-600"
-            >
-              View PDF Slip
-            </a>
-          )}
         </div>
       )}
     </div>
