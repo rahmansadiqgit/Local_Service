@@ -46,6 +46,7 @@ class Post(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     post_type = models.CharField(max_length=10, choices=PostType.choices)
     post_name = models.CharField(max_length=255)
+    post_title = models.CharField(max_length=255, blank=True)
     description = models.TextField(blank=True)
     brand_company_name = models.CharField(max_length=255, blank=True)
     location = models.CharField(max_length=255, blank=True)
@@ -164,3 +165,4 @@ class ProblemReport(models.Model):
 
     def __str__(self) -> str:
         return f"{self.reporter_email} - {self.subject}"
+

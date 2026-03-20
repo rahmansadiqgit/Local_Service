@@ -191,6 +191,18 @@ export default function PostCard({
         </div>
       </div>
 
+      <h3 className="text-center text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
+        {post.post_title || 'Untitled Post'}
+      </h3>
+
+      <div className="rounded-2xl border border-slate-200 bg-white px-4 py-2.5">
+        {post.description ? (
+          <p className="text-sm leading-6 text-slate-700">{post.description}</p>
+        ) : (
+          <p className="text-sm text-slate-400">No description provided.</p>
+        )}
+      </div>
+
       <div className="flex flex-wrap items-center gap-2">
         {displayCategories.length ? (
           displayCategories.map((category) => (
@@ -208,24 +220,16 @@ export default function PostCard({
         )}
       </div>
 
-      <div className="rounded-2xl border border-slate-200 bg-white px-4 py-2.5">
-        {post.description ? (
-          <p className="text-sm leading-6 text-slate-700">{post.description}</p>
-        ) : (
-          <p className="text-sm text-slate-400">No description provided.</p>
-        )}
-      </div>
-
       {postImageSrc ? (
-        <div className="flex items-center justify-center rounded-2xl border border-slate-200/70 bg-transparent p-2.5">
+        <div className="mx-auto w-fit max-w-full rounded-2xl border border-slate-200/70 bg-transparent p-2">
           <img
             src={postImageSrc}
             alt={post.post_name}
-            className="max-h-[270px] w-auto max-w-[90%] rounded-2xl object-contain"
+            className="block max-h-[320px] max-w-full rounded-2xl object-contain"
           />
         </div>
       ) : (
-        <div className="flex h-40 items-center justify-center rounded-2xl border border-dashed border-slate-300/80 bg-transparent text-sm text-slate-400">
+        <div className="flex h-40 w-full items-center justify-center rounded-2xl border border-dashed border-slate-300/80 bg-transparent text-sm text-slate-400">
           No image provided
         </div>
       )}
