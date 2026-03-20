@@ -21,7 +21,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 
-from .models import ERP, Notification, Post, Product, Rating, Skill
+from .models import ERP, Notification, Post, ProblemReport, Product, Rating, Skill
 from .serializers import (
     ChangePasswordSerializer,
     EmailTokenObtainPairSerializer,
@@ -30,6 +30,7 @@ from .serializers import (
     PasswordResetConfirmSerializer,
     PasswordResetRequestSerializer,
     PostSerializer,
+    ProblemReportSerializer,
     ProductSerializer,
     RatingSerializer,
     SkillSerializer,
@@ -168,44 +169,23 @@ class ReportProblemView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        if settings.EMAIL_BACKEND == "django.core.mail.backends.console.EmailBackend":
-            return Response(
-                {
-                    "detail": (
-                        "Email service is not configured. "
-                        "Set SMTP values (EMAIL_BACKEND, EMAIL_HOST, EMAIL_HOST_USER, EMAIL_HOST_PASSWORD)."
-                    )
-                },
-                status=status.HTTP_503_SERVICE_UNAVAILABLE,
-            )
-
-        timestamp = timezone.now().isoformat()
-        message = (
-            "New Localix problem report submitted.\n\n"
-            f"Subject: {subject}\n"
-            f"Reported by: {user_label}\n"
-            f"Reporter email: {user_email}\n"
-            f"Time (UTC): {timestamp}\n\n"
-            "Details:\n"
-            f"{details}\n"
+        report = ProblemReport.objects.create(
+            user=request.user,
+            subject=subject,
+            details=details,
+            reporter_name=(request.user.name or user_label),
+            reporter_email=user_email,
+            reporter_phone=str(request.user.phone or "").strip(),
         )
 
-        try:
-            send_mail(
-                subject=f"[Localix Report] {subject}",
-                message=message,
-                from_email=settings.DEFAULT_FROM_EMAIL,
-                recipient_list=["antu2305341317@diu.edu.bd"],
-                reply_to=[user_email],
-                fail_silently=False,
-            )
-        except Exception as send_error:
-            return Response(
-                {"detail": f"Failed to send email: {send_error}"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
-
-        return Response({"detail": "Report submitted successfully."}, status=status.HTTP_201_CREATED)
+        serializer = ProblemReportSerializer(report)
+        return Response(
+            {
+                "detail": "Report submitted successfully.",
+                "report": serializer.data,
+            },
+            status=status.HTTP_201_CREATED,
+        )
 """
 ModelViewSet automatically gives you:
 

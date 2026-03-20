@@ -53,27 +53,33 @@ export default function ReportProblem() {
         </div>
       </section>
 
-      <form onSubmit={handleSubmit} className="card border border-orange-200/80 bg-gradient-to-br from-white to-orange-50/70 space-y-4">
+      <form
+        onSubmit={handleSubmit}
+        className="card relative overflow-hidden border border-violet-200/80 bg-gradient-to-br from-[#efe6ff]/85 via-[#e7dcff]/78 to-[#f3e9ff]/80 shadow-lg backdrop-blur-sm space-y-4"
+      >
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.42),transparent_52%)]" />
+        <div className="absolute -right-10 -bottom-10 h-28 w-28 rounded-full bg-violet-200/35 blur-2xl" />
+        <div className="relative space-y-4">
         <div>
-          <label className="text-xs font-semibold uppercase tracking-[0.12em] text-orange-700">Subject</label>
+          <label className="text-xs font-semibold uppercase tracking-[0.12em] text-violet-700">Subject</label>
           <input
             name="subject"
             value={form.subject}
             onChange={handleChange}
             placeholder="Short title of the issue"
-            className="mt-1.5 w-full rounded-xl border border-orange-200 bg-white px-3 py-2 text-sm text-slate-800 focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-200"
+            className="mt-1.5 w-full rounded-xl border border-violet-200 bg-white/90 px-3 py-2 text-sm text-slate-800 shadow-sm focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-200"
           />
         </div>
 
         <div>
-          <label className="text-xs font-semibold uppercase tracking-[0.12em] text-orange-700">Details</label>
+          <label className="text-xs font-semibold uppercase tracking-[0.12em] text-violet-700">Details</label>
           <textarea
             name="details"
             value={form.details}
             onChange={handleChange}
             rows={5}
             placeholder="Describe what happened and where you faced the issue."
-            className="mt-1.5 w-full rounded-xl border border-orange-200 bg-white px-3 py-2 text-sm text-slate-800 focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-200"
+            className="mt-1.5 w-full rounded-xl border border-violet-200 bg-white/90 px-3 py-2 text-sm text-slate-800 shadow-sm focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-200"
           />
         </div>
 
@@ -81,11 +87,12 @@ export default function ReportProblem() {
           <button
             type="submit"
             disabled={sending}
-            className="rounded-xl bg-orange-500 px-5 py-2 text-sm font-semibold text-white transition hover:bg-orange-600 disabled:opacity-60"
+            className="rounded-xl bg-gradient-to-r from-violet-600 to-fuchsia-600 px-5 py-2 text-sm font-semibold text-white transition hover:from-violet-700 hover:to-fuchsia-700 disabled:opacity-60"
           >
             {sending ? 'Submitting...' : 'Submit Report'}
           </button>
           {message && <p className="text-sm text-slate-600">{message}</p>}
+        </div>
         </div>
       </form>
     </div>

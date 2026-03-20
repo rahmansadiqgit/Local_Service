@@ -144,3 +144,23 @@ class Notification(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     def __str__(self) -> str:
         return f"{self.user.username} - {self.title}"
+
+
+class ProblemReport(models.Model):
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="problem_reports",
+    )
+    subject = models.CharField(max_length=255)
+    details = models.TextField()
+    reporter_name = models.CharField(max_length=255, blank=True)
+    reporter_email = models.EmailField()
+    reporter_phone = models.CharField(max_length=30, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self) -> str:
+        return f"{self.reporter_email} - {self.subject}"
