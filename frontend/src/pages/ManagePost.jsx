@@ -161,23 +161,119 @@ export default function ManagePost() {
     return expertiseTotal + serviceTotal + productTotal
   }
 
+  const buildConfigurationSnapshot = (post) => {
+    const postId = post.id
+    const expertiseRows = skillBreakdownByPost[postId]?.expertise || []
+    const serviceRows = skillBreakdownByPost[postId]?.services || []
+    const productRows = productsByPost[postId] || []
+
+    const expertise = expertiseRows
+      .map((row) => {
+        const quantity = Number(skillWorkers[`skill-${row.id}`] || 0)
+        const unitCost = Number(row.cost_per_unit || 0)
+        return {
+          id: row.id,
+          name: row.skill_name,
+          unit: row.unit,
+          quantity,
+          duration: 0,
+          unit_cost: unitCost,
+          line_total: quantity * unitCost,
+        }
+      })
+      .filter((row) => row.quantity > 0)
+
+    const services = serviceRows
+      .map((row) => {
+        const quantity = Number(serviceWorkers[`service-${row.id}-workers`] || 0)
+        const duration = Number(serviceDurations[`service-${row.id}-duration`] || 0)
+        const unitCost = Number(row.cost_per_unit || 0)
+        return {
+          id: row.id,
+          name: row.service_name,
+          unit: row.unit,
+          quantity,
+          duration,
+          unit_cost: unitCost,
+          line_total: quantity * duration * unitCost,
+        }
+      })
+      .filter((row) => row.quantity > 0 || row.duration > 0)
+
+    const products = productRows
+      .map((row) => {
+        const quantity = Number(productUnits[`product-${row.id}`] || 0)
+        const unitCost = Number(row.cost_per_unit || 0)
+        return {
+          id: row.id,
+          name: row.product_name,
+          unit: row.unit,
+          quantity,
+          duration: 0,
+          unit_cost: unitCost,
+          line_total: quantity * unitCost,
+        }
+      })
+      .filter((row) => row.quantity > 0)
+
+    const expertiseTotal = expertise.reduce((sum, row) => sum + Number(row.line_total || 0), 0)
+    const serviceTotal = services.reduce((sum, row) => sum + Number(row.line_total || 0), 0)
+    const productTotal = products.reduce((sum, row) => sum + Number(row.line_total || 0), 0)
+    const grand = expertiseTotal + serviceTotal + productTotal
+
+    return {
+      generated_at: new Date().toISOString(),
+      post: {
+        id: post.id,
+        title: post.post_title || '',
+        name: post.post_name || '',
+        type: post.post_type || '',
+        location: post.location || '',
+        description: post.description || '',
+        brand_company_name: post.brand_company_name || '',
+        website_link: post.website_link || '',
+        created_at: post.created_at || '',
+        owner_id: post.owner_id || null,
+        owner_name: post.owner_name || '',
+        owner_status: post.owner_status || '',
+        owner_supply_status: post.owner_supply_status || '',
+        owner_demand_status: post.owner_demand_status || '',
+      },
+      expertise,
+      services,
+      products,
+      totals: {
+        expertise: expertiseTotal,
+        services: serviceTotal,
+        products: productTotal,
+        grand,
+      },
+    }
+  }
+
   const handleCreateOrUpdateErp = async (post) => {
-    const total = getTotalForPost(post.id)
+    const snapshot = buildConfigurationSnapshot(post)
+    const total = Number(snapshot.totals?.grand || getTotalForPost(post.id) || 0)
     const existing = erpByPost[post.id]
     try {
       if (existing) {
-        const { data } = await api.patch(`/erp/${existing.id}/`, { total_cost: total })
+        const { data } = await api.patch(`/erp/${existing.id}/`, {
+          total_cost: total,
+          configuration_snapshot: snapshot,
+          is_configured: true,
+        })
         setErpItems((prev) => prev.map((item) => (item.id === data.id ? data : item)))
-        showMessage('ERP task updated with new total cost', 'success')
+        showMessage('ERP task updated with finalized configuration', 'success')
       } else {
         const payload = {
-          category: post.post_type === 'Supply' ? 'Provided' : 'Received',
           post: post.id,
           total_cost: total,
+          configuration_snapshot: snapshot,
+          is_configured: true,
         }
         const { data } = await api.post('/erp/', payload)
         setErpItems((prev) => [...prev, data])
-        showMessage('ERP task created successfully', 'success')
+        showMessage('ERP task created with finalized configuration', 'success')
       }
     } catch (error) {
       console.error(error)

@@ -113,6 +113,7 @@ class ERP(models.Model):
         blank=True,
     )
     total_cost = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    configuration_snapshot = models.JSONField(default=dict, blank=True)
     created_at = models.DateTimeField(auto_now_add=True, null=True, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
     is_configured = models.BooleanField(default=False)

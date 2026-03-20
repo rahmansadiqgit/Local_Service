@@ -187,10 +187,14 @@ class ERPSerializer(serializers.ModelSerializer):
             "stage",
             "post",
             "provider",
+            "receiver",
             "assigned_workers",
             "total_cost",
+            "configuration_snapshot",
+            "is_configured",
             "pdf_slip",
         )
+        read_only_fields = ("provider", "receiver", "category")
 
 
 class RatingSerializer(serializers.ModelSerializer):
