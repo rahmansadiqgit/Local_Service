@@ -72,8 +72,24 @@ export default function Footer() {
             </h3>
 
             <div className="space-y-2 text-sm text-white drop-shadow">
-              <p>Email: antu2305341317@diu.edu.bd</p>
-              <p>Phone: 01709913594</p>
+              <p>
+                Email:{" "}
+                <a
+                  href="mailto:antu2305341317@diu.edu.bd"
+                  className="hover:text-yellow-300 transition"
+                >
+                  antu2305341317@diu.edu.bd
+                </a>
+              </p>
+              <p>
+                Phone:{" "}
+                <a
+                  href="tel:+8801709913594"
+                  className="hover:text-yellow-300 transition"
+                >
+                  01709913594
+                </a>
+              </p>
             </div>
           </div>
 
