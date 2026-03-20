@@ -48,3 +48,39 @@ a {
 a:hover {
   color: #ec4899; /* Pink hover to match gradient */
 }
+
+/* Professional interactive hover for system buttons (except header login/register) */
+button:not(.header-auth-btn):not(.settings-gear-btn):not(:disabled) {
+  transition:
+    transform 220ms ease,
+    box-shadow 220ms ease,
+    filter 220ms ease,
+    background-color 220ms ease,
+    color 220ms ease;
+}
+
+button:not(.header-auth-btn):not(.settings-gear-btn):not(:disabled):hover {
+  transform: translateY(-1px) scale(1.03);
+  box-shadow: 0 10px 24px rgba(79, 70, 229, 0.25);
+  filter: saturate(1.08);
+}
+
+button:not(.header-auth-btn):not(.settings-gear-btn):not(:disabled):focus-visible {
+  outline: 2px solid rgba(253, 224, 71, 0.9);
+  outline-offset: 2px;
+}
+
+/* Professional hover for page header cards */
+.card.border-0.bg-gradient-to-r {
+  transition:
+    transform 260ms ease,
+    box-shadow 260ms ease,
+    filter 260ms ease;
+  will-change: transform;
+}
+
+.card.border-0.bg-gradient-to-r:hover {
+  transform: translateY(-2px) scale(1.005);
+  box-shadow: 0 14px 30px rgba(91, 33, 182, 0.28);
+  filter: saturate(1.05);
+}
