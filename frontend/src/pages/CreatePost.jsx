@@ -7,6 +7,7 @@ const CATEGORY_OPTIONS = ['Expertise', 'Services', 'Product']
 const initialPost = {
   post_type: 'Supply',
   post_name: '',
+  post_title: '',
   description: '',
   brand_company_name: '',
   location: '',
@@ -214,6 +215,17 @@ export default function CreatePost() {
                 </div>
               )}
             </div>
+          </div>
+          <div className="lg:col-span-2">
+            <label className="text-xs font-semibold text-black">Post Title</label>
+            <input
+              type="text"
+              name="post_title"
+              value={post.post_title}
+              onChange={handleChange}
+              placeholder="Give your post a descriptive title"
+              className={profileLikeInputClass}
+            />
           </div>
           <div className="lg:col-span-2">
             <label className="text-xs font-semibold text-black">Description</label>

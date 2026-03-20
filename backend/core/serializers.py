@@ -143,6 +143,7 @@ class PostSerializer(serializers.ModelSerializer):
             "owner_demand_status",
             "post_type",
             "post_name",
+            "post_title",
             "description",
             "brand_company_name",
             "location",
@@ -234,3 +235,7 @@ class ProblemReportSerializer(serializers.ModelSerializer):
             "reporter_phone",
             "created_at",
         )
+
+
+
+
