@@ -1,11 +1,16 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import api from '../api/client'
+import defaultAvatar from '../assets/default-avatar.svg'
 
 export default function ERP() {
+  const navigate = useNavigate()
   const [erpItems, setErpItems] = useState([])
+  const [currentUserId, setCurrentUserId] = useState(null)
   const [posts, setPosts] = useState([])
   const [ratings, setRatings] = useState([])
   const [expandedId, setExpandedId] = useState(null)
+  const [trackOpenId, setTrackOpenId] = useState(null)
   const [workerPool, setWorkerPool] = useState('')
   const [filters, setFilters] = useState({
     category: '',
@@ -16,20 +21,38 @@ export default function ERP() {
   })
   const [message, setMessage] = useState('')
 
+  const backendOrigin = useMemo(() => {
+    const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api'
+    return apiBase.replace(/\/api\/?$/, '')
+  }, [])
+
+  const toMediaUrl = (value) => {
+    if (!value) return ''
+    if (/^https?:\/\//i.test(value) || value.startsWith('data:') || value.startsWith('blob:')) {
+      return value
+    }
+    if (value.startsWith('/')) {
+      return `${backendOrigin}${value}`
+    }
+    return `${backendOrigin}/${value}`
+  }
+
   useEffect(() => {
     let active = true
 
     const load = async () => {
       try {
-        const [erpRes, postRes, ratingRes] = await Promise.all([
+        const [erpRes, postRes, ratingRes, meRes] = await Promise.all([
           api.get('/erp/'),
           api.get('/posts/'),
           api.get('/ratings/'),
+          api.get('/auth/me/'),
         ])
         if (!active) return
         setErpItems(erpRes.data)
         setPosts(postRes.data)
         setRatings(ratingRes.data)
+        setCurrentUserId(meRes.data?.id ?? null)
       } catch (error) {
         console.error(error)
       }
@@ -129,16 +152,62 @@ export default function ERP() {
     }
   }
 
-  const handleAssignWorkers = async (erp, workerIds) => {
-    try {
-      const { data } = await api.post(`/erp/${erp.id}/assign_workers/`, { worker_ids: workerIds })
-      setErpItems((prev) => prev.map((item) => (item.id === data.id ? data : item)))
-      notify('Workers Assigned', `Workers assigned to task ${erp.id}.`)
-      setMessage('Workers assigned successfully.')
-    } catch (error) {
-      console.error(error)
-      setMessage('Failed to assign workers.')
+  const getPhaseTasks = (erp) => {
+    const hasWorkers = Array.isArray(erp.assigned_workers) && erp.assigned_workers.length > 0
+    const hasPdfSlip = Boolean(erp.pdf_slip)
+    const hasTotalCost = Number(erp.total_cost || 0) > 0
+    const hasLinkedPost = Boolean(erp.post)
+
+    return {
+      Pending: [
+        {
+          label: 'Post linked to ERP task',
+          done: hasLinkedPost,
+        },
+        {
+          label: 'Assign at least one worker',
+          done: hasWorkers,
+        },
+      ],
+      'On Process': [
+        {
+          label: 'Generate PDF slip',
+          done: hasPdfSlip,
+        },
+        {
+          label: 'Set final total cost',
+          done: hasTotalCost,
+        },
+      ],
+      Completed: [
+        {
+          label: 'Process completed',
+          done: erp.stage === 'Completed',
+        },
+      ],
     }
+  }
+
+  const handleTrackStage = async (erp) => {
+    if (erp.stage === 'Completed') {
+      setMessage(`Task ${erp.id} is already in Completed phase.`)
+      return
+    }
+
+    const phaseTasks = getPhaseTasks(erp)
+    const currentTasks = phaseTasks[erp.stage] || []
+    const pendingTasks = currentTasks.filter((task) => !task.done)
+
+    if (pendingTasks.length > 0) {
+      setMessage(
+        `Complete these tasks first: ${pendingTasks.map((task) => task.label).join(', ')}`,
+      )
+      return
+    }
+
+    const nextStage = erp.stage === 'Pending' ? 'On Process' : 'Completed'
+    await handleStageChange(erp, nextStage)
+    setMessage(`Task ${erp.id} moved to ${nextStage}.`)
   }
 
   const handleGeneratePdf = async (erp) => {
@@ -146,7 +215,10 @@ export default function ERP() {
       const { data } = await api.post(`/erp/${erp.id}/generate_pdf/`)
       setErpItems((prev) => prev.map((item) => (item.id === data.id ? data : item)))
       if (data.pdf_slip) {
-        window.open(data.pdf_slip, '_blank')
+        const pdfUrl = /^https?:\/\//i.test(data.pdf_slip)
+          ? data.pdf_slip
+          : `${backendOrigin}${data.pdf_slip.startsWith('/') ? '' : '/'}${data.pdf_slip}`
+        window.open(pdfUrl, '_blank')
       }
     } catch (error) {
       console.error(error)
@@ -327,7 +399,28 @@ export default function ERP() {
         ) : (
           filteredTasks.map((erp) => {
             const post = postMap[erp.post]
+            const phases = ['Pending', 'On Process', 'Completed']
+            const activePhaseIndex = phases.indexOf(erp.stage)
+            const phaseTasks = getPhaseTasks(erp)
+            const snapshot = erp.configuration_snapshot || {}
+            const snapshotPost = snapshot.post || {}
+            const snapshotExpertise = Array.isArray(snapshot.expertise) ? snapshot.expertise : []
+            const snapshotServices = Array.isArray(snapshot.services) ? snapshot.services : []
+            const snapshotProducts = Array.isArray(snapshot.products) ? snapshot.products : []
+            const snapshotTotals = snapshot.totals || {}
             const rating = averageRatingByPost[erp.post] || 0
+            const viewerRole =
+              currentUserId && String(erp.provider) === String(currentUserId)
+                ? 'Provider'
+                : currentUserId && String(erp.receiver) === String(currentUserId)
+                  ? 'Receiver'
+                  : 'Viewer'
+            const roleLabel =
+              viewerRole === 'Provider'
+                ? 'Providing'
+                : viewerRole === 'Receiver'
+                  ? 'Receiving'
+                  : erp.category
             const stageStyle =
               erp.stage === 'Completed'
                 ? 'bg-emerald-100 text-emerald-700'
@@ -338,9 +431,23 @@ export default function ERP() {
               <div key={erp.id} className="card space-y-4 transition-shadow hover:shadow-lg">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div>
-                    <p className="text-xs uppercase text-slate-500">{erp.category}</p>
+                    <p className="text-xs uppercase text-slate-500">{roleLabel}</p>
                     <h3 className="text-lg font-semibold">{post?.post_name || `Task #${erp.id}`}</h3>
                     <p className="text-sm text-slate-500">{post?.location || 'Unknown location'}</p>
+                    {post?.owner_id && (
+                      <button
+                        type="button"
+                        onClick={() => navigate(`/dashboard/${post.owner_id}`)}
+                        className="mt-2 inline-flex items-center gap-2 rounded-lg border border-slate-200 px-2 py-1 text-xs font-semibold text-slate-600 hover:bg-slate-50"
+                      >
+                        <img
+                          src={toMediaUrl(post?.owner_profile_photo) || defaultAvatar}
+                          alt={post?.owner_name || 'Post owner'}
+                          className="h-6 w-6 rounded-full object-cover"
+                        />
+                        <span>{post?.owner_name || `Owner #${post.owner_id}`}</span>
+                      </button>
+                    )}
                   </div>
                   <span className={`rounded-full px-3 py-1 text-xs font-semibold ${stageStyle}`}>
                     {erp.stage}
@@ -348,13 +455,12 @@ export default function ERP() {
                 </div>
 
                 <div className="flex flex-wrap items-center gap-3 text-sm text-slate-500">
-                  <span>Provider: #{erp.provider || 'N/A'}</span>
                   <span>Rating: {rating.toFixed(2)}</span>
                   <span>Total: ${Number(erp.total_cost || 0).toFixed(2)}</span>
                 </div>
 
                 <div className="flex flex-wrap gap-2">
-                  {['Pending', 'On Process', 'Completed'].map((stage) => (
+                  {['Pending'].map((stage) => (
                     <button
                       key={stage}
                       type="button"
@@ -370,35 +476,10 @@ export default function ERP() {
                   ))}
                   <button
                     type="button"
-                    onClick={() => {
-                      const raw = window.prompt('Enter worker IDs separated by comma')
-                      if (!raw) return
-                      const ids = raw
-                        .split(',')
-                        .map((id) => Number(id.trim()))
-                        .filter(Boolean)
-                      handleAssignWorkers(erp, ids)
-                    }}
-                    className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600"
+                    onClick={() => setTrackOpenId((prev) => (prev === erp.id ? null : erp.id))}
+                    className="rounded-full border border-violet-200 px-3 py-1 text-xs font-semibold text-violet-700"
                   >
-                    Assign (Manual)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const ids = workerPool
-                        .split(',')
-                        .map((id) => Number(id.trim()))
-                        .filter(Boolean)
-                      if (ids.length === 0) {
-                        setMessage('Worker pool is empty for auto-assign.')
-                        return
-                      }
-                      handleAssignWorkers(erp, ids)
-                    }}
-                    className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600"
-                  >
-                    Assign (Auto)
+                    Track
                   </button>
                   <button
                     type="button"
@@ -416,19 +497,166 @@ export default function ERP() {
                   </button>
                 </div>
 
+                {trackOpenId === erp.id && (
+                  <div className="space-y-3 rounded-xl border border-violet-200 bg-violet-50/50 p-3 text-xs text-slate-700">
+                    <div className="flex flex-wrap items-center gap-2">
+                      {phases.map((phase, index) => {
+                        const isDone = index < activePhaseIndex
+                        const isActive = phase === erp.stage
+                        return (
+                          <span
+                            key={`phase-chip-${erp.id}-${phase}`}
+                            className={`rounded-full px-3 py-1 font-semibold ${
+                              isActive
+                                ? 'bg-violet-600 text-white'
+                                : isDone
+                                  ? 'bg-emerald-100 text-emerald-700'
+                                  : 'border border-slate-200 bg-white text-slate-600'
+                            }`}
+                          >
+                            {phase}
+                          </span>
+                        )
+                      })}
+                    </div>
+
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div className="rounded-lg border border-slate-200 bg-white p-2">
+                        <p className="font-semibold text-slate-800">Pending Tasks</p>
+                        <ul className="mt-1 space-y-1">
+                          {phaseTasks.Pending.map((task) => (
+                            <li key={`${erp.id}-pending-${task.label}`} className="flex items-center gap-1">
+                              <span className={task.done ? 'text-emerald-600' : 'text-amber-600'}>
+                                {task.done ? '✓' : '•'}
+                              </span>
+                              <span>{task.label}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+
+                      <div className="rounded-lg border border-slate-200 bg-white p-2">
+                        <p className="font-semibold text-slate-800">On Process Tasks</p>
+                        <ul className="mt-1 space-y-1">
+                          {phaseTasks['On Process'].map((task) => (
+                            <li key={`${erp.id}-onprocess-${task.label}`} className="flex items-center gap-1">
+                              <span className={task.done ? 'text-emerald-600' : 'text-amber-600'}>
+                                {task.done ? '✓' : '•'}
+                              </span>
+                              <span>{task.label}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleTrackStage(erp)}
+                        className="rounded-full border border-violet-300 bg-white px-3 py-1 font-semibold text-violet-700"
+                      >
+                        {erp.stage === 'Completed' ? 'Completed' : 'Next State'}
+                      </button>
+                      <p className="text-[11px] text-slate-500">
+                        Flow: Pending → On Process → Completed
+                      </p>
+                    </div>
+                  </div>
+                )}
+
                 {expandedId === erp.id && (
-                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
-                    <p>Service Type: {post?.service_type || '-'}</p>
-                    <p>Post Type: {post?.post_type || '-'}</p>
-                    <p>Brand: {post?.brand_company_name || '-'}</p>
-                    <p>Website: {post?.website_link || '-'}</p>
-                    <p>Assigned Workers: {(erp.assigned_workers || []).length}</p>
+                  <div className="space-y-4 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+                    <div className="rounded-xl border border-slate-200 bg-white p-3">
+                      <h4 className="text-sm font-semibold text-slate-800">Post Details</h4>
+                      <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                        <p><span className="font-semibold text-slate-700">Title:</span> {snapshotPost.title || post?.post_title || '-'}</p>
+                        <p><span className="font-semibold text-slate-700">Type:</span> {snapshotPost.type || post?.post_type || '-'}</p>
+                        <p><span className="font-semibold text-slate-700">Name:</span> {snapshotPost.name || post?.post_name || '-'}</p>
+                        <p><span className="font-semibold text-slate-700">Location:</span> {snapshotPost.location || post?.location || '-'}</p>
+                        <p><span className="font-semibold text-slate-700">Brand:</span> {snapshotPost.brand_company_name || post?.brand_company_name || '-'}</p>
+                        <p>
+                          <span className="font-semibold text-slate-700">Website:</span>{' '}
+                          {snapshotPost.website_link || post?.website_link ? (
+                            <a
+                              href={snapshotPost.website_link || post?.website_link}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-brand-600"
+                            >
+                              Open link
+                            </a>
+                          ) : '-'}
+                        </p>
+                      </div>
+                      <p className="mt-2">
+                        <span className="font-semibold text-slate-700">Description:</span>{' '}
+                        {snapshotPost.description || post?.description || '-'}
+                      </p>
+                      <p className="mt-2">
+                        <span className="font-semibold text-slate-700">Assigned Workers:</span> {(erp.assigned_workers || []).length}
+                      </p>
+                    </div>
+
+                    {[{
+                      title: 'Expertise (Modified)',
+                      rows: snapshotExpertise,
+                    }, {
+                      title: 'Services (Modified)',
+                      rows: snapshotServices,
+                    }, {
+                      title: 'Products (Modified)',
+                      rows: snapshotProducts,
+                    }].map((section) => (
+                      section.rows.length > 0 ? (
+                        <div key={section.title} className="rounded-xl border border-slate-200 bg-white p-3">
+                          <h4 className="text-sm font-semibold text-slate-800">{section.title}</h4>
+                          <div className="mt-2 overflow-x-auto">
+                            <table className="min-w-full text-left text-xs">
+                              <thead>
+                                <tr className="border-b border-slate-200 text-slate-500">
+                                  <th className="px-2 py-1">Name</th>
+                                  <th className="px-2 py-1">Unit</th>
+                                  <th className="px-2 py-1">Qty</th>
+                                  <th className="px-2 py-1">Duration</th>
+                                  <th className="px-2 py-1">Unit Cost</th>
+                                  <th className="px-2 py-1">Line Total</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {section.rows.map((row) => (
+                                  <tr key={`${section.title}-${row.id}`} className="border-b border-slate-100 last:border-none">
+                                    <td className="px-2 py-1 font-medium text-slate-700">{row.name || '-'}</td>
+                                    <td className="px-2 py-1">{row.unit || '-'}</td>
+                                    <td className="px-2 py-1">{Number(row.quantity || 0)}</td>
+                                    <td className="px-2 py-1">{Number(row.duration || 0)}</td>
+                                    <td className="px-2 py-1">${Number(row.unit_cost || 0).toFixed(2)}</td>
+                                    <td className="px-2 py-1 font-semibold text-slate-700">${Number(row.line_total || 0).toFixed(2)}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      ) : null
+                    ))}
+
+                    <div className="rounded-xl border border-slate-200 bg-white p-3">
+                      <h4 className="text-sm font-semibold text-slate-800">Final Cost Summary</h4>
+                      <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                        <p><span className="font-semibold text-slate-700">Expertise Total:</span> ${Number(snapshotTotals.expertise || 0).toFixed(2)}</p>
+                        <p><span className="font-semibold text-slate-700">Services Total:</span> ${Number(snapshotTotals.services || 0).toFixed(2)}</p>
+                        <p><span className="font-semibold text-slate-700">Products Total:</span> ${Number(snapshotTotals.products || 0).toFixed(2)}</p>
+                        <p><span className="font-semibold text-slate-700">Grand Total:</span> ${Number(snapshotTotals.grand || erp.total_cost || 0).toFixed(2)}</p>
+                      </div>
+                    </div>
+
                     {erp.pdf_slip && (
                       <a
-                        href={erp.pdf_slip}
+                        href={toMediaUrl(erp.pdf_slip)}
                         target="_blank"
                         rel="noreferrer"
-                        className="mt-2 inline-flex text-brand-600"
+                        className="inline-flex text-brand-600"
                       >
                         View PDF Slip
                       </a>

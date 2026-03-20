@@ -185,12 +185,31 @@ export default function HomeFeed() {
         total_cost: cost.min,
       }
 
+      let erpCreated = false
+
       // Try to create ERP task
       try {
         await api.post('/erp/', erpPayload)
+        erpCreated = true
       } catch (erpError) {
         console.warn('ERP creation issue:', erpError)
-        // Continue even if ERP fails (might already exist)
+
+        const statusCode = erpError?.response?.status
+        const detail = erpError?.response?.data
+
+        if (statusCode === 400 && typeof detail === 'object' && detail !== null) {
+          const text = Object.entries(detail)
+            .map(([field, messages]) => {
+              const messageText = Array.isArray(messages) ? messages.join(' ') : `${messages}`
+              return `${field}: ${messageText}`
+            })
+            .join(' | ')
+          setActionMessage(`Action failed: ${text || 'Could not create ERP task.'}`)
+        } else {
+          setActionMessage('Action failed: Could not create ERP task.')
+        }
+
+        return
       }
 
       // Send notification
@@ -202,6 +221,11 @@ export default function HomeFeed() {
         })
       } catch (notifError) {
         console.warn('Notification issue:', notifError)
+      }
+
+      if (!erpCreated) {
+        setActionMessage('Action failed. Please try again.')
+        return
       }
 
       setActionMessage('Action sent. Navigating to manage post...')
