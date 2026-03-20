@@ -50,6 +50,9 @@ export default function ERPTaskCard({
           <p className="text-xs uppercase text-slate-500">{roleLabel}</p>
           <h3 className="text-lg font-semibold">{post?.post_name || `Task #${erp.id}`}</h3>
           <p className="text-sm text-slate-500">{post?.location || 'Unknown location'}</p>
+          <p className="mt-1 text-sm text-slate-600">
+            <span className="font-semibold">Post Title:</span> {post?.post_title || snapshotPost?.title || '-'}
+          </p>
           {post?.owner_id && (
             <button
               type="button"
