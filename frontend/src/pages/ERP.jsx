@@ -10,6 +10,7 @@ export default function ERP() {
   const [posts, setPosts] = useState([])
   const [ratings, setRatings] = useState([])
   const [expandedId, setExpandedId] = useState(null)
+  const [trackOpenId, setTrackOpenId] = useState(null)
   const [workerPool, setWorkerPool] = useState('')
   const [filters, setFilters] = useState({
     category: '',
@@ -151,16 +152,62 @@ export default function ERP() {
     }
   }
 
-  const handleAssignWorkers = async (erp, workerIds) => {
-    try {
-      const { data } = await api.post(`/erp/${erp.id}/assign_workers/`, { worker_ids: workerIds })
-      setErpItems((prev) => prev.map((item) => (item.id === data.id ? data : item)))
-      notify('Workers Assigned', `Workers assigned to task ${erp.id}.`)
-      setMessage('Workers assigned successfully.')
-    } catch (error) {
-      console.error(error)
-      setMessage('Failed to assign workers.')
+  const getPhaseTasks = (erp) => {
+    const hasWorkers = Array.isArray(erp.assigned_workers) && erp.assigned_workers.length > 0
+    const hasPdfSlip = Boolean(erp.pdf_slip)
+    const hasTotalCost = Number(erp.total_cost || 0) > 0
+    const hasLinkedPost = Boolean(erp.post)
+
+    return {
+      Pending: [
+        {
+          label: 'Post linked to ERP task',
+          done: hasLinkedPost,
+        },
+        {
+          label: 'Assign at least one worker',
+          done: hasWorkers,
+        },
+      ],
+      'On Process': [
+        {
+          label: 'Generate PDF slip',
+          done: hasPdfSlip,
+        },
+        {
+          label: 'Set final total cost',
+          done: hasTotalCost,
+        },
+      ],
+      Completed: [
+        {
+          label: 'Process completed',
+          done: erp.stage === 'Completed',
+        },
+      ],
     }
+  }
+
+  const handleTrackStage = async (erp) => {
+    if (erp.stage === 'Completed') {
+      setMessage(`Task ${erp.id} is already in Completed phase.`)
+      return
+    }
+
+    const phaseTasks = getPhaseTasks(erp)
+    const currentTasks = phaseTasks[erp.stage] || []
+    const pendingTasks = currentTasks.filter((task) => !task.done)
+
+    if (pendingTasks.length > 0) {
+      setMessage(
+        `Complete these tasks first: ${pendingTasks.map((task) => task.label).join(', ')}`,
+      )
+      return
+    }
+
+    const nextStage = erp.stage === 'Pending' ? 'On Process' : 'Completed'
+    await handleStageChange(erp, nextStage)
+    setMessage(`Task ${erp.id} moved to ${nextStage}.`)
   }
 
   const handleGeneratePdf = async (erp) => {
@@ -352,6 +399,9 @@ export default function ERP() {
         ) : (
           filteredTasks.map((erp) => {
             const post = postMap[erp.post]
+            const phases = ['Pending', 'On Process', 'Completed']
+            const activePhaseIndex = phases.indexOf(erp.stage)
+            const phaseTasks = getPhaseTasks(erp)
             const snapshot = erp.configuration_snapshot || {}
             const snapshotPost = snapshot.post || {}
             const snapshotExpertise = Array.isArray(snapshot.expertise) ? snapshot.expertise : []
@@ -410,7 +460,7 @@ export default function ERP() {
                 </div>
 
                 <div className="flex flex-wrap gap-2">
-                  {['Pending', 'On Process', 'Completed'].map((stage) => (
+                  {['Pending'].map((stage) => (
                     <button
                       key={stage}
                       type="button"
@@ -426,35 +476,10 @@ export default function ERP() {
                   ))}
                   <button
                     type="button"
-                    onClick={() => {
-                      const raw = window.prompt('Enter worker IDs separated by comma')
-                      if (!raw) return
-                      const ids = raw
-                        .split(',')
-                        .map((id) => Number(id.trim()))
-                        .filter(Boolean)
-                      handleAssignWorkers(erp, ids)
-                    }}
-                    className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600"
+                    onClick={() => setTrackOpenId((prev) => (prev === erp.id ? null : erp.id))}
+                    className="rounded-full border border-violet-200 px-3 py-1 text-xs font-semibold text-violet-700"
                   >
-                    Assign (Manual)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const ids = workerPool
-                        .split(',')
-                        .map((id) => Number(id.trim()))
-                        .filter(Boolean)
-                      if (ids.length === 0) {
-                        setMessage('Worker pool is empty for auto-assign.')
-                        return
-                      }
-                      handleAssignWorkers(erp, ids)
-                    }}
-                    className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600"
-                  >
-                    Assign (Auto)
+                    Track
                   </button>
                   <button
                     type="button"
@@ -471,6 +496,74 @@ export default function ERP() {
                     {expandedId === erp.id ? 'Hide Details' : 'View Details'}
                   </button>
                 </div>
+
+                {trackOpenId === erp.id && (
+                  <div className="space-y-3 rounded-xl border border-violet-200 bg-violet-50/50 p-3 text-xs text-slate-700">
+                    <div className="flex flex-wrap items-center gap-2">
+                      {phases.map((phase, index) => {
+                        const isDone = index < activePhaseIndex
+                        const isActive = phase === erp.stage
+                        return (
+                          <span
+                            key={`phase-chip-${erp.id}-${phase}`}
+                            className={`rounded-full px-3 py-1 font-semibold ${
+                              isActive
+                                ? 'bg-violet-600 text-white'
+                                : isDone
+                                  ? 'bg-emerald-100 text-emerald-700'
+                                  : 'border border-slate-200 bg-white text-slate-600'
+                            }`}
+                          >
+                            {phase}
+                          </span>
+                        )
+                      })}
+                    </div>
+
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div className="rounded-lg border border-slate-200 bg-white p-2">
+                        <p className="font-semibold text-slate-800">Pending Tasks</p>
+                        <ul className="mt-1 space-y-1">
+                          {phaseTasks.Pending.map((task) => (
+                            <li key={`${erp.id}-pending-${task.label}`} className="flex items-center gap-1">
+                              <span className={task.done ? 'text-emerald-600' : 'text-amber-600'}>
+                                {task.done ? '✓' : '•'}
+                              </span>
+                              <span>{task.label}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+
+                      <div className="rounded-lg border border-slate-200 bg-white p-2">
+                        <p className="font-semibold text-slate-800">On Process Tasks</p>
+                        <ul className="mt-1 space-y-1">
+                          {phaseTasks['On Process'].map((task) => (
+                            <li key={`${erp.id}-onprocess-${task.label}`} className="flex items-center gap-1">
+                              <span className={task.done ? 'text-emerald-600' : 'text-amber-600'}>
+                                {task.done ? '✓' : '•'}
+                              </span>
+                              <span>{task.label}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleTrackStage(erp)}
+                        className="rounded-full border border-violet-300 bg-white px-3 py-1 font-semibold text-violet-700"
+                      >
+                        {erp.stage === 'Completed' ? 'Completed' : 'Next State'}
+                      </button>
+                      <p className="text-[11px] text-slate-500">
+                        Flow: Pending → On Process → Completed
+                      </p>
+                    </div>
+                  </div>
+                )}
 
                 {expandedId === erp.id && (
                   <div className="space-y-4 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
