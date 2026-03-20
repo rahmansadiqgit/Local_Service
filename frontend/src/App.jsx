@@ -12,6 +12,8 @@ import About from './pages/About'
 import Login from './pages/Login'
 import ManagePost from './pages/ManagePost'
 import Profile from './pages/Profile'
+import EditProfile from './pages/EditProfile'
+import ChangePasswordPage from './pages/ChangePasswordPage'
 import ReportProblem from './pages/ReportProblem'
 import Register from './pages/Register'
 import ResetPassword from './pages/ResetPassword'
@@ -44,6 +46,8 @@ export default function App() {
                 <Route path="/dashboard" element={<Dashboard />} />
                 <Route path="/dashboard/:id" element={<Dashboard />} />
                 <Route path="/profile" element={<Profile />} />
+                <Route path="/profile/edit" element={<EditProfile />} />
+                <Route path="/profile/change-password" element={<ChangePasswordPage />} />
                 <Route path="/profile/:id" element={<Profile />} />
               <Route path="/create-post" element={<CreatePost />} />
               <Route path="/manage-post" element={<ManagePost />} />
