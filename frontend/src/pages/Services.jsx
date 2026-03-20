@@ -3,15 +3,39 @@ import { Link } from 'react-router-dom'
 const serviceGroups = [
   {
     title: 'Home Services',
-    items: ['Electrician', 'Plumbing', 'Cleaning', 'AC Repair'],
+    subtitle: 'Trusted day-to-day help available around your neighborhood.',
+    items: [
+      { label: 'Electrician', icon: '⚡' },
+      { label: 'Plumbing', icon: '🔧' },
+      { label: 'Cleaning', icon: '🧹' },
+      { label: 'AC Repair', icon: '❄️' },
+      { label: 'Home Painting', icon: '🖌️' },
+      { label: 'Appliance Repair', icon: '🛠️' },
+    ],
   },
   {
     title: 'Education & Skills',
-    items: ['Private Tutoring', 'Language Practice', 'Computer Training', 'Career Mentoring'],
+    subtitle: 'Learning and mentoring services to boost your growth.',
+    items: [
+      { label: 'Private Tutoring', icon: '📘' },
+      { label: 'Language Practice', icon: '🗣️' },
+      { label: 'Computer Training', icon: '💻' },
+      { label: 'Career Mentoring', icon: '🎯' },
+      { label: 'Exam Preparation', icon: '📝' },
+      { label: 'Music Lessons', icon: '🎵' },
+    ],
   },
   {
     title: 'Business Support',
-    items: ['Digital Marketing', 'Graphic Design', 'Accounting Support', 'Delivery Assistance'],
+    subtitle: 'Practical support services for local shops and startups.',
+    items: [
+      { label: 'Digital Marketing', icon: '📣' },
+      { label: 'Graphic Design', icon: '🎨' },
+      { label: 'Accounting Support', icon: '📊' },
+      { label: 'Delivery Assistance', icon: '🚚' },
+      { label: 'Social Media Management', icon: '📱' },
+      { label: 'Printing Services', icon: '🖨️' },
+    ],
   },
 ]
 
@@ -35,12 +59,22 @@ export default function Services() {
 
       <section className="grid gap-4 md:grid-cols-3">
         {serviceGroups.map((group) => (
-          <article key={group.title} className="card border border-orange-200/80 bg-gradient-to-br from-white to-orange-50/70">
-            <h3 className="text-lg font-bold text-orange-900">{group.title}</h3>
-            <ul className="mt-3 space-y-2 text-sm text-slate-700">
+          <article
+            key={group.title}
+            className="card border border-violet-200/80 bg-gradient-to-br from-white via-violet-50/40 to-fuchsia-50/40"
+          >
+            <h3 className="text-lg font-bold text-violet-900">{group.title}</h3>
+            <p className="mt-1 text-xs text-slate-600">{group.subtitle}</p>
+            <ul className="mt-4 flex flex-wrap gap-2.5 text-sm">
               {group.items.map((item) => (
-                <li key={item} className="rounded-lg border border-orange-100 bg-white px-3 py-2">
-                  {item}
+                <li
+                  key={item.label}
+                  className="inline-flex items-center gap-2 rounded-full border border-violet-200 bg-white px-3 py-1.5 text-slate-700 shadow-sm"
+                >
+                  <span className="text-base leading-none" aria-hidden="true">
+                    {item.icon}
+                  </span>
+                  <span>{item.label}</span>
                 </li>
               ))}
             </ul>
@@ -48,13 +82,18 @@ export default function Services() {
         ))}
       </section>
 
-      <section className="card border border-slate-200">
-        <p className="text-sm text-slate-600">
-          Ready to request or provide a service?
-          <Link to="/create-post" className="ml-1 font-semibold text-orange-700 hover:text-orange-800">
-            Create your post.
+      <section className="card border border-violet-200/80 bg-gradient-to-r from-violet-100/65 via-white to-fuchsia-100/65">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-sm font-medium text-slate-700">
+            Ready to request or provide a service?
+          </p>
+          <Link
+            to="/create-post"
+            className="inline-flex items-center justify-center rounded-lg bg-gradient-to-r from-violet-600 to-fuchsia-600 px-4 py-2 text-sm font-semibold !text-white shadow-sm transition hover:from-violet-700 hover:to-fuchsia-700 hover:!text-white"
+          >
+            Create Post
           </Link>
-        </p>
+        </div>
       </section>
     </div>
   )

@@ -65,7 +65,7 @@ export default function Profile() {
             onClick={() => setSettingsOpen((prev) => !prev)}
             aria-label="Open profile settings"
             aria-expanded={settingsOpen}
-            className="rounded-full border border-violet-300 bg-white/85 p-2.5 text-violet-700 shadow-sm transition hover:bg-white hover:text-yellow-400 hover:drop-shadow-[0_0_8px_rgba(253,224,71,0.85)]"
+            className="settings-gear-btn rounded-full border border-violet-300 bg-white/85 p-2.5 text-violet-700 shadow-sm transition hover:bg-violet-100 hover:text-violet-700 hover:shadow-md"
           >
             <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.9">
               <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.757.426 1.757 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.757-2.924 1.757-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.757-.426-1.757-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
@@ -168,30 +168,24 @@ export default function Profile() {
               backgroundImage: 'linear-gradient(135deg, rgba(214, 203, 232, 0.66), rgba(248, 235, 255, 0.62))',
             }}
           >
-            <div className="flex flex-col items-center gap-3">
-            <div className="h-32 w-32 overflow-hidden rounded-full border-2 border-violet-200 bg-slate-100 shadow-sm">
-              {profilePhotoSrc ? (
-                <img
-                  src={profilePhotoSrc}
-                  alt="Profile"
-                  className="h-full w-full object-cover"
-                />
-              ) : (
-                <div className="flex h-full w-full items-center justify-center text-xs text-slate-400">
-                  No photo
+            <div className="flex flex-col items-center gap-4">
+              <div className="relative">
+                <div className="absolute inset-0 rounded-full bg-gradient-to-br from-violet-300 to-fuchsia-300 blur-md opacity-70" />
+                <div className="relative h-36 w-36 overflow-hidden rounded-full border-4 border-white/85 bg-slate-100 shadow-lg ring-2 ring-violet-300/60">
+                  {profilePhotoSrc ? (
+                    <img
+                      src={profilePhotoSrc}
+                      alt="Profile"
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center text-sm font-semibold text-slate-500">
+                      No photo
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
-            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-violet-500">Profile Photo</p>
-            {!id && (
-              <button
-                type="button"
-                onClick={() => navigate('/profile/edit')}
-                className="rounded-lg bg-gradient-to-r from-violet-600 to-fuchsia-600 px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:from-violet-700 hover:to-fuchsia-700"
-              >
-                Update Photo
-              </button>
-            )}
+              </div>
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-violet-600">Profile Photo</p>
             </div>
           </div>
 
@@ -245,13 +239,6 @@ export default function Profile() {
         </div>
       </div>
 
-      {!id && (
-        <div className="card border border-violet-200/80 bg-white/85">
-          <p className="text-sm text-slate-600">
-            Use the settings icon in the header to edit your profile, change password, report a problem, or manage account options.
-          </p>
-        </div>
-      )}
     </div>
   )
 }
