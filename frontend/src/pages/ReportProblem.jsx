@@ -47,9 +47,14 @@ export default function ReportProblem() {
     <div className="space-y-6">
       <section className="card relative overflow-hidden border-0 bg-gradient-to-r from-[#c9b6ff] via-[#e6d7ff] to-[#f2eaff] p-0 text-slate-800 shadow-lg">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.45),transparent_58%)]" />
-        <div className="relative px-6 py-4 sm:px-8 sm:py-5">
-          <h2 className="text-2xl font-extrabold tracking-tight text-violet-900 sm:text-3xl">Report a Problem</h2>
-          <p className="mt-1 text-sm text-violet-800/80">Tell us what went wrong and we will investigate.</p>
+        <div className="relative px-6 py-3.5 pr-32 sm:px-8 sm:py-4 sm:pr-36 lg:pr-40">
+          <h2 className="text-xl font-extrabold tracking-tight text-violet-900 sm:text-3xl">Report a Problem</h2>
+          <p className="mt-0.5 text-xs text-violet-800/80 sm:text-sm">Tell us what went wrong and we will investigate.</p>
+          <img
+            src="/images/report_a_problem.png"
+            alt="Report problem header illustration"
+            className="pointer-events-none absolute right-4 top-1/2 h-28 w-28 -translate-y-1/2 object-contain sm:h-32 sm:w-32 lg:h-36 lg:w-36"
+          />
         </div>
       </section>
 
