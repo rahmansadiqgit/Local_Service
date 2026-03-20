@@ -49,11 +49,20 @@ export default function ResetPasswordConfirm() {
 
   return (
     <div className="mx-auto w-full max-w-md space-y-6">
-      <div className="card">
-        <h2 className="text-2xl font-semibold">Set New Password</h2>
-        <p className="text-sm text-slate-500">
-          Choose a new password for your account.
-        </p>
+      <div className="card relative overflow-hidden border-0 bg-gradient-to-r from-[#c9b6ff] via-[#e6d7ff] to-[#f2eaff] p-0 text-slate-800 shadow-lg">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.45),transparent_58%)]" />
+        <div className="absolute -right-8 -top-8 h-20 w-20 rounded-full bg-white/30 blur-xl" />
+        <div className="relative px-6 py-3.5 sm:px-8 sm:py-4">
+          <h2
+            className="text-xl font-extrabold tracking-tight text-violet-900 sm:text-3xl"
+            style={{ fontFamily: "'Sora', 'Trebuchet MS', sans-serif" }}
+          >
+            Set New Password
+          </h2>
+          <p className="mt-0.5 text-xs text-violet-800/80 sm:text-sm">
+            Choose a new password for your account.
+          </p>
+        </div>
       </div>
 
       <form onSubmit={handleSubmit} className="card space-y-4">
