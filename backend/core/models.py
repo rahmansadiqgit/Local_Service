@@ -100,12 +100,22 @@ class ERP(models.Model):
         null=True,
         related_name="provided_erp_records",
     )
+    receiver = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="received_erp_records",
+    )
     assigned_workers = models.ManyToManyField(
         settings.AUTH_USER_MODEL,
         related_name="assigned_erp_records",
         blank=True,
     )
     total_cost = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    created_at = models.DateTimeField(auto_now_add=True, null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    is_configured = models.BooleanField(default=False)
     pdf_slip = models.FileField(upload_to="erp_slips/", blank=True, null=True)
 
     def __str__(self) -> str:

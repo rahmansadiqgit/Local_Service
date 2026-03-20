@@ -5,6 +5,7 @@ import api from '../api/client'
 export default function ManagePost() {
   const { id } = useParams()
   const [posts, setPosts] = useState([])
+  const [ownPostIds, setOwnPostIds] = useState(new Set())
   const [skills, setSkills] = useState([])
   const [products, setProducts] = useState([])
   const [erpItems, setErpItems] = useState([])
@@ -33,13 +34,21 @@ export default function ManagePost() {
 
   const loadPosts = useCallback(async () => {
     try {
-      const [postRes, skillRes, productRes, erpRes] = await Promise.all([
+      const [myPostRes, allPostRes, skillRes, productRes, erpRes] = await Promise.all([
         api.get('/posts/?mine=1'),
+        api.get('/posts/'),
         api.get('/skills/'),
         api.get('/products/'),
         api.get('/erp/'),
       ])
-      setPosts(postRes.data)
+
+      const mineIds = new Set((myPostRes.data || []).map((post) => post.id))
+      const erpPostIds = new Set((erpRes.data || []).map((item) => item.post))
+      const manageableIds = new Set([...mineIds, ...erpPostIds])
+      const manageablePosts = (allPostRes.data || []).filter((post) => manageableIds.has(post.id))
+
+      setOwnPostIds(mineIds)
+      setPosts(manageablePosts)
       setSkills(skillRes.data)
       setProducts(productRes.data)
       setErpItems(erpRes.data)
@@ -60,6 +69,11 @@ export default function ManagePost() {
       try {
         await api.delete(`/posts/${postId}/`)
         setPosts((prev) => prev.filter((post) => post.id !== postId))
+        setOwnPostIds((prev) => {
+          const next = new Set(prev)
+          next.delete(postId)
+          return next
+        })
         showMessage('Post deleted successfully', 'success')
       } catch (error) {
         console.error(error)
@@ -276,9 +290,10 @@ export default function ManagePost() {
                       </div>
                       <button
                         onClick={() => handleDeletePost(post.id)}
+                        disabled={!ownPostIds.has(post.id)}
                         className="px-6 py-3 bg-red-500 hover:bg-red-600 dark:bg-red-700 dark:hover:bg-red-800 text-white font-bold rounded-2xl transition transform hover:scale-105 shadow-lg"
                       >
-                        🗑️ Delete Post
+                        {ownPostIds.has(post.id) ? '🗑️ Delete Post' : '🔒 Not Your Post'}
                       </button>
                     </div>
                     {post.description && (

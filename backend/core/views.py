@@ -6,6 +6,7 @@ from django.conf import settings
 from django.core.files.base import ContentFile
 from django.core.mail import send_mail
 from django.db.models import Avg, DecimalField, Max, Min
+from django.db.models import Q
 from django.db.models.functions import Coalesce
 from django.utils.encoding import force_bytes, force_str
 from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
@@ -273,6 +274,12 @@ class ERPViewSet(viewsets.ModelViewSet):
     queryset = ERP.objects.all()
     serializer_class = ERPSerializer
     permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        user = self.request.user
+        return ERP.objects.filter(
+            Q(provider=user) | Q(post__owner=user) | Q(assigned_workers=user)
+        ).distinct()
 
     def perform_create(self, serializer):
         serializer.save(provider=self.request.user)
