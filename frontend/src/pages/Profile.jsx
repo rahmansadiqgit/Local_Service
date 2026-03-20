@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import api from '../api/client';
 import useAuth from '../context/useAuth';
 
 export default function Profile() {
   const { id } = useParams();
+  const navigate = useNavigate()
   const { refreshUser } = useAuth();
   const [profile, setProfile] = useState(null)
   const [form, setForm] = useState({
@@ -19,6 +20,7 @@ export default function Profile() {
     whatsapp_link: '',
   })
   const [photoFile, setPhotoFile] = useState(null)
+  const [selectedPhotoName, setSelectedPhotoName] = useState('')
   const [previewUrl, setPreviewUrl] = useState(null)
   const [saving, setSaving] = useState(false)
   const [passwordForm, setPasswordForm] = useState({
@@ -128,6 +130,7 @@ export default function Profile() {
       setProfileMessage('Profile updated successfully.')
       // Clear photoFile after save, but keep preview
       setPhotoFile(null)
+      setSelectedPhotoName('')
       await refreshUser(data)
     } catch (error) {
       console.error(error)
@@ -155,6 +158,7 @@ export default function Profile() {
     'mt-1.5 w-full rounded-xl border border-violet-200 bg-gradient-to-br from-white/85 to-violet-50/70 px-3 py-2.5 text-sm shadow-sm transition placeholder:text-slate-400 focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-200'
   const currentAvailableStatus = form.supply_status?.[0] || 'None'
   const currentDemandStatus = form.demand_status?.[0] || 'None'
+  const photoChooserText = selectedPhotoName || (profile?.profile_photo ? 'Photo selected' : 'No file chosen')
 
   return (
     <div className="space-y-6">
@@ -226,10 +230,14 @@ export default function Profile() {
               id="profile-photo-upload"
               type="file"
               accept="image/*"
-              onChange={(event) => setPhotoFile(event.target.files?.[0] || null)}
+              onChange={(event) => {
+                const file = event.target.files?.[0] || null
+                setPhotoFile(file)
+                setSelectedPhotoName(file?.name || '')
+              }}
               className="hidden"
             />
-            <p className="text-xs text-slate-500">{photoFile?.name || 'No file chosen'}</p>
+            <p className="text-xs text-slate-500">{photoChooserText}</p>
             </div>
           </div>
 
@@ -269,20 +277,32 @@ export default function Profile() {
           </div>
         </div>
 
+        {!id && (
+          <div className="mt-5 flex justify-center">
+            <button
+              type="button"
+              onClick={() => navigate('/create-post')}
+              className="rounded-full border border-violet-500 bg-gradient-to-r from-violet-600 to-fuchsia-600 px-5 py-2 text-sm font-semibold text-white shadow-sm transition hover:from-violet-700 hover:to-fuchsia-700"
+            >
+              Create a Post
+            </button>
+          </div>
+        )}
+
         <form
           onSubmit={handleSubmit}
-          className="mt-6 space-y-5 rounded-2xl border border-violet-200/80 p-5 shadow-sm backdrop-blur-md"
+          className="mt-5 space-y-4 rounded-2xl border border-violet-200/80 p-4 shadow-sm backdrop-blur-md"
           style={{
             backgroundColor: 'rgba(236, 225, 255, 0.56)',
             backgroundImage: 'linear-gradient(145deg, rgba(225, 205, 255, 0.58), rgba(244, 230, 255, 0.54))',
           }}
         >
-          <div className="flex items-center justify-between border-b border-violet-100 pb-3">
+          <div className="flex items-center justify-between border-b border-violet-100 pb-2">
             <h4 className="text-lg font-semibold text-violet-900">Edit Profile</h4>
             <p className="text-xs font-medium text-violet-500">Keep your public info up to date</p>
           </div>
 
-          <div className="grid gap-4 lg:grid-cols-2">
+          <div className="grid gap-3.5 lg:grid-cols-2">
           <div>
             <label className={formLabelClass}>Name</label>
             <input
@@ -293,7 +313,7 @@ export default function Profile() {
             />
           </div>
           <div>
-            <label className={formLabelClass}>Phone</label>
+            <label className={formLabelClass}>Phone no</label>
             <input
               name="phone"
               value={form.phone}
@@ -366,7 +386,7 @@ export default function Profile() {
               name="education_skills"
               value={form.education_skills}
               onChange={handleChange}
-              rows={4}
+              rows={3}
               className={formInputClass}
               placeholder="Add your study background and professional skills"
             />
@@ -377,7 +397,7 @@ export default function Profile() {
               name="experience"
               value={form.experience}
               onChange={handleChange}
-              rows={4}
+              rows={3}
               className={formInputClass}
               placeholder="Describe your work experience and achievements"
             />

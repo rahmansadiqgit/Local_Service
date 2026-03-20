@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import api from '../api/client'
 
@@ -20,6 +20,7 @@ export default function CreatePost() {
   const [selectedCategories, setSelectedCategories] = useState([])
   const [showCategoryMenu, setShowCategoryMenu] = useState(false)
   const [imageFile, setImageFile] = useState(null)
+  const [previewUrl, setPreviewUrl] = useState(null)
   const [skills, setSkills] = useState([
     { skill_name: '', unit: '', cost_per_unit: '', available_workers: 0 },
   ])
@@ -31,6 +32,18 @@ export default function CreatePost() {
   ])
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState('')
+
+  useEffect(() => {
+    if (imageFile) {
+      const reader = new FileReader()
+      reader.onload = () => {
+        setPreviewUrl(reader.result)
+      }
+      reader.readAsDataURL(imageFile)
+    } else {
+      setPreviewUrl(null)
+    }
+  }, [imageFile])
 
   const handleChange = (event) => {
     const { name, value } = event.target
@@ -226,34 +239,45 @@ export default function CreatePost() {
           </div>
           <div>
             <label className="text-xs font-semibold text-black">Image</label>
-            <div className="mt-1">
-              <label className="inline-block cursor-pointer rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 transition">
-                Choose File
-                <input
-                  ref={imageInputRef}
-                  type="file"
-                  accept="image/*"
-                  onChange={(event) => setImageFile(event.target.files?.[0] || null)}
-                  className="hidden"
-                />
-              </label>
-              {imageFile && (
-                <span className="ml-3 inline-flex items-center gap-2 text-sm text-slate-600">
-                  {imageFile.name}
-                  <button
-                    type="button"
-                    aria-label="Remove selected image"
-                    onClick={() => {
-                      setImageFile(null)
-                      if (imageInputRef.current) {
-                        imageInputRef.current.value = ''
-                      }
-                    }}
-                    className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-slate-300 text-xs font-bold text-slate-600 hover:bg-slate-100"
-                  >
-                    x
-                  </button>
-                </span>
+            <div className="mt-1 flex items-start gap-4">
+              <div className="flex flex-col items-start gap-2">
+                <label className="inline-block cursor-pointer rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 transition">
+                  Choose File
+                  <input
+                    ref={imageInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={(event) => setImageFile(event.target.files?.[0] || null)}
+                    className="hidden"
+                  />
+                </label>
+                {imageFile && (
+                  <span className="flex items-center gap-2 text-sm text-slate-600">
+                    {imageFile.name}
+                    <button
+                      type="button"
+                      aria-label="Remove selected image"
+                      onClick={() => {
+                        setImageFile(null)
+                        if (imageInputRef.current) {
+                          imageInputRef.current.value = ''
+                        }
+                      }}
+                      className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-slate-300 text-xs font-bold text-slate-600 hover:bg-slate-100"
+                    >
+                      x
+                    </button>
+                  </span>
+                )}
+              </div>
+              {previewUrl && (
+                <div className="rounded-lg border border-slate-200 bg-slate-50 p-2 shadow-sm">
+                  <img
+                    src={previewUrl}
+                    alt="Preview"
+                    className="h-20 w-20 rounded-lg object-cover"
+                  />
+                </div>
               )}
             </div>
           </div>
@@ -290,7 +314,7 @@ export default function CreatePost() {
               <div>
                 <label className="text-xs font-semibold text-black">Expertise Name</label>
                 <input
-                  placeholder="Expertise Name (e.g., Electrical, Teacher)"
+                  placeholder="Enter your skill Name (e.g., Electrical, Teacher)"
                   value={row.skill_name}
                   onChange={(event) =>
                     setSkills((prev) =>
@@ -387,7 +411,7 @@ export default function CreatePost() {
               <div>
                 <label className="text-xs font-semibold text-black">Service Name</label>
                 <input
-                  placeholder="Service Name(e.g., Plumbing, Tutoring)"
+                  placeholder="Enter service Name(e.g., Plumbing, Tutoring)"
                   value={row.service_name}
                   onChange={(event) =>
                     setServices((prev) =>
@@ -482,7 +506,7 @@ export default function CreatePost() {
               <div>
                 <label className="text-xs font-semibold text-black">Product Name</label>
                 <input
-                  placeholder="Product Name (e.g., Laptop, Book)"
+                  placeholder="Enter product Name (e.g., Laptop, Book)"
                   value={row.product_name}
                   onChange={(event) =>
                     setProducts((prev) =>
