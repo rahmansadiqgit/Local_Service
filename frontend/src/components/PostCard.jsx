@@ -12,6 +12,7 @@ export default function PostCard({
   products = [],
   rating,
   profile,
+  isOwnPost = false,
   onAction,
 }) {
   const navigate = useNavigate()
@@ -238,11 +239,12 @@ export default function PostCard({
         <button
           type="button"
           onClick={() => onAction?.(post, post.post_type === 'Demand' ? 'apply' : 'book')}
+          disabled={isOwnPost}
 
-          className="rounded-full bg-gradient-to-r from-sky-600 to-blue-700 px-5 py-2 text-sm font-semibold text-white shadow-md transition hover:from-sky-700 hover:to-blue-800 focus:outline-none focus:ring-2 focus:ring-sky-300"
+          className="rounded-full bg-gradient-to-r from-sky-600 to-blue-700 px-5 py-2 text-sm font-semibold text-white shadow-md transition hover:from-sky-700 hover:to-blue-800 focus:outline-none focus:ring-2 focus:ring-sky-300 disabled:cursor-not-allowed disabled:opacity-50"
 
         >
-          {post.post_type === 'Demand' ? 'Apply' : 'Book'}
+          {isOwnPost ? 'Your Post' : post.post_type === 'Demand' ? 'Apply' : 'Book'}
         </button>
         <button
           type="button"

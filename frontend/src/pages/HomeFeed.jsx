@@ -15,7 +15,7 @@ import useAuth from '../context/useAuth'
 export default function HomeFeed() {
 
   const navigate = useNavigate()
-  const { isAuthenticated } = useAuth()
+  const { isAuthenticated, user } = useAuth()
 
   const [posts, setPosts] = useState([])
   const [skills, setSkills] = useState([])
@@ -33,6 +33,7 @@ export default function HomeFeed() {
   })
 
   const [actionMessage, setActionMessage] = useState('')
+  const currentUserId = user?.id
 
   useEffect(() => {
     let active = true
@@ -169,6 +170,12 @@ export default function HomeFeed() {
   const handleAction = async (post, actionType) => {
 
     setActionMessage('')
+
+    const postOwnerId = post.owner_id || post.owner
+    if (currentUserId && String(postOwnerId) === String(currentUserId)) {
+      setActionMessage("You can't apply or book your own post.")
+      return
+    }
 
     if (!isAuthenticated) {
       navigate('/login')
@@ -437,6 +444,7 @@ export default function HomeFeed() {
                   skills={skillsByPost[post.id] || []}
                   products={productsByPost[post.id] || []}
                   rating={ratingByPost[post.id]}
+                  isOwnPost={Boolean(currentUserId) && String(post.owner_id || post.owner) === String(currentUserId)}
                   profile={{
                     id: post.owner_id || post.owner || null,
                     name: post.owner_name ||

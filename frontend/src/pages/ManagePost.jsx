@@ -44,7 +44,7 @@ export default function ManagePost() {
 
       const mineIds = new Set((myPostRes.data || []).map((post) => post.id))
       const erpPostIds = new Set((erpRes.data || []).map((item) => item.post))
-      const manageableIds = new Set([...mineIds, ...erpPostIds])
+      const manageableIds = new Set([...erpPostIds])
       const manageablePosts = (allPostRes.data || []).filter((post) => manageableIds.has(post.id))
 
       setOwnPostIds(mineIds)
@@ -384,13 +384,14 @@ export default function ManagePost() {
                           <span>📍</span> {post.location || 'Location not specified'}
                         </p>
                       </div>
-                      <button
-                        onClick={() => handleDeletePost(post.id)}
-                        disabled={!ownPostIds.has(post.id)}
-                        className="px-6 py-3 bg-red-500 hover:bg-red-600 dark:bg-red-700 dark:hover:bg-red-800 text-white font-bold rounded-2xl transition transform hover:scale-105 shadow-lg"
-                      >
-                        {ownPostIds.has(post.id) ? '🗑️ Delete Post' : '🔒 Not Your Post'}
-                      </button>
+                      {ownPostIds.has(post.id) && (
+                        <button
+                          onClick={() => handleDeletePost(post.id)}
+                          className="px-6 py-3 bg-red-500 hover:bg-red-600 dark:bg-red-700 dark:hover:bg-red-800 text-white font-bold rounded-2xl transition transform hover:scale-105 shadow-lg"
+                        >
+                          🗑️ Delete Post
+                        </button>
+                      )}
                     </div>
                     {post.description && (
                       <p className="text-slate-700 dark:text-slate-300 text-base leading-relaxed">{post.description}</p>
