@@ -9,10 +9,21 @@ export default function ManagePost() {
   const [products, setProducts] = useState([])
   const [erpItems, setErpItems] = useState([])
   const [skillWorkers, setSkillWorkers] = useState({})
+  const [serviceWorkers, setServiceWorkers] = useState({})
+  const [serviceDurations, setServiceDurations] = useState({})
   const [productUnits, setProductUnits] = useState({})
   const [loading, setLoading] = useState(true)
   const [message, setMessage] = useState('')
   const [messageType, setMessageType] = useState('info')
+
+  const stripCategoryPrefix = (value) =>
+    String(value || '')
+      .replace(/^__expertise__::/i, '')
+      .replace(/^__service__::/i, '')
+      .trim()
+
+  const isExpertiseSkill = (value) => /^__expertise__::/i.test(String(value || ''))
+  const isServiceSkill = (value) => /^__service__::/i.test(String(value || ''))
 
   const showMessage = useCallback((msg, type = 'info') => {
     setMessage(msg)
@@ -57,13 +68,49 @@ export default function ManagePost() {
     }
   }
 
-  const skillsByPost = useMemo(() => {
-    return skills.reduce((acc, skill) => {
+  const skillBreakdownByPost = useMemo(() => {
+    const skillsGroupedByPost = skills.reduce((acc, skill) => {
       acc[skill.post] = acc[skill.post] || []
       acc[skill.post].push(skill)
       return acc
     }, {})
-  }, [skills])
+
+    return posts.reduce((acc, post) => {
+      const rows = skillsGroupedByPost[post.id] || []
+      const taggedExpertise = rows
+        .filter((item) => isExpertiseSkill(item.skill_name))
+        .map((item) => ({ ...item, skill_name: stripCategoryPrefix(item.skill_name) }))
+      const taggedServices = rows
+        .filter((item) => isServiceSkill(item.skill_name))
+        .map((item) => ({ ...item, service_name: stripCategoryPrefix(item.skill_name) }))
+
+      if (taggedExpertise.length || taggedServices.length) {
+        acc[post.id] = { expertise: taggedExpertise, services: taggedServices }
+        return acc
+      }
+
+      const categories = String(post.post_name || '')
+        .split(',')
+        .map((item) => item.trim().toLowerCase())
+        .filter(Boolean)
+
+      const hasServicesCategory = categories.includes('services')
+      const hasExpertiseCategory = categories.includes('expertise')
+
+      const cleanedRows = rows.map((item) => ({ ...item, skill_name: stripCategoryPrefix(item.skill_name) }))
+
+      if (hasServicesCategory && !hasExpertiseCategory) {
+        acc[post.id] = {
+          expertise: [],
+          services: cleanedRows.map((item) => ({ ...item, service_name: item.skill_name })),
+        }
+      } else {
+        acc[post.id] = { expertise: cleanedRows, services: [] }
+      }
+
+      return acc
+    }, {})
+  }, [posts, skills])
 
   const productsByPost = useMemo(() => {
     return products.reduce((acc, product) => {
@@ -81,17 +128,23 @@ export default function ManagePost() {
   }, [erpItems])
 
   const getTotalForPost = (postId) => {
-    const skillRows = skillsByPost[postId] || []
+    const expertiseRows = skillBreakdownByPost[postId]?.expertise || []
+    const serviceRows = skillBreakdownByPost[postId]?.services || []
     const productRows = productsByPost[postId] || []
-    const skillTotal = skillRows.reduce((sum, row) => {
+    const expertiseTotal = expertiseRows.reduce((sum, row) => {
       const workers = Number(skillWorkers[`skill-${row.id}`] || 0)
       return sum + workers * Number(row.cost_per_unit || 0)
+    }, 0)
+    const serviceTotal = serviceRows.reduce((sum, row) => {
+      const workers = Number(serviceWorkers[`service-${row.id}-workers`] || 0)
+      const duration = Number(serviceDurations[`service-${row.id}-duration`] || 0)
+      return sum + workers * duration * Number(row.cost_per_unit || 0)
     }, 0)
     const productTotal = productRows.reduce((sum, row) => {
       const units = Number(productUnits[`product-${row.id}`] || 0)
       return sum + units * Number(row.cost_per_unit || 0)
     }, 0)
-    return skillTotal + productTotal
+    return expertiseTotal + serviceTotal + productTotal
   }
 
   const handleCreateOrUpdateErp = async (post) => {
@@ -170,7 +223,7 @@ export default function ManagePost() {
               >
                 Manage Your Posts
               </h1>
-              <p className="mt-0.5 text-xs text-violet-800/80 sm:text-sm">Easily adjust workers for skills and units for products. Real-time cost calculation!</p>
+              <p className="mt-0.5 text-xs text-violet-800/80 sm:text-sm">Adjust expertise workers, service duration, and product units with real-time cost calculation.</p>
             </div>
           </div>
 
@@ -234,40 +287,98 @@ export default function ManagePost() {
                   </div>
 
                   {/* Skills Management Section */}
-                  {(skillsByPost[post.id] || []).length > 0 && (
+                  {(skillBreakdownByPost[post.id]?.expertise || []).length > 0 && (
                     <div className="p-8 border-b-2 border-slate-200 dark:border-slate-700">
                       <div className="flex items-center gap-3 mb-8">
                         <span className="text-3xl">🛠️</span>
-                        <h3 className="text-2xl font-bold text-slate-900 dark:text-white">Skills Management</h3>
+                        <h3 className="text-2xl font-bold text-slate-900 dark:text-white">Expertise Management</h3>
                         <span className="ml-auto px-3 py-1 bg-brand-100 dark:bg-brand-900/40 text-brand-700 dark:text-brand-300 rounded-full font-semibold">
-                          {(skillsByPost[post.id] || []).length} skills
+                          {(skillBreakdownByPost[post.id]?.expertise || []).length} expertise
                         </span>
                       </div>
                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        {(skillsByPost[post.id] || []).map((skill) => {
+                        {(skillBreakdownByPost[post.id]?.expertise || []).map((skill) => {
                           const workers = Number(skillWorkers[`skill-${skill.id}`] || 0)
                           const totalCost = workers * Number(skill.cost_per_unit || 0)
                           return (
                             <div key={skill.id} className="bg-gradient-to-br from-slate-50 to-blue-50 dark:from-slate-800 dark:to-slate-700/50 rounded-2xl p-6 border-2 border-slate-200 dark:border-slate-600 hover:border-brand-400 dark:hover:border-brand-500 transition">
-                              <p className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2">Skill</p>
+                              <p className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2">Expertise</p>
                               <h4 className="text-xl font-bold text-slate-900 dark:text-white mb-1">{skill.skill_name}</h4>
                               <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">
-                                Unit: <span className="font-semibold">{skill.unit}</span> | Cost: <span className="font-semibold">${skill.cost_per_unit}</span>
+                                Experience: <span className="font-semibold">{skill.unit}</span> | Charge: <span className="font-semibold">${skill.cost_per_unit}</span>
                               </p>
+                              <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">Available Person: {Number(skill.available_workers || 0)}</p>
                               
                               <div className="mb-4">
                                 <CounterControl
                                   value={workers}
                                   onChange={(val) => setSkillWorkers((prev) => ({ ...prev, [`skill-${skill.id}`]: val }))}
-                                  max={100}
-                                  label="Workers Needed"
-                                  unit={workers === 1 ? 'worker' : 'workers'}
+                                  max={Math.max(Number(skill.available_workers || 0), 1)}
+                                  label="Required Person"
+                                  unit={workers === 1 ? 'person' : 'persons'}
                                 />
                               </div>
                               
                               <div className="pt-4 border-t-2 border-slate-300 dark:border-slate-600">
                                 <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">TOTAL COST</p>
                                 <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">${totalCost.toFixed(2)}</p>
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Services Management Section */}
+                  {(skillBreakdownByPost[post.id]?.services || []).length > 0 && (
+                    <div className="p-8 border-b-2 border-slate-200 dark:border-slate-700">
+                      <div className="flex items-center gap-3 mb-8">
+                        <span className="text-3xl">🧹</span>
+                        <h3 className="text-2xl font-bold text-slate-900 dark:text-white">Services Management</h3>
+                        <span className="ml-auto px-3 py-1 bg-cyan-100 dark:bg-cyan-900/40 text-cyan-700 dark:text-cyan-300 rounded-full font-semibold">
+                          {(skillBreakdownByPost[post.id]?.services || []).length} services
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        {(skillBreakdownByPost[post.id]?.services || []).map((service) => {
+                          const workers = Number(serviceWorkers[`service-${service.id}-workers`] || 0)
+                          const duration = Number(serviceDurations[`service-${service.id}-duration`] || 0)
+                          const totalCost = workers * duration * Number(service.cost_per_unit || 0)
+                          const durationUnit = service.unit || 'duration unit'
+
+                          return (
+                            <div key={service.id} className="bg-gradient-to-br from-cyan-50 to-sky-50 dark:from-slate-800 dark:to-slate-700/50 rounded-2xl p-6 border-2 border-slate-200 dark:border-slate-600 hover:border-cyan-400 dark:hover:border-cyan-500 transition">
+                              <p className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2">Service</p>
+                              <h4 className="text-xl font-bold text-slate-900 dark:text-white mb-1">{service.service_name}</h4>
+                              <p className="text-sm text-slate-600 dark:text-slate-400 mb-2">
+                                Service Duration: <span className="font-semibold">{durationUnit}</span>
+                              </p>
+                              <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">
+                                Service Cost: <span className="font-semibold">${service.cost_per_unit}</span> / {durationUnit}
+                              </p>
+                              <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">Available Workers: {Number(service.available_workers || 0)}</p>
+
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+                                <CounterControl
+                                  value={workers}
+                                  onChange={(val) => setServiceWorkers((prev) => ({ ...prev, [`service-${service.id}-workers`]: val }))}
+                                  max={Math.max(Number(service.available_workers || 0), 1)}
+                                  label="Workers Needed"
+                                  unit={workers === 1 ? 'worker' : 'workers'}
+                                />
+                                <CounterControl
+                                  value={duration}
+                                  onChange={(val) => setServiceDurations((prev) => ({ ...prev, [`service-${service.id}-duration`]: val }))}
+                                  max={365}
+                                  label="Duration Needed"
+                                  unit={durationUnit}
+                                />
+                              </div>
+
+                              <div className="pt-4 border-t-2 border-slate-300 dark:border-slate-600">
+                                <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">TOTAL COST</p>
+                                <p className="text-2xl font-bold text-cyan-600 dark:text-cyan-400">${totalCost.toFixed(2)}</p>
                               </div>
                             </div>
                           )
@@ -325,9 +436,13 @@ export default function ManagePost() {
                       <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-md">
                         <p className="text-sm text-slate-500 dark:text-slate-400 font-semibold mb-2">Skills Total</p>
                         <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
-                          ${((skillsByPost[post.id] || []).reduce((sum, row) => {
+                          ${((skillBreakdownByPost[post.id]?.expertise || []).reduce((sum, row) => {
                             const workers = Number(skillWorkers[`skill-${row.id}`] || 0)
                             return sum + workers * Number(row.cost_per_unit || 0)
+                          }, 0) + (skillBreakdownByPost[post.id]?.services || []).reduce((sum, row) => {
+                            const workers = Number(serviceWorkers[`service-${row.id}-workers`] || 0)
+                            const duration = Number(serviceDurations[`service-${row.id}-duration`] || 0)
+                            return sum + workers * duration * Number(row.cost_per_unit || 0)
                           }, 0)).toFixed(2)}
                         </p>
                       </div>
