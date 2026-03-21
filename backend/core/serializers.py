@@ -4,7 +4,7 @@ from django.core.exceptions import ValidationError
 from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
-from .models import ERP, Notification, Post, ProblemReport, Product, Rating, Skill
+from .models import ERP, Expertise, Notification, Post, ProblemReport, Product, Rating, Skill
 
 User = get_user_model()
 
@@ -143,6 +143,7 @@ class PostSerializer(serializers.ModelSerializer):
             "owner_demand_status",
             "post_type",
             "post_name",
+            "post_title",
             "description",
             "brand_company_name",
             "location",
@@ -158,9 +159,24 @@ class SkillSerializer(serializers.ModelSerializer):
             "id",
             "post",
             "skill_name",
+            "description",
             "unit",
             "cost_per_unit",
             "available_workers",
+        )
+
+
+class ExpertiseSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Expertise
+        fields = (
+            "id",
+            "post",
+            "name",
+            "experience",
+            "unit",
+            "cost",
+            "available_person",
         )
 
 
@@ -171,6 +187,7 @@ class ProductSerializer(serializers.ModelSerializer):
             "id",
             "post",
             "product_name",
+            "description",
             "unit",
             "cost_per_unit",
             "available_units",
@@ -186,10 +203,14 @@ class ERPSerializer(serializers.ModelSerializer):
             "stage",
             "post",
             "provider",
+            "receiver",
             "assigned_workers",
             "total_cost",
+            "configuration_snapshot",
+            "is_configured",
             "pdf_slip",
         )
+        read_only_fields = ("provider", "receiver", "category")
 
 
 class RatingSerializer(serializers.ModelSerializer):
@@ -234,3 +255,7 @@ class ProblemReportSerializer(serializers.ModelSerializer):
             "reporter_phone",
             "created_at",
         )
+
+
+
+

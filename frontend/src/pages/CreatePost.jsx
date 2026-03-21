@@ -7,6 +7,7 @@ const CATEGORY_OPTIONS = ['Expertise', 'Services', 'Product']
 const initialPost = {
   post_type: 'Supply',
   post_name: '',
+  post_title: '',
   description: '',
   brand_company_name: '',
   location: '',
@@ -24,11 +25,14 @@ export default function CreatePost() {
   const [skills, setSkills] = useState([
     { skill_name: '', unit: '', cost_per_unit: '', available_workers: 0 },
   ])
+  const [expertises, setExpertises] = useState([
+    { name: '', experience: '', unit: '', cost: '', available_person: 0 },
+  ])
   const [services, setServices] = useState([
-    { service_name: '', unit: '', cost_per_unit: '', available_workers: 0 },
+    { service_name: '', description: '', unit: '', cost_per_unit: '', available_workers: 0 },
   ])
   const [products, setProducts] = useState([
-    { product_name: '', unit: '', cost_per_unit: '', available_units: 0 },
+    { product_name: '', description: '', unit: '', cost_per_unit: '', available_units: 0 },
   ])
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState('')
@@ -90,6 +94,7 @@ export default function CreatePost() {
       })
 
       const validSkills = skills.filter((item) => item.skill_name && item.cost_per_unit)
+      const validExpertises = expertises.filter((item) => item.name && item.experience && item.cost)
       const validServices = services.filter((item) => item.service_name && item.cost_per_unit)
       const validProducts = products.filter((item) => item.product_name && item.cost_per_unit)
 
@@ -101,9 +106,20 @@ export default function CreatePost() {
             post: createdPost.id,
           }),
         ),
+        ...validExpertises.map((item) =>
+          api.post('/expertises/', {
+            name: item.name,
+            experience: item.experience,
+            unit: item.unit,
+            cost: Number(item.cost),
+            available_person: Number(item.available_person) || 0,
+            post: createdPost.id,
+          }),
+        ),
         ...validServices.map((item) =>
           api.post('/skills/', {
             skill_name: `__service__::${item.service_name}`,
+            description: item.description,
             unit: item.unit,
             cost_per_unit: item.cost_per_unit,
             available_workers: item.available_workers,
@@ -118,8 +134,9 @@ export default function CreatePost() {
       setShowCategoryMenu(false)
       setImageFile(null)
       setSkills([{ skill_name: '', unit: '', cost_per_unit: '', available_workers: 0 }])
-      setServices([{ service_name: '', unit: '', cost_per_unit: '', available_workers: 0 }])
-      setProducts([{ product_name: '', unit: '', cost_per_unit: '', available_units: 0 }])
+      setExpertises([{ name: '', experience: '', unit: '', cost: '', available_person: 0 }])
+      setServices([{ service_name: '', description: '', unit: '', cost_per_unit: '', available_workers: 0 }])
+      setProducts([{ product_name: '', description: '', unit: '', cost_per_unit: '', available_units: 0 }])
       window.dispatchEvent(new Event('post-created'))
       navigate('/')
     } catch (error) {
@@ -216,6 +233,17 @@ export default function CreatePost() {
             </div>
           </div>
           <div className="lg:col-span-2">
+            <label className="text-xs font-semibold text-black">Post Title</label>
+            <input
+              type="text"
+              name="post_title"
+              value={post.post_title}
+              onChange={handleChange}
+              placeholder="Give your post a descriptive title"
+              className={profileLikeInputClass}
+            />
+          </div>
+          <div className="lg:col-span-2">
             <label className="text-xs font-semibold text-black">Description</label>
             <textarea
               name="description"
@@ -302,13 +330,13 @@ export default function CreatePost() {
         {showExpertiseSection && (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <p className="text-base font-bold text-slate-700 dark:text-slate-200">Expertise</p>
+            <p className="text-base font-bold text-slate-700 dark:text-slate-200">Expertise Services</p>
             <button
               type="button"
               onClick={() =>
-                setSkills((prev) => [
+                setExpertises((prev) => [
                   ...prev,
-                  { skill_name: '', unit: '', cost_per_unit: '', available_workers: 0 },
+                  { name: '', experience: '', unit: '', cost: '', available_person: 0 },
                 ])
               }
               className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600"
@@ -316,17 +344,17 @@ export default function CreatePost() {
               Add Row
             </button>
           </div>
-          {skills.map((row, index) => (
-            <div key={`skill-${index}`} className="grid gap-4 lg:grid-cols-4">
+          {expertises.map((row, index) => (
+            <div key={`expertise-${index}`} className="grid gap-4 lg:grid-cols-5">
               <div>
                 <label className="text-xs font-semibold text-black">Expertise Name</label>
                 <input
-                  placeholder="Enter your skill Name (e.g., Electrical, Teacher)"
-                  value={row.skill_name}
+                  placeholder="e.g., Electricians, Teachers"
+                  value={row.name}
                   onChange={(event) =>
-                    setSkills((prev) =>
+                    setExpertises((prev) =>
                       prev.map((item, i) =>
-                        i === index ? { ...item, skill_name: event.target.value } : item,
+                        i === index ? { ...item, name: event.target.value } : item,
                       ),
                     )
                   }
@@ -336,11 +364,29 @@ export default function CreatePost() {
               <div>
                 <label className="text-xs font-semibold text-black">Experience</label>
                 <input
-                  placeholder="e.g., Months, Years"
+                  type="text"
+                  placeholder="e.g., 6 years"
+                  value={row.experience}
+                  onChange={(event) =>
+                    setExpertises((prev) =>
+                      prev.map((item, i) =>
+                        i === index ? { ...item, experience: event.target.value } : item,
+                      ),
+                    )
+                  }
+                  className={profileLikeInputClass}
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-black">Charge Unit</label>
+                <input
+                  placeholder="e.g., hour, day"
                   value={row.unit}
                   onChange={(event) =>
-                    setSkills((prev) =>
-                      prev.map((item, i) => (i === index ? { ...item, unit: event.target.value } : item)),
+                    setExpertises((prev) =>
+                      prev.map((item, i) =>
+                        i === index ? { ...item, unit: event.target.value } : item,
+                      ),
                     )
                   }
                   className={profileLikeInputClass}
@@ -352,11 +398,11 @@ export default function CreatePost() {
                   type="text"
                   inputMode="decimal"
                   placeholder="Enter charge amount ($)"
-                  value={row.cost_per_unit}
+                  value={row.cost}
                   onChange={(event) =>
-                    setSkills((prev) =>
+                    setExpertises((prev) =>
                       prev.map((item, i) =>
-                        i === index ? { ...item, cost_per_unit: event.target.value } : item,
+                        i === index ? { ...item, cost: event.target.value } : item,
                       ),
                     )
                   }
@@ -370,12 +416,12 @@ export default function CreatePost() {
                     type="text"
                     inputMode="numeric"
                     placeholder="Enter available persons"
-                    value={row.available_workers}
+                    value={row.available_person}
                     onChange={(event) =>
-                      setSkills((prev) =>
+                      setExpertises((prev) =>
                         prev.map((item, i) =>
                           i === index
-                            ? { ...item, available_workers: event.target.value }
+                            ? { ...item, available_person: event.target.value }
                             : item,
                         ),
                       )
@@ -384,7 +430,7 @@ export default function CreatePost() {
                   />
                   <button
                     type="button"
-                    onClick={() => setSkills((prev) => prev.filter((_, i) => i !== index))}
+                    onClick={() => setExpertises((prev) => prev.filter((_, i) => i !== index))}
                     className="px-6 py-2 rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-700 active:scale-95 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     Remove
@@ -405,7 +451,7 @@ export default function CreatePost() {
               onClick={() =>
                 setServices((prev) => [
                   ...prev,
-                  { service_name: '', unit: '', cost_per_unit: '', available_workers: 0 },
+                  { service_name: '', description: '', unit: '', cost_per_unit: '', available_workers: 0 },
                 ])
               }
               className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600"
@@ -414,7 +460,7 @@ export default function CreatePost() {
             </button>
           </div>
           {services.map((row, index) => (
-            <div key={`service-${index}`} className="grid gap-4 lg:grid-cols-4">
+            <div key={`service-${index}`} className="grid gap-4 lg:grid-cols-5">
               <div>
                 <label className="text-xs font-semibold text-black">Service Name</label>
                 <input
@@ -427,6 +473,22 @@ export default function CreatePost() {
                       ),
                     )
                   }
+                  className={profileLikeInputClass}
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-black">Service Description</label>
+                <textarea
+                  placeholder="Enter service description"
+                  value={row.description}
+                  onChange={(event) =>
+                    setServices((prev) =>
+                      prev.map((item, i) =>
+                        i === index ? { ...item, description: event.target.value } : item,
+                      ),
+                    )
+                  }
+                  rows={3}
                   className={profileLikeInputClass}
                 />
               </div>
@@ -500,7 +562,7 @@ export default function CreatePost() {
               onClick={() =>
                 setProducts((prev) => [
                   ...prev,
-                  { product_name: '', unit: '', cost_per_unit: '', available_units: 0 },
+                  { product_name: '', description: '', unit: '', cost_per_unit: '', available_units: 0 },
                 ])
               }
               className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600"
@@ -509,7 +571,7 @@ export default function CreatePost() {
             </button>
           </div>
           {products.map((row, index) => (
-            <div key={`product-${index}`} className="grid gap-4 lg:grid-cols-4">
+            <div key={`product-${index}`} className="grid gap-4 lg:grid-cols-5">
               <div>
                 <label className="text-xs font-semibold text-black">Product Name</label>
                 <input
@@ -522,6 +584,22 @@ export default function CreatePost() {
                       ),
                     )
                   }
+                  className={profileLikeInputClass}
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-black">Product Description</label>
+                <textarea
+                  placeholder="Enter product description"
+                  value={row.description}
+                  onChange={(event) =>
+                    setProducts((prev) =>
+                      prev.map((item, i) =>
+                        i === index ? { ...item, description: event.target.value } : item,
+                      ),
+                    )
+                  }
+                  rows={3}
                   className={profileLikeInputClass}
                 />
               </div>

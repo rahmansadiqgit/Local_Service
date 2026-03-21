@@ -46,6 +46,7 @@ class Post(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     post_type = models.CharField(max_length=10, choices=PostType.choices)
     post_name = models.CharField(max_length=255)
+    post_title = models.CharField(max_length=255, blank=True)
     description = models.TextField(blank=True)
     brand_company_name = models.CharField(max_length=255, blank=True)
     location = models.CharField(max_length=255, blank=True)
@@ -59,6 +60,7 @@ class Post(models.Model):
 class Skill(models.Model):
     post = models.ForeignKey(Post, on_delete=models.CASCADE, related_name="skills")
     skill_name = models.CharField(max_length=255)
+    description = models.TextField(blank=True)
     unit = models.CharField(max_length=50)
     cost_per_unit = models.DecimalField(max_digits=12, decimal_places=2)
     available_workers = models.PositiveIntegerField(default=0)
@@ -67,9 +69,22 @@ class Skill(models.Model):
         return f"{self.skill_name} ({self.post.post_name})"
 
 
+class Expertise(models.Model):
+    post = models.ForeignKey(Post, on_delete=models.CASCADE, related_name="expertises")
+    name = models.CharField(max_length=255)
+    experience = models.CharField(max_length=100)
+    unit = models.CharField(max_length=50)
+    cost = models.DecimalField(max_digits=12, decimal_places=2)
+    available_person = models.PositiveIntegerField(default=0)
+
+    def __str__(self) -> str:
+        return f"{self.name} ({self.post.post_name})"
+
+
 class Product(models.Model):
     post = models.ForeignKey(Post, on_delete=models.CASCADE, related_name="products")
     product_name = models.CharField(max_length=255)
+    description = models.TextField(blank=True)
     unit = models.CharField(max_length=50)
     cost_per_unit = models.DecimalField(max_digits=12, decimal_places=2)
     available_units = models.PositiveIntegerField(default=0)
@@ -99,12 +114,23 @@ class ERP(models.Model):
         null=True,
         related_name="provided_erp_records",
     )
+    receiver = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="received_erp_records",
+    )
     assigned_workers = models.ManyToManyField(
         settings.AUTH_USER_MODEL,
         related_name="assigned_erp_records",
         blank=True,
     )
     total_cost = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    configuration_snapshot = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True, null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    is_configured = models.BooleanField(default=False)
     pdf_slip = models.FileField(upload_to="erp_slips/", blank=True, null=True)
 
     def __str__(self) -> str:
@@ -164,3 +190,4 @@ class ProblemReport(models.Model):
 
     def __str__(self) -> str:
         return f"{self.reporter_email} - {self.subject}"
+

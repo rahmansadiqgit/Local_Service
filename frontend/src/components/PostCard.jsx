@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import defaultAvatar from '../assets/default-avatar.svg'
+import ExpertiseTable from './ExpertiseTable'
 import ProductTable from './ProductTable'
 import RatingCard from './RatingCard'
 import ServiceTable from './ServiceTable'
@@ -9,9 +10,11 @@ import SkillTable from './SkillTable'
 export default function PostCard({
   post,
   skills = [],
+  expertises = [],
   products = [],
   rating,
   profile,
+  isOwnPost = false,
   onAction,
   onAddToCart,
   inCart = false,
@@ -135,6 +138,8 @@ export default function PostCard({
   }, [hasExpertiseCategory, hasServicesCategory, skills])
 
   const productRows = products
+  
+  const newExpertiseRows = useMemo(() => expertises, [expertises])
 
   const profileId = profile?.id ?? post?.owner_id ?? post?.owner
 
@@ -193,6 +198,18 @@ export default function PostCard({
         </div>
       </div>
 
+      <h3 className="text-center text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
+        {post.post_title || 'Untitled Post'}
+      </h3>
+
+      <div className="rounded-2xl border border-slate-200 bg-white px-4 py-2.5">
+        {post.description ? (
+          <p className="text-sm leading-6 text-slate-700">{post.description}</p>
+        ) : (
+          <p className="text-sm text-slate-400">No description provided.</p>
+        )}
+      </div>
+
       <div className="flex flex-wrap items-center gap-2">
         {displayCategories.length ? (
           displayCategories.map((category) => (
@@ -210,24 +227,16 @@ export default function PostCard({
         )}
       </div>
 
-      <div className="rounded-2xl border border-slate-200 bg-white px-4 py-2.5">
-        {post.description ? (
-          <p className="text-sm leading-6 text-slate-700">{post.description}</p>
-        ) : (
-          <p className="text-sm text-slate-400">No description provided.</p>
-        )}
-      </div>
-
       {postImageSrc ? (
-        <div className="flex items-center justify-center rounded-2xl border border-slate-200/70 bg-transparent p-2.5">
+        <div className="mx-auto w-fit max-w-full rounded-2xl border border-slate-200/70 bg-transparent p-2">
           <img
             src={postImageSrc}
             alt={post.post_name}
-            className="max-h-[270px] w-auto max-w-[90%] rounded-2xl object-contain"
+            className="block max-h-[320px] max-w-full rounded-2xl object-contain"
           />
         </div>
       ) : (
-        <div className="flex h-40 items-center justify-center rounded-2xl border border-dashed border-slate-300/80 bg-transparent text-sm text-slate-400">
+        <div className="flex h-40 w-full items-center justify-center rounded-2xl border border-dashed border-slate-300/80 bg-transparent text-sm text-slate-400">
           No image provided
         </div>
       )}
@@ -236,11 +245,12 @@ export default function PostCard({
         <button
           type="button"
           onClick={() => onAction?.(post, post.post_type === 'Demand' ? 'apply' : 'book')}
+          disabled={isOwnPost}
 
-          className="rounded-full bg-gradient-to-r from-sky-600 to-blue-700 px-5 py-2 text-sm font-semibold text-white shadow-md transition hover:from-sky-700 hover:to-blue-800 focus:outline-none focus:ring-2 focus:ring-sky-300"
+          className="rounded-full bg-gradient-to-r from-sky-600 to-blue-700 px-5 py-2 text-sm font-semibold text-white shadow-md transition hover:from-sky-700 hover:to-blue-800 focus:outline-none focus:ring-2 focus:ring-sky-300 disabled:cursor-not-allowed disabled:opacity-50"
 
         >
-          {post.post_type === 'Demand' ? 'Apply' : 'Book'}
+          {isOwnPost ? 'Your Post' : post.post_type === 'Demand' ? 'Apply' : 'Book'}
         </button>
         <button
           type="button"
@@ -283,6 +293,13 @@ export default function PostCard({
                   ) : (
                     <p className="text-sm text-slate-400">No expertise detail listed.</p>
                   )}
+                </div>
+              )}
+
+              {newExpertiseRows.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-sm font-semibold text-slate-600 dark:text-slate-300">Expertise Services</p>
+                  <ExpertiseTable expertises={newExpertiseRows} />
                 </div>
               )}
 

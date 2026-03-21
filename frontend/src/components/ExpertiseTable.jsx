@@ -1,11 +1,11 @@
 import { useMemo, useState } from 'react'
 
-export default function ServiceTable({ services = [] }) {
-  const [sortKey, setSortKey] = useState('service_name')
+export default function ExpertiseTable({ expertises = [] }) {
+  const [sortKey, setSortKey] = useState('name')
   const [sortDir, setSortDir] = useState('asc')
 
   const sorted = useMemo(() => {
-    const copy = [...services]
+    const copy = [...expertises]
     copy.sort((a, b) => {
       const aValue = a[sortKey] ?? ''
       const bValue = b[sortKey] ?? ''
@@ -17,7 +17,7 @@ export default function ServiceTable({ services = [] }) {
         : String(bValue).localeCompare(String(aValue))
     })
     return copy
-  }, [services, sortDir, sortKey])
+  }, [expertises, sortDir, sortKey])
 
   const handleSort = (key) => {
     if (sortKey === key) {
@@ -28,8 +28,8 @@ export default function ServiceTable({ services = [] }) {
     }
   }
 
-  if (!services.length) {
-    return <p className="text-sm text-slate-500">No services listed.</p>
+  if (!expertises.length) {
+    return <p className="text-sm text-slate-500">No expertise services listed.</p>
   }
 
   return (
@@ -38,42 +38,45 @@ export default function ServiceTable({ services = [] }) {
         <thead className="bg-slate-50 text-slate-600 dark:bg-slate-900 dark:text-slate-300">
           <tr>
             <th className="px-3 py-2 whitespace-nowrap">
-              <button type="button" onClick={() => handleSort('service_name')}>
-                Service Name
+              <button type="button" onClick={() => handleSort('name')}>
+                Expertise Name
               </button>
             </th>
             <th className="px-3 py-2 whitespace-nowrap">
-              <button type="button" onClick={() => handleSort('description')}>
-                Description
+              <button type="button" onClick={() => handleSort('experience')}>
+                Experience
               </button>
             </th>
             <th className="px-3 py-2 whitespace-nowrap">
               <button type="button" onClick={() => handleSort('unit')}>
-                Service Duration
+                Charge Unit
               </button>
             </th>
             <th className="px-3 py-2 whitespace-nowrap">
-              <button type="button" onClick={() => handleSort('cost_per_unit')}>
-                Service Cost
+              <button type="button" onClick={() => handleSort('cost')}>
+                Cost ($)
               </button>
             </th>
             <th className="px-3 py-2 whitespace-nowrap">
-              <button type="button" onClick={() => handleSort('available_workers')}>
-                Available Workers
+              <button type="button" onClick={() => handleSort('available_person')}>
+                Available Person
               </button>
             </th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
-          {sorted.map((row, idx) => (
-            <tr key={idx} className={idx % 2 === 0 ? 'bg-white dark:bg-slate-950' : 'bg-slate-50 dark:bg-slate-900'}>
-              <td className="px-3 py-2 text-slate-900 dark:text-slate-100 whitespace-nowrap">{row.service_name || '-'}</td>
-              <td className="px-3 py-2 text-slate-900 dark:text-slate-100 whitespace-pre-line break-words">{row.description || '-'}</td>
-              <td className="px-3 py-2 text-slate-900 dark:text-slate-100 whitespace-nowrap">{row.unit || '-'}</td>
-              <td className="px-3 py-2 text-slate-900 dark:text-slate-100 whitespace-nowrap">
-                ${!isNaN(parseFloat(row.cost_per_unit)) ? parseFloat(row.cost_per_unit).toFixed(2) : '0.00'}
-              </td>
-              <td className="px-3 py-2 text-slate-900 dark:text-slate-100 whitespace-nowrap">{row.available_workers || 0}</td>
+        <tbody>
+          {sorted.map((expertise, index) => (
+            <tr
+              key={expertise.id}
+              className={`border-t border-slate-200 dark:border-slate-800 ${
+                index % 2 === 1 ? 'bg-slate-50 dark:bg-slate-900/40' : ''
+              }`}
+            >
+              <td className="px-3 py-2 font-medium whitespace-nowrap">{expertise.name}</td>
+              <td className="px-3 py-2 whitespace-nowrap">{expertise.experience}</td>
+              <td className="px-3 py-2 whitespace-nowrap">{expertise.unit}</td>
+              <td className="px-3 py-2 whitespace-nowrap">${expertise.cost}</td>
+              <td className="px-3 py-2 whitespace-nowrap">{expertise.available_person}</td>
             </tr>
           ))}
         </tbody>

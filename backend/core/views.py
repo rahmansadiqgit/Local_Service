@@ -1,4 +1,5 @@
 from io import BytesIO
+import textwrap
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.tokens import default_token_generator
@@ -6,13 +7,14 @@ from django.conf import settings
 from django.core.files.base import ContentFile
 from django.core.mail import send_mail
 from django.db.models import Avg, DecimalField, Max, Min
+from django.db.models import Q
 from django.db.models.functions import Coalesce
 from django.utils.encoding import force_bytes, force_str
 from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
 from django.utils import timezone
 from rest_framework import permissions, status, viewsets
 from rest_framework.decorators import action
-from rest_framework.exceptions import PermissionDenied
+from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.views import TokenObtainPairView
@@ -21,10 +23,11 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 
-from .models import ERP, Notification, Post, ProblemReport, Product, Rating, Skill
+from .models import ERP, Expertise, Notification, Post, ProblemReport, Product, Rating, Skill
 from .serializers import (
     ChangePasswordSerializer,
     EmailTokenObtainPairSerializer,
+    ExpertiseSerializer,
     ERPSerializer,
     NotificationSerializer,
     PasswordResetConfirmSerializer,
@@ -262,6 +265,13 @@ class SkillViewSet(viewsets.ModelViewSet):
     filterset_fields = ["post"]
 
 
+class ExpertiseViewSet(viewsets.ModelViewSet):
+    queryset = Expertise.objects.all()
+    serializer_class = ExpertiseSerializer
+    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+    filterset_fields = ["post"]
+
+
 class ProductViewSet(viewsets.ModelViewSet):
     queryset = Product.objects.all() # From GenericAPIView
     serializer_class = ProductSerializer # From GenericAPIView
@@ -274,8 +284,34 @@ class ERPViewSet(viewsets.ModelViewSet):
     serializer_class = ERPSerializer
     permission_classes = [permissions.IsAuthenticated]
 
+    def get_queryset(self):
+        user = self.request.user
+        return ERP.objects.filter(
+            Q(provider=user) | Q(receiver=user) | Q(post__owner=user) | Q(assigned_workers=user)
+        ).distinct()
+
     def perform_create(self, serializer):
-        serializer.save(provider=self.request.user)
+        actor = self.request.user
+        post = serializer.validated_data.get("post")
+
+        if not post:
+            raise ValidationError({"post": "Post is required."})
+
+        owner = post.owner
+
+        if post.post_type == "Demand":
+            provider = actor
+            receiver = owner
+        else:
+            provider = owner
+            receiver = actor if owner and actor != owner else None
+
+        if provider is None and receiver is None:
+            raise ValidationError({"detail": "Cannot assign ERP roles for this post."})
+
+        category = "Provided" if actor == provider else "Received"
+
+        serializer.save(provider=provider, receiver=receiver, category=category)
 
     @action(detail=True, methods=["patch"])
     def update_stage(self, request, pk=None):
@@ -299,15 +335,214 @@ class ERPViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["post"])
     def generate_pdf(self, request, pk=None):
         erp = self.get_object()
+
+        def user_label(user):
+            if not user:
+                return "N/A"
+            display = user.name or user.username or user.email or f"User #{user.id}"
+            return f"{display} (id:{user.id})"
+
+        def as_text(value):
+            if value is None or value == "":
+                return "-"
+            return str(value)
+
+        def as_money(value):
+            try:
+                return f"${float(value):.2f}"
+            except (TypeError, ValueError):
+                return "$0.00"
+
+        post = erp.post
+        owner = post.owner if post else None
+        provider = erp.provider
+        receiver = erp.receiver
+        actor = request.user
+        snapshot = erp.configuration_snapshot or {}
+        snapshot_post = snapshot.get("post") or {}
+        snapshot_expertise = snapshot.get("expertise") or []
+        snapshot_services = snapshot.get("services") or []
+        snapshot_products = snapshot.get("products") or []
+        snapshot_totals = snapshot.get("totals") or {}
+
+        post_rating = (
+            Rating.objects.filter(post=post).aggregate(avg=Avg("rating_value")).get("avg")
+            if post
+            else 0
+        ) or 0
+
+        viewer_role = "Viewer"
+        if provider and actor and provider.id == actor.id:
+            viewer_role = "Provider"
+        elif receiver and actor and receiver.id == actor.id:
+            viewer_role = "Receiver"
+
+        role_label = "Providing" if viewer_role == "Provider" else "Receiving" if viewer_role == "Receiver" else erp.category
+
+        has_workers = erp.assigned_workers.exists()
+        has_pdf_slip = bool(erp.pdf_slip)
+        has_total_cost = float(erp.total_cost or 0) > 0
+        has_linked_post = bool(erp.post_id)
+
+        tracking_tasks = {
+            "Pending": [
+                ("Post linked to ERP task", has_linked_post),
+                ("Assign at least one worker", has_workers),
+            ],
+            "On Process": [
+                ("Generate PDF slip", has_pdf_slip),
+                ("Set final total cost", has_total_cost),
+            ],
+            "Completed": [
+                ("Process completed", erp.stage == "Completed"),
+            ],
+        }
+
+        assigned_workers = [user_label(worker) for worker in erp.assigned_workers.all()]
+
         buffer = BytesIO()
         pdf = canvas.Canvas(buffer, pagesize=A4)
-        pdf.setTitle("ERP Slip")
-        pdf.drawString(50, 800, "Localix ERP Slip")
-        pdf.drawString(50, 770, f"Post: {erp.post.post_name}")
-        pdf.drawString(50, 750, f"Category: {erp.category}")
-        pdf.drawString(50, 730, f"Stage: {erp.stage}")
-        pdf.drawString(50, 710, f"Total Cost: {erp.total_cost}")
-        pdf.showPage()
+        pdf.setTitle(f"ERP Slip #{erp.id}")
+
+        page_width, page_height = A4
+        left = 42
+        right = page_width - 42
+        top = page_height - 42
+        bottom = 50
+        line_height = 13
+        y = top
+
+        def new_page():
+            nonlocal y
+            pdf.showPage()
+            y = top
+
+        def ensure_space(required_height):
+            nonlocal y
+            if y - required_height < bottom:
+                new_page()
+
+        def draw_title(title, subtitle=""):
+            nonlocal y
+            ensure_space(36)
+            pdf.setFont("Helvetica-Bold", 16)
+            pdf.drawString(left, y, title)
+            y -= 18
+            if subtitle:
+                pdf.setFont("Helvetica", 9)
+                pdf.drawString(left, y, subtitle)
+                y -= 14
+
+        def draw_section(title):
+            nonlocal y
+            ensure_space(20)
+            y -= 2
+            pdf.setFont("Helvetica-Bold", 12)
+            pdf.drawString(left, y, title)
+            y -= 8
+            pdf.line(left, y, right, y)
+            y -= 12
+
+        def draw_kv(key, value, wrap=78):
+            nonlocal y
+            wrapped = textwrap.wrap(as_text(value), width=wrap) or ["-"]
+            needed = max(line_height * len(wrapped), line_height)
+            ensure_space(needed + 2)
+            pdf.setFont("Helvetica-Bold", 9)
+            pdf.drawString(left, y, f"{key}:")
+            pdf.setFont("Helvetica", 9)
+            value_x = left + 140
+            current_y = y
+            for line in wrapped:
+                pdf.drawString(value_x, current_y, line)
+                current_y -= line_height
+            y = current_y
+
+        def draw_table(title, rows):
+            nonlocal y
+            if not rows:
+                return
+
+            draw_section(title)
+            headers = ["Name", "Unit", "Qty", "Duration", "Unit Cost", "Line Total"]
+            col_x = [left, left + 160, left + 235, left + 290, left + 355, left + 435]
+
+            def draw_header():
+                nonlocal y
+                ensure_space(18)
+                pdf.setFont("Helvetica-Bold", 8)
+                for idx, header in enumerate(headers):
+                    pdf.drawString(col_x[idx], y, header)
+                y -= 10
+                pdf.line(left, y, right, y)
+                y -= 10
+
+            draw_header()
+            for row in rows:
+                ensure_space(14)
+                pdf.setFont("Helvetica", 8)
+                values = [
+                    as_text(row.get("name") or "-"),
+                    as_text(row.get("unit") or "-"),
+                    as_text(row.get("quantity", 0)),
+                    as_text(row.get("duration", 0)),
+                    as_money(row.get("unit_cost", 0)),
+                    as_money(row.get("line_total", 0)),
+                ]
+                for idx, val in enumerate(values):
+                    cell = val[:26]
+                    pdf.drawString(col_x[idx], y, cell)
+                y -= 11
+            y -= 2
+
+        draw_title(
+            f"Localix ERP Slip #{erp.id}",
+            f"Generated by: {user_label(actor)}   |   Generated at: {timezone.now().strftime('%Y-%m-%d %H:%M:%S')}",
+        )
+
+        draw_section("Card Information")
+        draw_kv("Role", role_label)
+        draw_kv("Category", erp.category)
+        draw_kv("Current Stage", erp.stage)
+        draw_kv("Post Name", post.post_name if post else "-")
+        draw_kv("Location", post.location if post else "-")
+        draw_kv("Provider", user_label(provider))
+        draw_kv("Receiver", user_label(receiver))
+        draw_kv("Rating", f"{float(post_rating):.2f}")
+        draw_kv("Total Cost", as_money(erp.total_cost))
+
+        draw_section("Tracking Information")
+        draw_kv("State Flow", "Pending -> On Process -> Completed")
+        draw_kv("Active State", erp.stage)
+        for phase, tasks in tracking_tasks.items():
+            status_lines = [f"{'DONE' if done else 'PENDING'} - {label}" for label, done in tasks]
+            draw_kv(f"{phase} Tasks", " | ".join(status_lines), wrap=88)
+
+        draw_section("View Details - Post")
+        draw_kv("Title", snapshot_post.get("title") or getattr(post, "post_title", "-") or "-")
+        draw_kv("Type", snapshot_post.get("type") or (post.post_type if post else "-"))
+        draw_kv("Name", snapshot_post.get("name") or (post.post_name if post else "-"))
+        draw_kv("Location", snapshot_post.get("location") or (post.location if post else "-"))
+        draw_kv("Brand / Company", snapshot_post.get("brand_company_name") or (post.brand_company_name if post else "-"))
+        draw_kv("Website", snapshot_post.get("website_link") or (post.website_link if post else "-"))
+        draw_kv("Description", snapshot_post.get("description") or (post.description if post else "-"), wrap=90)
+        draw_kv("Assigned Workers Count", len(assigned_workers))
+        draw_kv("Assigned Workers", ", ".join(assigned_workers) if assigned_workers else "None", wrap=90)
+
+        draw_section("View Details - Final Cost Summary")
+        draw_kv("Expertise Total", as_money(snapshot_totals.get("expertise", 0)))
+        draw_kv("Services Total", as_money(snapshot_totals.get("services", 0)))
+        draw_kv("Products Total", as_money(snapshot_totals.get("products", 0)))
+        draw_kv("Grand Total", as_money(snapshot_totals.get("grand", erp.total_cost)))
+
+        draw_table("View Details - Expertise", snapshot_expertise)
+        draw_table("View Details - Services", snapshot_services)
+        draw_table("View Details - Products", snapshot_products)
+
+        if not snapshot_expertise and not snapshot_services and not snapshot_products:
+            draw_section("View Details - Item Tables")
+            draw_kv("Info", "No finalized item rows found in configuration snapshot.")
+
         pdf.save()
         buffer.seek(0)
         erp.pdf_slip.save(f"erp_{erp.id}.pdf", ContentFile(buffer.read()), save=True)

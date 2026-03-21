@@ -1,11 +1,20 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import api from '../api/client'
+import ERPAnalyticsGrid from '../components/erp/ERPAnalyticsGrid'
+import ERPFiltersBar from '../components/erp/ERPFiltersBar'
+import ERPHeader from '../components/erp/ERPHeader'
+import ERPTaskCard from '../components/erp/ERPTaskCard'
+import ERPTopRatedServices from '../components/erp/ERPTopRatedServices'
 
 export default function ERP() {
+  const navigate = useNavigate()
   const [erpItems, setErpItems] = useState([])
+  const [currentUserId, setCurrentUserId] = useState(null)
   const [posts, setPosts] = useState([])
   const [ratings, setRatings] = useState([])
   const [expandedId, setExpandedId] = useState(null)
+  const [trackOpenId, setTrackOpenId] = useState(null)
   const [workerPool, setWorkerPool] = useState('')
   const [filters, setFilters] = useState({
     category: '',
@@ -16,20 +25,38 @@ export default function ERP() {
   })
   const [message, setMessage] = useState('')
 
+  const backendOrigin = useMemo(() => {
+    const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api'
+    return apiBase.replace(/\/api\/?$/, '')
+  }, [])
+
+  const toMediaUrl = (value) => {
+    if (!value) return ''
+    if (/^https?:\/\//i.test(value) || value.startsWith('data:') || value.startsWith('blob:')) {
+      return value
+    }
+    if (value.startsWith('/')) {
+      return `${backendOrigin}${value}`
+    }
+    return `${backendOrigin}/${value}`
+  }
+
   useEffect(() => {
     let active = true
 
     const load = async () => {
       try {
-        const [erpRes, postRes, ratingRes] = await Promise.all([
+        const [erpRes, postRes, ratingRes, meRes] = await Promise.all([
           api.get('/erp/'),
           api.get('/posts/'),
           api.get('/ratings/'),
+          api.get('/auth/me/'),
         ])
         if (!active) return
         setErpItems(erpRes.data)
         setPosts(postRes.data)
         setRatings(ratingRes.data)
+        setCurrentUserId(meRes.data?.id ?? null)
       } catch (error) {
         console.error(error)
       }
@@ -129,16 +156,62 @@ export default function ERP() {
     }
   }
 
-  const handleAssignWorkers = async (erp, workerIds) => {
-    try {
-      const { data } = await api.post(`/erp/${erp.id}/assign_workers/`, { worker_ids: workerIds })
-      setErpItems((prev) => prev.map((item) => (item.id === data.id ? data : item)))
-      notify('Workers Assigned', `Workers assigned to task ${erp.id}.`)
-      setMessage('Workers assigned successfully.')
-    } catch (error) {
-      console.error(error)
-      setMessage('Failed to assign workers.')
+  const getPhaseTasks = (erp) => {
+    const hasWorkers = Array.isArray(erp.assigned_workers) && erp.assigned_workers.length > 0
+    const hasPdfSlip = Boolean(erp.pdf_slip)
+    const hasTotalCost = Number(erp.total_cost || 0) > 0
+    const hasLinkedPost = Boolean(erp.post)
+
+    return {
+      Pending: [
+        {
+          label: 'Post linked to ERP task',
+          done: hasLinkedPost,
+        },
+        {
+          label: 'Assign at least one worker',
+          done: hasWorkers,
+        },
+      ],
+      'On Process': [
+        {
+          label: 'Generate PDF slip',
+          done: hasPdfSlip,
+        },
+        {
+          label: 'Set final total cost',
+          done: hasTotalCost,
+        },
+      ],
+      Completed: [
+        {
+          label: 'Process completed',
+          done: erp.stage === 'Completed',
+        },
+      ],
     }
+  }
+
+  const handleTrackStage = async (erp) => {
+    if (erp.stage === 'Completed') {
+      setMessage(`Task ${erp.id} is already in Completed phase.`)
+      return
+    }
+
+    const phaseTasks = getPhaseTasks(erp)
+    const currentTasks = phaseTasks[erp.stage] || []
+    const pendingTasks = currentTasks.filter((task) => !task.done)
+
+    if (pendingTasks.length > 0) {
+      setMessage(
+        `Complete these tasks first: ${pendingTasks.map((task) => task.label).join(', ')}`,
+      )
+      return
+    }
+
+    const nextStage = erp.stage === 'Pending' ? 'On Process' : 'Completed'
+    await handleStageChange(erp, nextStage)
+    setMessage(`Task ${erp.id} moved to ${nextStage}.`)
   }
 
   const handleGeneratePdf = async (erp) => {
@@ -146,7 +219,10 @@ export default function ERP() {
       const { data } = await api.post(`/erp/${erp.id}/generate_pdf/`)
       setErpItems((prev) => prev.map((item) => (item.id === data.id ? data : item)))
       if (data.pdf_slip) {
-        window.open(data.pdf_slip, '_blank')
+        const pdfUrl = /^https?:\/\//i.test(data.pdf_slip)
+          ? data.pdf_slip
+          : `${backendOrigin}${data.pdf_slip.startsWith('/') ? '' : '/'}${data.pdf_slip}`
+        window.open(pdfUrl, '_blank')
       }
     } catch (error) {
       console.error(error)
@@ -167,148 +243,18 @@ export default function ERP() {
 
   return (
     <div className="space-y-6">
-      <div className="card relative overflow-hidden border-0 bg-gradient-to-r from-[#c9b6ff] via-[#e6d7ff] to-[#f2eaff] p-0 text-slate-800 shadow-lg">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.45),transparent_58%)]" />
-        <div className="absolute -right-8 -top-8 h-20 w-20 rounded-full bg-white/30 blur-xl" />
-        <div className="relative px-6 py-3.5 pr-36 sm:px-8 sm:py-4 sm:pr-40 lg:pr-44">
-          <div>
-            <h2
-              className="text-xl font-extrabold tracking-tight text-violet-900 sm:text-3xl"
-              style={{ fontFamily: "'Sora', 'Trebuchet MS', sans-serif" }}
-            >
-              ERP Management
-            </h2>
-            <p className="mt-0.5 text-xs text-violet-800/80 sm:text-sm">Monitor and manage ERP tasks.</p>
-          </div>
-          <img
-            src="/images/erp.png"
-            alt="ERP header illustration"
-            className="pointer-events-none absolute right-4 top-1/2 h-32 w-32 -translate-y-1/2 object-contain sm:h-36 sm:w-36 lg:h-40 lg:w-40"
-          />
-        </div>
-      </div>
+      <ERPHeader />
 
-      <div className="grid gap-4 lg:grid-cols-5">
-        <div className="card">
-          <p className="text-sm text-slate-500">Total Tasks</p>
-          <p className="mt-2 text-2xl font-semibold">{analytics.total}</p>
-        </div>
-        <div className="card">
-          <p className="text-sm text-slate-500">Completed</p>
-          <p className="mt-2 text-2xl font-semibold">{analytics.completed}</p>
-        </div>
-        <div className="card">
-          <p className="text-sm text-slate-500">Pending</p>
-          <p className="mt-2 text-2xl font-semibold">{analytics.pending}</p>
-        </div>
-        <div className="card">
-          <p className="text-sm text-slate-500">Revenue</p>
-          <p className="mt-2 text-2xl font-semibold">${analytics.revenue.toFixed(2)}</p>
-        </div>
-        <div className="card">
-          <p className="text-sm text-slate-500">Top Rated Workers</p>
-          <div className="mt-2 space-y-1 text-sm">
-            {ratingsByProvider.slice(0, 3).map((row) => (
-              <div key={row.providerId} className="flex items-center justify-between">
-                <span>Provider #{row.providerId}</span>
-                <span className="font-semibold">{row.average.toFixed(2)}</span>
-              </div>
-            ))}
-            {ratingsByProvider.length === 0 && <p className="text-xs text-slate-400">No ratings yet.</p>}
-          </div>
-        </div>
-      </div>
+      <ERPAnalyticsGrid analytics={analytics} ratingsByProvider={ratingsByProvider} />
 
-      <div className="card">
-        <h3 className="text-lg font-semibold">Top Rated Services</h3>
-        <div className="mt-3 grid gap-2 text-sm">
-          {analytics.topServices.length === 0 ? (
-            <p className="text-slate-500">No ratings yet.</p>
-          ) : (
-            analytics.topServices.map((item) => (
-              <div key={item.postId} className="flex items-center justify-between">
-                <span>{postMap[item.postId]?.post_name || `Post #${item.postId}`}</span>
-                <span className="font-semibold">{item.average.toFixed(2)}</span>
-              </div>
-            ))
-          )}
-        </div>
-      </div>
+      <ERPTopRatedServices topServices={analytics.topServices} postMap={postMap} />
 
-      <div className="card grid gap-4 lg:grid-cols-6">
-        <div>
-          <label className="text-xs font-semibold text-slate-500">Category</label>
-          <select
-            name="category"
-            value={filters.category}
-            onChange={handleFilterChange}
-            className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
-          >
-            <option value="">All</option>
-            <option value="Received">Received</option>
-            <option value="Provided">Provided</option>
-          </select>
-        </div>
-        <div>
-          <label className="text-xs font-semibold text-slate-500">Stage</label>
-          <select
-            name="stage"
-            value={filters.stage}
-            onChange={handleFilterChange}
-            className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
-          >
-            <option value="">All</option>
-            <option value="Pending">Pending</option>
-            <option value="On Process">On Process</option>
-            <option value="Completed">Completed</option>
-          </select>
-        </div>
-        <div>
-          <label className="text-xs font-semibold text-slate-500">Provider ID</label>
-          <input
-            name="provider"
-            value={filters.provider}
-            onChange={handleFilterChange}
-            placeholder="e.g. 12"
-            className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
-          />
-        </div>
-        <div>
-          <label className="text-xs font-semibold text-slate-500">Location</label>
-          <input
-            name="location"
-            value={filters.location}
-            onChange={handleFilterChange}
-            placeholder="City"
-            className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
-          />
-        </div>
-        <div>
-          <label className="text-xs font-semibold text-slate-500">Min Rating</label>
-          <select
-            name="rating"
-            value={filters.rating}
-            onChange={handleFilterChange}
-            className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
-          >
-            <option value="">Any</option>
-            <option value="5">5+</option>
-            <option value="4">4+</option>
-            <option value="3">3+</option>
-            <option value="2">2+</option>
-            <option value="1">1+</option>
-          </select>
-        </div>
-        <div>
-          <label className="text-xs font-semibold text-slate-500">Worker Pool</label>
-          <input
-            value={workerPool}
-            onChange={(event) => setWorkerPool(event.target.value)}
-            placeholder="IDs for auto assign"
-            className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
-          />
-        </div>
-      </div>
+      <ERPFiltersBar
+        filters={filters}
+        workerPool={workerPool}
+        onFilterChange={handleFilterChange}
+        onWorkerPoolChange={(event) => setWorkerPool(event.target.value)}
+      />
 
       <div className="flex flex-wrap items-center gap-3">
         <button
@@ -325,119 +271,25 @@ export default function ERP() {
         {filteredTasks.length === 0 ? (
           <div className="card">No ERP tasks found.</div>
         ) : (
-          filteredTasks.map((erp) => {
-            const post = postMap[erp.post]
-            const rating = averageRatingByPost[erp.post] || 0
-            const stageStyle =
-              erp.stage === 'Completed'
-                ? 'bg-emerald-100 text-emerald-700'
-                : erp.stage === 'On Process'
-                  ? 'bg-blue-100 text-blue-700'
-                  : 'bg-amber-100 text-amber-700'
-            return (
-              <div key={erp.id} className="card space-y-4 transition-shadow hover:shadow-lg">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div>
-                    <p className="text-xs uppercase text-slate-500">{erp.category}</p>
-                    <h3 className="text-lg font-semibold">{post?.post_name || `Task #${erp.id}`}</h3>
-                    <p className="text-sm text-slate-500">{post?.location || 'Unknown location'}</p>
-                  </div>
-                  <span className={`rounded-full px-3 py-1 text-xs font-semibold ${stageStyle}`}>
-                    {erp.stage}
-                  </span>
-                </div>
-
-                <div className="flex flex-wrap items-center gap-3 text-sm text-slate-500">
-                  <span>Provider: #{erp.provider || 'N/A'}</span>
-                  <span>Rating: {rating.toFixed(2)}</span>
-                  <span>Total: ${Number(erp.total_cost || 0).toFixed(2)}</span>
-                </div>
-
-                <div className="flex flex-wrap gap-2">
-                  {['Pending', 'On Process', 'Completed'].map((stage) => (
-                    <button
-                      key={stage}
-                      type="button"
-                      onClick={() => handleStageChange(erp, stage)}
-                      className={`rounded-full px-3 py-1 text-xs font-semibold ${
-                        erp.stage === stage
-                          ? 'bg-brand-500 text-white'
-                          : 'border border-slate-200 text-slate-600'
-                      }`}
-                    >
-                      {stage}
-                    </button>
-                  ))}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const raw = window.prompt('Enter worker IDs separated by comma')
-                      if (!raw) return
-                      const ids = raw
-                        .split(',')
-                        .map((id) => Number(id.trim()))
-                        .filter(Boolean)
-                      handleAssignWorkers(erp, ids)
-                    }}
-                    className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600"
-                  >
-                    Assign (Manual)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const ids = workerPool
-                        .split(',')
-                        .map((id) => Number(id.trim()))
-                        .filter(Boolean)
-                      if (ids.length === 0) {
-                        setMessage('Worker pool is empty for auto-assign.')
-                        return
-                      }
-                      handleAssignWorkers(erp, ids)
-                    }}
-                    className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600"
-                  >
-                    Assign (Auto)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleGeneratePdf(erp)}
-                    className="rounded-full border border-brand-200 px-3 py-1 text-xs font-semibold text-brand-600"
-                  >
-                    Generate PDF
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setExpandedId((prev) => (prev === erp.id ? null : erp.id))}
-                    className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600"
-                  >
-                    {expandedId === erp.id ? 'Hide Details' : 'View Details'}
-                  </button>
-                </div>
-
-                {expandedId === erp.id && (
-                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
-                    <p>Service Type: {post?.service_type || '-'}</p>
-                    <p>Post Type: {post?.post_type || '-'}</p>
-                    <p>Brand: {post?.brand_company_name || '-'}</p>
-                    <p>Website: {post?.website_link || '-'}</p>
-                    <p>Assigned Workers: {(erp.assigned_workers || []).length}</p>
-                    {erp.pdf_slip && (
-                      <a
-                        href={erp.pdf_slip}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="mt-2 inline-flex text-brand-600"
-                      >
-                        View PDF Slip
-                      </a>
-                    )}
-                  </div>
-                )}
-              </div>
-            )
-          })
+          filteredTasks.map((erp) => (
+            <ERPTaskCard
+              key={erp.id}
+              erp={erp}
+              post={postMap[erp.post]}
+              rating={averageRatingByPost[erp.post] || 0}
+              currentUserId={currentUserId}
+              expandedId={expandedId}
+              trackOpenId={trackOpenId}
+              phaseTasks={getPhaseTasks(erp)}
+              onSetPending={(item) => handleStageChange(item, 'Pending')}
+              onToggleTrack={(id) => setTrackOpenId((prev) => (prev === id ? null : id))}
+              onGeneratePdf={handleGeneratePdf}
+              onToggleDetails={(id) => setExpandedId((prev) => (prev === id ? null : id))}
+              onTrackNext={handleTrackStage}
+              onOpenOwner={(ownerId) => navigate(`/dashboard/${ownerId}`)}
+              toMediaUrl={toMediaUrl}
+            />
+          ))
         )}
       </div>
     </div>
