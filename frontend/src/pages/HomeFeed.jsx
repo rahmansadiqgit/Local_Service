@@ -176,6 +176,80 @@ export default function HomeFeed() {
     }))
   }
 
+  const handleAction = async (post, actionType) => {
+    setActionMessage('')
+
+    const postOwnerId = post.owner_id || post.owner
+    if (currentUserId && String(postOwnerId) === String(currentUserId)) {
+      setActionMessage("You can't apply or book your own post.")
+      return
+    }
+
+    if (!isAuthenticated) {
+      navigate('/login')
+      return
+    }
+
+    try {
+      const cost = costSummaryByPost[post.id] || { min: 0 }
+
+      const erpPayload = {
+        category: post.post_type === 'Supply' ? 'Provided' : 'Received',
+        post: post.id,
+        total_cost: cost.min,
+      }
+
+      let erpCreated = false
+
+      try {
+        await api.post('/erp/', erpPayload)
+        erpCreated = true
+      } catch (erpError) {
+        console.warn('ERP creation issue:', erpError)
+
+        const statusCode = erpError?.response?.status
+        const detail = erpError?.response?.data
+
+        if (statusCode === 400 && typeof detail === 'object' && detail !== null) {
+          const text = Object.entries(detail)
+            .map(([field, messages]) => {
+              const messageText = Array.isArray(messages) ? messages.join(' ') : `${messages}`
+              return `${field}: ${messageText}`
+            })
+            .join(' | ')
+          setActionMessage(`Action failed: ${text || 'Could not create ERP task.'}`)
+        } else {
+          setActionMessage('Action failed: Could not create ERP task.')
+        }
+
+        return
+      }
+
+      try {
+        const title = actionType === 'apply' ? 'New Application' : 'New Booking'
+        await api.post('/notifications/', {
+          title,
+          message: `${title} for ${post.post_name} (${post.post_type}).`,
+        })
+      } catch (notifError) {
+        console.warn('Notification issue:', notifError)
+      }
+
+      if (!erpCreated) {
+        setActionMessage('Action failed. Please try again.')
+        return
+      }
+
+      setActionMessage('Action sent. Navigating to manage post...')
+      setTimeout(() => {
+        navigate(`/manage-post/${post.id}`)
+      }, 800)
+    } catch (error) {
+      console.error(error)
+      setActionMessage('Action failed. Please try again.')
+    }
+  }
+
   const handleAddToCart = (post) => {
     const added = addToCart(post, {
       minCost: costSummaryByPost[post.id]?.min || 0,
@@ -191,7 +265,171 @@ export default function HomeFeed() {
   return (
     <div className="space-y-6">
 
+      {/* HERO BANNER SECTION */}
+      <section
+        className="relative overflow-hidden rounded-3xl shadow-lg"
+        style={{
+          backgroundImage: `url(/images/hero.png)`,
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+        }}
+      >
+        <div className="absolute inset-0 bg-black/30" />
+        <div className="absolute inset-0 bg-gradient-to-r from-brand-600/20 via-brand-700/20 to-brand-800/20" />
+
+        <div className="absolute inset-0 opacity-20">
+          <svg className="h-full w-full" viewBox="0 0 1200 400" preserveAspectRatio="none">
+            <defs>
+              <pattern id="grid" width="100" height="100" patternUnits="userSpaceOnUse">
+                <path d="M 100 0 L 0 0 0 100" fill="none" stroke="white" strokeWidth="0.5" />
+              </pattern>
+            </defs>
+            <rect width="1200" height="400" fill="url(#grid)" opacity="0.1" />
+          </svg>
+        </div>
+
+        <div className="relative z-10 px-6 py-16 sm:px-10 lg:px-16">
+          <div className="mx-auto max-w-4xl space-y-8 text-center">
+            <div className="space-y-4">
+              <h1
+                className="text-4xl font-bold text-yellow-200 sm:text-5xl lg:text-6xl"
+                style={{ textShadow: '0 4px 12px rgba(0, 0, 0, 0.9)' }}
+              >
+                Find Trusted Local Services Near You
+              </h1>
+              <p
+                className="text-lg font-bold text-amber-100 sm:text-xl lg:text-2xl"
+                style={{ textShadow: '0 3px 10px rgba(0, 0, 0, 0.9)' }}
+              >
+                Connect with plumbers, electricians, cleaners, and other professionals in your area.
+              </p>
+            </div>
+
+            <div className="space-y-2 text-center">
+              <div className="flex justify-center">
+                <Link
+                  to={isAuthenticated ? '/create-post' : '/login?next=%2Fcreate-post'}
+                  className="inline-flex h-11 items-center justify-center whitespace-nowrap rounded-xl bg-yellow-400 px-8 text-center text-base font-bold text-black shadow-md transition hover:bg-yellow-500 hover:shadow-lg"
+                  style={{ color: '#000000' }}
+                >
+                  Create post
+                </Link>
+              </div>
+              <p
+                className="text-sm font-semibold text-amber-100"
+                style={{ textShadow: '0 2px 8px rgba(0, 0, 0, 0.7)' }}
+              >
+                Request your Demand or Offer a Service
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <section className="space-y-6">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <h2 className="text-2xl font-bold">Browse the latest available & demand service posts</h2>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {['All', 'Demand', 'Supply'].map((type) => (
+              <button
+                key={type}
+                type="button"
+                onClick={() =>
+                  setFilters((prev) => ({ ...prev, postType: type === 'All' ? '' : type }))
+                }
+                className={`rounded-full px-3 py-1 text-xs font-semibold transition ${
+                  (filters.postType === '' && type === 'All') || filters.postType === type
+                    ? 'bg-brand-500 text-white'
+                    : 'border border-slate-200 text-slate-600'
+                }`}
+              >
+                {type}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="relative overflow-hidden rounded-3xl border border-white/45 bg-gradient-to-r from-orange-200/45 via-amber-100/35 to-orange-300/35 p-4 shadow-[0_14px_30px_rgba(251,146,60,0.22)] sm:p-5">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.45),transparent_52%)]" />
+          <div className="absolute -left-10 -top-10 h-24 w-24 rounded-full bg-white/35 blur-2xl" />
+          <div className="absolute -right-10 -bottom-10 h-24 w-24 rounded-full bg-orange-200/45 blur-2xl" />
+          <div className="relative mb-4 flex items-center justify-between gap-3 border-b border-white/45 pb-3">
+            <p className="text-sm font-extrabold tracking-wide text-orange-900">Search & Filters</p>
+            <p className="text-xs text-slate-600">Use filters to quickly narrow service posts</p>
+          </div>
+
+          <div className="relative grid gap-4 lg:grid-cols-6">
+            <div className="lg:col-span-2">
+              <label className="text-[11px] font-semibold uppercase tracking-[0.14em] text-orange-900/90">Search</label>
+              <input
+                name="search"
+                value={filters.search}
+                onChange={handleFilterChange}
+                placeholder="Post name or brand"
+                className="mt-1.5 w-full rounded-xl border border-white/50 bg-white/45 px-3 py-2 text-sm text-slate-800 shadow-sm transition placeholder:text-slate-500 focus:border-orange-300 focus:outline-none focus:ring-2 focus:ring-orange-200/80"
+              />
+            </div>
+
+            <div>
+              <label className="text-[11px] font-semibold uppercase tracking-[0.14em] text-orange-900/90">Location</label>
+              <input
+                name="location"
+                value={filters.location}
+                onChange={handleFilterChange}
+                placeholder="City"
+                className="mt-1.5 w-full rounded-xl border border-white/50 bg-white/45 px-3 py-2 text-sm text-slate-800 shadow-sm transition placeholder:text-slate-500 focus:border-orange-300 focus:outline-none focus:ring-2 focus:ring-orange-200/80"
+              />
+            </div>
+
+            <div>
+              <label className="text-[11px] font-semibold uppercase tracking-[0.14em] text-orange-900/90">Min Cost</label>
+              <input
+                name="minCost"
+                type="number"
+                value={filters.minCost}
+                onChange={handleFilterChange}
+                className="mt-1.5 w-full rounded-xl border border-white/50 bg-white/45 px-3 py-2 text-sm text-slate-800 shadow-sm transition placeholder:text-slate-500 focus:border-orange-300 focus:outline-none focus:ring-2 focus:ring-orange-200/80"
+              />
+            </div>
+
+            <div>
+              <label className="text-[11px] font-semibold uppercase tracking-[0.14em] text-orange-900/90">Max Cost</label>
+              <input
+                name="maxCost"
+                type="number"
+                value={filters.maxCost}
+                onChange={handleFilterChange}
+                className="mt-1.5 w-full rounded-xl border border-white/50 bg-white/45 px-3 py-2 text-sm text-slate-800 shadow-sm transition placeholder:text-slate-500 focus:border-orange-300 focus:outline-none focus:ring-2 focus:ring-orange-200/80"
+              />
+            </div>
+
+            <div>
+              <label className="text-[11px] font-semibold uppercase tracking-[0.14em] text-orange-900/90">Rating</label>
+              <select
+                name="rating"
+                value={filters.rating}
+                onChange={handleFilterChange}
+                className="mt-1.5 w-full rounded-xl border border-white/50 bg-white/45 px-3 py-2 text-sm text-slate-800 shadow-sm transition placeholder:text-slate-500 focus:border-orange-300 focus:outline-none focus:ring-2 focus:ring-orange-200/80"
+              >
+                <option value="">Any</option>
+                <option value="5">5⭐</option>
+                <option value="4">4⭐</option>
+                <option value="3">3⭐</option>
+                <option value="2">2⭐</option>
+                <option value="1">1⭐</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        {actionMessage && (
+          <div className="card text-sm text-slate-500">
+            {actionMessage}
+          </div>
+        )}
+
         {loading ? (
           <div className="card">Loading feed...</div>
         ) : filteredPosts.length === 0 ? (
@@ -210,6 +448,7 @@ export default function HomeFeed() {
                   Boolean(currentUserId) &&
                   String(post.owner_id || post.owner) === String(currentUserId)
                 }
+                onAction={handleAction}
                 onAddToCart={handleAddToCart}
                 inCart={isInCart(post.id)}
               />
