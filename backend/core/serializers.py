@@ -4,7 +4,7 @@ from django.core.exceptions import ValidationError
 from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
-from .models import ERP, Notification, Post, ProblemReport, Product, Rating, Skill
+from .models import ERP, Expertise, Notification, Post, ProblemReport, Product, Rating, Skill
 
 User = get_user_model()
 
@@ -162,6 +162,20 @@ class SkillSerializer(serializers.ModelSerializer):
             "unit",
             "cost_per_unit",
             "available_workers",
+        )
+
+
+class ExpertiseSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Expertise
+        fields = (
+            "id",
+            "post",
+            "name",
+            "experience",
+            "unit",
+            "cost",
+            "available_person",
         )
 
 

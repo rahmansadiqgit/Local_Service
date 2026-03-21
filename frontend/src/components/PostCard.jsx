@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import defaultAvatar from '../assets/default-avatar.svg'
+import ExpertiseTable from './ExpertiseTable'
 import ProductTable from './ProductTable'
 import RatingCard from './RatingCard'
 import ServiceTable from './ServiceTable'
@@ -9,6 +10,7 @@ import SkillTable from './SkillTable'
 export default function PostCard({
   post,
   skills = [],
+  expertises = [],
   products = [],
   rating,
   profile,
@@ -134,6 +136,8 @@ export default function PostCard({
   }, [hasExpertiseCategory, hasServicesCategory, skills])
 
   const productRows = products
+  
+  const newExpertiseRows = useMemo(() => expertises, [expertises])
 
   const profileId = profile?.id ?? post?.owner_id ?? post?.owner
 
@@ -279,6 +283,13 @@ export default function PostCard({
                   ) : (
                     <p className="text-sm text-slate-400">No expertise detail listed.</p>
                   )}
+                </div>
+              )}
+
+              {newExpertiseRows.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-sm font-semibold text-slate-600 dark:text-slate-300">Expertise Services</p>
+                  <ExpertiseTable expertises={newExpertiseRows} />
                 </div>
               )}
 

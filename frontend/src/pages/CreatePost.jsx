@@ -25,6 +25,9 @@ export default function CreatePost() {
   const [skills, setSkills] = useState([
     { skill_name: '', unit: '', cost_per_unit: '', available_workers: 0 },
   ])
+  const [expertises, setExpertises] = useState([
+    { name: '', experience: '', unit: '', cost: '', available_person: 0 },
+  ])
   const [services, setServices] = useState([
     { service_name: '', unit: '', cost_per_unit: '', available_workers: 0 },
   ])
@@ -91,6 +94,7 @@ export default function CreatePost() {
       })
 
       const validSkills = skills.filter((item) => item.skill_name && item.cost_per_unit)
+      const validExpertises = expertises.filter((item) => item.name && item.experience && item.cost)
       const validServices = services.filter((item) => item.service_name && item.cost_per_unit)
       const validProducts = products.filter((item) => item.product_name && item.cost_per_unit)
 
@@ -99,6 +103,16 @@ export default function CreatePost() {
           api.post('/skills/', {
             ...item,
             skill_name: `__expertise__::${item.skill_name}`,
+            post: createdPost.id,
+          }),
+        ),
+        ...validExpertises.map((item) =>
+          api.post('/expertises/', {
+            name: item.name,
+            experience: item.experience,
+            unit: item.unit,
+            cost: Number(item.cost),
+            available_person: Number(item.available_person) || 0,
             post: createdPost.id,
           }),
         ),
@@ -119,6 +133,7 @@ export default function CreatePost() {
       setShowCategoryMenu(false)
       setImageFile(null)
       setSkills([{ skill_name: '', unit: '', cost_per_unit: '', available_workers: 0 }])
+      setExpertises([{ name: '', experience: '', unit: '', cost: '', available_person: 0 }])
       setServices([{ service_name: '', unit: '', cost_per_unit: '', available_workers: 0 }])
       setProducts([{ product_name: '', unit: '', cost_per_unit: '', available_units: 0 }])
       window.dispatchEvent(new Event('post-created'))
@@ -314,13 +329,13 @@ export default function CreatePost() {
         {showExpertiseSection && (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <p className="text-base font-bold text-slate-700 dark:text-slate-200">Expertise</p>
+            <p className="text-base font-bold text-slate-700 dark:text-slate-200">Expertise Services</p>
             <button
               type="button"
               onClick={() =>
-                setSkills((prev) => [
+                setExpertises((prev) => [
                   ...prev,
-                  { skill_name: '', unit: '', cost_per_unit: '', available_workers: 0 },
+                  { name: '', experience: '', unit: '', cost: '', available_person: 0 },
                 ])
               }
               className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600"
@@ -328,17 +343,17 @@ export default function CreatePost() {
               Add Row
             </button>
           </div>
-          {skills.map((row, index) => (
-            <div key={`skill-${index}`} className="grid gap-4 lg:grid-cols-4">
+          {expertises.map((row, index) => (
+            <div key={`expertise-${index}`} className="grid gap-4 lg:grid-cols-5">
               <div>
                 <label className="text-xs font-semibold text-black">Expertise Name</label>
                 <input
-                  placeholder="Enter your skill Name (e.g., Electrical, Teacher)"
-                  value={row.skill_name}
+                  placeholder="e.g., Electricians, Teachers"
+                  value={row.name}
                   onChange={(event) =>
-                    setSkills((prev) =>
+                    setExpertises((prev) =>
                       prev.map((item, i) =>
-                        i === index ? { ...item, skill_name: event.target.value } : item,
+                        i === index ? { ...item, name: event.target.value } : item,
                       ),
                     )
                   }
@@ -348,11 +363,29 @@ export default function CreatePost() {
               <div>
                 <label className="text-xs font-semibold text-black">Experience</label>
                 <input
-                  placeholder="e.g., Months, Years"
+                  type="text"
+                  placeholder="e.g., 6 years"
+                  value={row.experience}
+                  onChange={(event) =>
+                    setExpertises((prev) =>
+                      prev.map((item, i) =>
+                        i === index ? { ...item, experience: event.target.value } : item,
+                      ),
+                    )
+                  }
+                  className={profileLikeInputClass}
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-black">Charge Unit</label>
+                <input
+                  placeholder="e.g., hour, day"
                   value={row.unit}
                   onChange={(event) =>
-                    setSkills((prev) =>
-                      prev.map((item, i) => (i === index ? { ...item, unit: event.target.value } : item)),
+                    setExpertises((prev) =>
+                      prev.map((item, i) =>
+                        i === index ? { ...item, unit: event.target.value } : item,
+                      ),
                     )
                   }
                   className={profileLikeInputClass}
@@ -364,11 +397,11 @@ export default function CreatePost() {
                   type="text"
                   inputMode="decimal"
                   placeholder="Enter charge amount ($)"
-                  value={row.cost_per_unit}
+                  value={row.cost}
                   onChange={(event) =>
-                    setSkills((prev) =>
+                    setExpertises((prev) =>
                       prev.map((item, i) =>
-                        i === index ? { ...item, cost_per_unit: event.target.value } : item,
+                        i === index ? { ...item, cost: event.target.value } : item,
                       ),
                     )
                   }
@@ -382,12 +415,12 @@ export default function CreatePost() {
                     type="text"
                     inputMode="numeric"
                     placeholder="Enter available persons"
-                    value={row.available_workers}
+                    value={row.available_person}
                     onChange={(event) =>
-                      setSkills((prev) =>
+                      setExpertises((prev) =>
                         prev.map((item, i) =>
                           i === index
-                            ? { ...item, available_workers: event.target.value }
+                            ? { ...item, available_person: event.target.value }
                             : item,
                         ),
                       )
@@ -396,7 +429,7 @@ export default function CreatePost() {
                   />
                   <button
                     type="button"
-                    onClick={() => setSkills((prev) => prev.filter((_, i) => i !== index))}
+                    onClick={() => setExpertises((prev) => prev.filter((_, i) => i !== index))}
                     className="px-6 py-2 rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-700 active:scale-95 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     Remove

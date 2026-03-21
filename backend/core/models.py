@@ -68,6 +68,18 @@ class Skill(models.Model):
         return f"{self.skill_name} ({self.post.post_name})"
 
 
+class Expertise(models.Model):
+    post = models.ForeignKey(Post, on_delete=models.CASCADE, related_name="expertises")
+    name = models.CharField(max_length=255)
+    experience = models.CharField(max_length=100)
+    unit = models.CharField(max_length=50)
+    cost = models.DecimalField(max_digits=12, decimal_places=2)
+    available_person = models.PositiveIntegerField(default=0)
+
+    def __str__(self) -> str:
+        return f"{self.name} ({self.post.post_name})"
+
+
 class Product(models.Model):
     post = models.ForeignKey(Post, on_delete=models.CASCADE, related_name="products")
     product_name = models.CharField(max_length=255)

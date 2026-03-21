@@ -7,9 +7,11 @@ export default function ManagePost() {
   const [posts, setPosts] = useState([])
   const [ownPostIds, setOwnPostIds] = useState(new Set())
   const [skills, setSkills] = useState([])
+  const [expertises, setExpertises] = useState([])
   const [products, setProducts] = useState([])
   const [erpItems, setErpItems] = useState([])
   const [skillWorkers, setSkillWorkers] = useState({})
+  const [expertisePersons, setExpertisePersons] = useState({})
   const [serviceWorkers, setServiceWorkers] = useState({})
   const [serviceDurations, setServiceDurations] = useState({})
   const [productUnits, setProductUnits] = useState({})
@@ -34,10 +36,11 @@ export default function ManagePost() {
 
   const loadPosts = useCallback(async () => {
     try {
-      const [myPostRes, allPostRes, skillRes, productRes, erpRes] = await Promise.all([
+      const [myPostRes, allPostRes, skillRes, expertiseRes, productRes, erpRes] = await Promise.all([
         api.get('/posts/?mine=1'),
         api.get('/posts/'),
         api.get('/skills/'),
+        api.get('/expertises/'),
         api.get('/products/'),
         api.get('/erp/'),
       ])
@@ -50,6 +53,7 @@ export default function ManagePost() {
       setOwnPostIds(mineIds)
       setPosts(manageablePosts)
       setSkills(skillRes.data)
+      setExpertises(expertiseRes.data)
       setProducts(productRes.data)
       setErpItems(erpRes.data)
     } catch (error) {
@@ -126,6 +130,14 @@ export default function ManagePost() {
     }, {})
   }, [posts, skills])
 
+  const expertisesByPost = useMemo(() => {
+    return expertises.reduce((acc, expertise) => {
+      acc[expertise.post] = acc[expertise.post] || []
+      acc[expertise.post].push(expertise)
+      return acc
+    }, {})
+  }, [expertises])
+
   const productsByPost = useMemo(() => {
     return products.reduce((acc, product) => {
       acc[product.post] = acc[product.post] || []
@@ -142,32 +154,43 @@ export default function ManagePost() {
   }, [erpItems])
 
   const getTotalForPost = (postId) => {
-    const expertiseRows = skillBreakdownByPost[postId]?.expertise || []
+    const skillExpertiseRows = skillBreakdownByPost[postId]?.expertise || []
     const serviceRows = skillBreakdownByPost[postId]?.services || []
+    const newExpertiseRows = expertisesByPost[postId] || []
     const productRows = productsByPost[postId] || []
-    const expertiseTotal = expertiseRows.reduce((sum, row) => {
+    
+    const skillExpertiseTotal = skillExpertiseRows.reduce((sum, row) => {
       const workers = Number(skillWorkers[`skill-${row.id}`] || 0)
       return sum + workers * Number(row.cost_per_unit || 0)
     }, 0)
+    
+    const newExpertiseTotal = newExpertiseRows.reduce((sum, expertise) => {
+      const persons = Number(expertisePersons[`expertise-${expertise.id}`] || 0)
+      return sum + persons * Number(expertise.cost || 0)
+    }, 0)
+    
     const serviceTotal = serviceRows.reduce((sum, row) => {
       const workers = Number(serviceWorkers[`service-${row.id}-workers`] || 0)
       const duration = Number(serviceDurations[`service-${row.id}-duration`] || 0)
       return sum + workers * duration * Number(row.cost_per_unit || 0)
     }, 0)
+    
     const productTotal = productRows.reduce((sum, row) => {
       const units = Number(productUnits[`product-${row.id}`] || 0)
       return sum + units * Number(row.cost_per_unit || 0)
     }, 0)
-    return expertiseTotal + serviceTotal + productTotal
+    
+    return skillExpertiseTotal + newExpertiseTotal + serviceTotal + productTotal
   }
 
   const buildConfigurationSnapshot = (post) => {
     const postId = post.id
-    const expertiseRows = skillBreakdownByPost[postId]?.expertise || []
+    const skillExpertiseRows = skillBreakdownByPost[postId]?.expertise || []
     const serviceRows = skillBreakdownByPost[postId]?.services || []
+    const newExpertiseRows = expertisesByPost[postId] || []
     const productRows = productsByPost[postId] || []
 
-    const expertise = expertiseRows
+    const skillExpertise = skillExpertiseRows
       .map((row) => {
         const quantity = Number(skillWorkers[`skill-${row.id}`] || 0)
         const unitCost = Number(row.cost_per_unit || 0)
@@ -182,6 +205,25 @@ export default function ManagePost() {
         }
       })
       .filter((row) => row.quantity > 0)
+
+    const newExpertise = newExpertiseRows
+      .map((row) => {
+        const quantity = Number(expertisePersons[`expertise-${row.id}`] || 0)
+        const unitCost = Number(row.cost || 0)
+        return {
+          id: row.id,
+          name: row.name,
+          experience: row.experience,
+          unit: row.unit,
+          quantity,
+          duration: 0,
+          unit_cost: unitCost,
+          line_total: quantity * unitCost,
+        }
+      })
+      .filter((row) => row.quantity > 0)
+
+    const expertise = [...skillExpertise, ...newExpertise]
 
     const services = serviceRows
       .map((row) => {
@@ -434,6 +476,50 @@ export default function ManagePost() {
                               <div className="pt-4 border-t-2 border-slate-300 dark:border-slate-600">
                                 <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">TOTAL COST</p>
                                 <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">${totalCost.toFixed(2)}</p>
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* New Expertise Management Section */}
+                  {(expertisesByPost[post.id] || []).length > 0 && (
+                    <div className="p-8 border-b-2 border-slate-200 dark:border-slate-700">
+                      <div className="flex items-center gap-3 mb-8">
+                        <span className="text-3xl">💼</span>
+                        <h3 className="text-2xl font-bold text-slate-900 dark:text-white">Expertise Services</h3>
+                        <span className="ml-auto px-3 py-1 bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 rounded-full font-semibold">
+                          {(expertisesByPost[post.id] || []).length} services
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        {(expertisesByPost[post.id] || []).map((expertise) => {
+                          const persons = Number(expertisePersons[`expertise-${expertise.id}`] || 0)
+                          const totalCost = persons * Number(expertise.cost || 0)
+                          return (
+                            <div key={expertise.id} className="bg-gradient-to-br from-purple-50 to-pink-50 dark:from-slate-800 dark:to-slate-700/50 rounded-2xl p-6 border-2 border-slate-200 dark:border-slate-600 hover:border-purple-400 dark:hover:border-purple-500 transition">
+                              <p className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2">Expertise Service</p>
+                              <h4 className="text-xl font-bold text-slate-900 dark:text-white mb-1">{expertise.name}</h4>
+                              <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">
+                                Experience: <span className="font-semibold">{expertise.experience}</span> | Cost: <span className="font-semibold">${expertise.cost}</span>/{expertise.unit}
+                              </p>
+                              <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">Available Person: {expertise.available_person}</p>
+                              
+                              <div className="mb-4">
+                                <CounterControl
+                                  value={persons}
+                                  onChange={(val) => setExpertisePersons((prev) => ({ ...prev, [`expertise-${expertise.id}`]: val }))}
+                                  max={Math.max(expertise.available_person || 1, 1)}
+                                  label="Required Person"
+                                  unit={persons === 1 ? 'person' : 'persons'}
+                                />
+                              </div>
+                              
+                              <div className="pt-4 border-t-2 border-slate-300 dark:border-slate-600">
+                                <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">TOTAL COST</p>
+                                <p className="text-2xl font-bold text-purple-600 dark:text-purple-400">${totalCost.toFixed(2)}</p>
                               </div>
                             </div>
                           )
