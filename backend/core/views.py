@@ -284,19 +284,7 @@ class ERPViewSet(viewsets.ModelViewSet):
     serializer_class = ERPSerializer
     permission_classes = [permissions.IsAuthenticated]
 
-    def get_queryset(self):
-        user = self.request.user
-        return ERP.objects.filter(
-            Q(provider=user) | Q(receiver=user) | Q(post__owner=user) | Q(assigned_workers=user)
-        ).distinct()
-
-    def perform_create(self, serializer):
-        actor = self.request.user
-        post = serializer.validated_data.get("post")
-
-        if not post:
-            raise ValidationError({"post": "Post is required."})
-
+    def _resolve_roles(self, actor, post):
         owner = post.owner
 
         if post.post_type == "Demand":
@@ -310,6 +298,49 @@ class ERPViewSet(viewsets.ModelViewSet):
             raise ValidationError({"detail": "Cannot assign ERP roles for this post."})
 
         category = "Provided" if actor == provider else "Received"
+        return provider, receiver, category
+
+    def get_queryset(self):
+        user = self.request.user
+        return ERP.objects.filter(
+            Q(provider=user) | Q(receiver=user) | Q(post__owner=user) | Q(assigned_workers=user)
+        ).distinct()
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        actor = request.user
+        post = serializer.validated_data.get("post")
+
+        if not post:
+            raise ValidationError({"post": "Post is required."})
+
+        provider, receiver, category = self._resolve_roles(actor, post)
+
+        existing = (
+            ERP.objects.filter(post=post, provider=provider, receiver=receiver)
+            .order_by("-updated_at", "-id")
+            .first()
+        )
+
+        if existing:
+            data = self.get_serializer(existing).data
+            return Response(data, status=status.HTTP_200_OK)
+
+        instance = serializer.save(provider=provider, receiver=receiver, category=category)
+        data = self.get_serializer(instance).data
+        headers = self.get_success_headers(data)
+        return Response(data, status=status.HTTP_201_CREATED, headers=headers)
+
+    def perform_create(self, serializer):
+        actor = self.request.user
+        post = serializer.validated_data.get("post")
+
+        if not post:
+            raise ValidationError({"post": "Post is required."})
+
+        provider, receiver, category = self._resolve_roles(actor, post)
 
         serializer.save(provider=provider, receiver=receiver, category=category)
 
