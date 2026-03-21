@@ -13,6 +13,7 @@ from .views import (
     ReportProblemView,
     RegisterView,
     ERPViewSet,
+    ExpertiseViewSet,
     NotificationViewSet,
     PostViewSet,
     ProductViewSet,
@@ -46,6 +47,7 @@ All of these are resources.
 router = DefaultRouter()
 router.register(r"posts", PostViewSet, basename="post")
 router.register(r"skills", SkillViewSet, basename="skill")
+router.register(r"expertises", ExpertiseViewSet, basename="expertise")
 router.register(r"products", ProductViewSet, basename="product")
 router.register(r"erp", ERPViewSet, basename="erp")
 router.register(r"ratings", RatingViewSet, basename="rating")

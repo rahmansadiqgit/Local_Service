@@ -19,6 +19,7 @@ export default function HomeFeed() {
 
   const [posts, setPosts] = useState([])
   const [skills, setSkills] = useState([])
+  const [expertises, setExpertises] = useState([])
   const [products, setProducts] = useState([])
   const [ratings, setRatings] = useState([])
   const [loading, setLoading] = useState(true)
@@ -43,13 +44,15 @@ export default function HomeFeed() {
         const postRes = await api.get('/posts/')
         if (!active) return
         setPosts(postRes.data)
-        const [skillRes, productRes, ratingRes] = await Promise.all([
+        const [skillRes, expertiseRes, productRes, ratingRes] = await Promise.all([
           api.get('/skills/'),
+          api.get('/expertises/'),
           api.get('/products/'),
           api.get('/ratings/'),
         ])
         if (!active) return
         setSkills(skillRes.data)
+        setExpertises(expertiseRes.data)
         setProducts(productRes.data)
         setRatings(ratingRes.data)
       } catch (error) {
@@ -81,6 +84,14 @@ export default function HomeFeed() {
       return acc
     }, {})
   }, [skills])
+
+  const expertisesByPost = useMemo(() => {
+    return expertises.reduce((acc, expertise) => {
+      acc[expertise.post] = acc[expertise.post] || []
+      acc[expertise.post].push(expertise)
+      return acc
+    }, {})
+  }, [expertises])
 
   const productsByPost = useMemo(() => {
     return products.reduce((acc, product) => {
@@ -442,6 +453,7 @@ export default function HomeFeed() {
                   key={post.id}
                   post={post}
                   skills={skillsByPost[post.id] || []}
+                  expertises={expertisesByPost[post.id] || []}
                   products={productsByPost[post.id] || []}
                   rating={ratingByPost[post.id]}
                   isOwnPost={Boolean(currentUserId) && String(post.owner_id || post.owner) === String(currentUserId)}

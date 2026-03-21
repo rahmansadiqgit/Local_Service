@@ -43,6 +43,9 @@ export default function ProductTable({ products = [] }) {
               </button>
             </th>
             <th className="px-3 py-2 whitespace-nowrap">
+              <button type="button" onClick={() => handleSort('description')}>Description</button>
+            </th>
+            <th className="px-3 py-2 whitespace-nowrap">
               <button type="button" onClick={() => handleSort('unit')}>Unit</button>
             </th>
             <th className="px-3 py-2 whitespace-nowrap">
@@ -66,6 +69,7 @@ export default function ProductTable({ products = [] }) {
               }`}
             >
               <td className="px-3 py-2 font-medium whitespace-nowrap">{product.product_name}</td>
+              <td className="px-3 py-2 whitespace-pre-line break-words">{product.description || '-'}</td>
               <td className="px-3 py-2 whitespace-nowrap">{product.unit}</td>
               <td className="px-3 py-2 whitespace-nowrap">${product.cost_per_unit}</td>
               <td className="px-3 py-2 whitespace-nowrap">{product.available_units}</td>

@@ -23,10 +23,11 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 
-from .models import ERP, Notification, Post, ProblemReport, Product, Rating, Skill
+from .models import ERP, Expertise, Notification, Post, ProblemReport, Product, Rating, Skill
 from .serializers import (
     ChangePasswordSerializer,
     EmailTokenObtainPairSerializer,
+    ExpertiseSerializer,
     ERPSerializer,
     NotificationSerializer,
     PasswordResetConfirmSerializer,
@@ -260,6 +261,13 @@ class PostViewSet(viewsets.ModelViewSet):
 class SkillViewSet(viewsets.ModelViewSet):
     queryset = Skill.objects.all() 
     serializer_class = SkillSerializer
+    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+    filterset_fields = ["post"]
+
+
+class ExpertiseViewSet(viewsets.ModelViewSet):
+    queryset = Expertise.objects.all()
+    serializer_class = ExpertiseSerializer
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
     filterset_fields = ["post"]
 
