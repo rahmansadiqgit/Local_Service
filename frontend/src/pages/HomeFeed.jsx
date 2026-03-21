@@ -448,6 +448,17 @@ export default function HomeFeed() {
                   Boolean(currentUserId) &&
                   String(post.owner_id || post.owner) === String(currentUserId)
                 }
+                profile={{
+                  id: post.owner_id || post.owner || null,
+                  name:
+                    post.owner_name ||
+                    post.owner_username ||
+                    post.brand_company_name ||
+                    'Localix Member',
+                  supplyStatus: post.owner_supply_status || '',
+                  demandStatus: post.owner_demand_status || '',
+                  photo: post.owner_profile_photo || '',
+                }}
                 onAction={handleAction}
                 onAddToCart={handleAddToCart}
                 inCart={isInCart(post.id)}
