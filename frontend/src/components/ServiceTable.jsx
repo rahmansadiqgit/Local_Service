@@ -43,6 +43,11 @@ export default function ServiceTable({ services = [] }) {
               </button>
             </th>
             <th className="px-3 py-2 whitespace-nowrap">
+              <button type="button" onClick={() => handleSort('description')}>
+                Description
+              </button>
+            </th>
+            <th className="px-3 py-2 whitespace-nowrap">
               <button type="button" onClick={() => handleSort('unit')}>
                 Service Duration
               </button>
@@ -63,6 +68,7 @@ export default function ServiceTable({ services = [] }) {
           {sorted.map((row, idx) => (
             <tr key={idx} className={idx % 2 === 0 ? 'bg-white dark:bg-slate-950' : 'bg-slate-50 dark:bg-slate-900'}>
               <td className="px-3 py-2 text-slate-900 dark:text-slate-100 whitespace-nowrap">{row.service_name || '-'}</td>
+              <td className="px-3 py-2 text-slate-900 dark:text-slate-100 whitespace-pre-line break-words">{row.description || '-'}</td>
               <td className="px-3 py-2 text-slate-900 dark:text-slate-100 whitespace-nowrap">{row.unit || '-'}</td>
               <td className="px-3 py-2 text-slate-900 dark:text-slate-100 whitespace-nowrap">
                 ${!isNaN(parseFloat(row.cost_per_unit)) ? parseFloat(row.cost_per_unit).toFixed(2) : '0.00'}
