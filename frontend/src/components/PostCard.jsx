@@ -13,6 +13,8 @@ export default function PostCard({
   rating,
   profile,
   onAction,
+  onAddToCart,
+  inCart = false,
 }) {
   const navigate = useNavigate()
   const [expanded, setExpanded] = useState(false)
@@ -239,6 +241,14 @@ export default function PostCard({
 
         >
           {post.post_type === 'Demand' ? 'Apply' : 'Book'}
+        </button>
+        <button
+          type="button"
+          onClick={() => onAddToCart?.(post)}
+          disabled={isOwnPost || inCart}
+          className="rounded-full border border-violet-300 bg-violet-50 px-5 py-2 text-sm font-semibold text-violet-700 transition hover:bg-violet-100 focus:outline-none focus:ring-2 focus:ring-violet-200 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {isOwnPost ? 'Your Post' : inCart ? 'Added' : 'Add to Cart'}
         </button>
         <button
           type="button"

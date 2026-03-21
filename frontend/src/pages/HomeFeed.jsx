@@ -11,11 +11,17 @@ import { Link, useNavigate } from 'react-router-dom'
 import api from '../api/client'
 import PostCard from '../components/PostCard'
 import useAuth from '../context/useAuth'
+import useCart from '../context/useCart'
 
 export default function HomeFeed() {
 
   const navigate = useNavigate()
+<<<<<<< Updated upstream
   const { isAuthenticated } = useAuth()
+=======
+  const { isAuthenticated, user } = useAuth()
+  const { addToCart, isInCart } = useCart()
+>>>>>>> Stashed changes
 
   const [posts, setPosts] = useState([])
   const [skills, setSkills] = useState([])
@@ -217,6 +223,14 @@ export default function HomeFeed() {
 
     }
 
+  }
+
+  const handleAddToCart = (post) => {
+    const added = addToCart(post, {
+      minCost: costSummaryByPost[post.id]?.min || 0,
+    })
+
+    setActionMessage(added ? 'Post added to your cart.' : 'This post is already in your cart.')
   }
 
   const filterLabelClass = 'text-[11px] font-semibold uppercase tracking-[0.14em] text-orange-900/90'
@@ -423,6 +437,8 @@ export default function HomeFeed() {
                     photo: post.owner_profile_photo || '',
                   }}
                   onAction={handleAction}
+                  onAddToCart={handleAddToCart}
+                  inCart={isInCart(post.id)}
                 />
 
               ))}
