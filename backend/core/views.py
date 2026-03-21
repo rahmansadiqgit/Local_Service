@@ -495,8 +495,37 @@ class ERPViewSet(viewsets.ModelViewSet):
                 return
 
             draw_section(title)
-            headers = ["Name", "Unit", "Qty", "Duration", "Unit Cost", "Line Total"]
-            col_x = [left, left + 160, left + 235, left + 290, left + 355, left + 435]
+            if "Expertise" in title:
+                headers = ["Name", "Duration", "Unit", "Unit Cost", "People", "Line Total"]
+                values_builder = lambda row: [
+                    as_text(row.get("name") or "-"),
+                    as_text(row.get("duration", 0)),
+                    as_text(row.get("unit") or "-"),
+                    as_money(row.get("unit_cost", 0)),
+                    as_text(row.get("quantity", 0)),
+                    as_money(row.get("line_total", 0)),
+                ]
+            elif "Services" in title:
+                headers = ["Name", "Duration", "Unit", "Unit Cost", "Packages", "Line Total"]
+                values_builder = lambda row: [
+                    as_text(row.get("name") or "-"),
+                    as_text(row.get("duration", 0)),
+                    as_text(row.get("unit") or "-"),
+                    as_money(row.get("unit_cost", 0)),
+                    as_text(row.get("quantity", 0)),
+                    as_money(row.get("line_total", 0)),
+                ]
+            else:
+                headers = ["Name", "Unit", "Qty", "Unit Cost", "Line Total"]
+                values_builder = lambda row: [
+                    as_text(row.get("name") or "-"),
+                    as_text(row.get("unit") or "-"),
+                    as_text(row.get("quantity", 0)),
+                    as_money(row.get("unit_cost", 0)),
+                    as_money(row.get("line_total", 0)),
+                ]
+
+            col_x = [left, left + 155, left + 235, left + 315, left + 390, left + 465][: len(headers)]
 
             def draw_header():
                 nonlocal y
@@ -512,14 +541,7 @@ class ERPViewSet(viewsets.ModelViewSet):
             for row in rows:
                 ensure_space(14)
                 pdf.setFont("Helvetica", 8)
-                values = [
-                    as_text(row.get("name") or "-"),
-                    as_text(row.get("unit") or "-"),
-                    as_text(row.get("quantity", 0)),
-                    as_text(row.get("duration", 0)),
-                    as_money(row.get("unit_cost", 0)),
-                    as_money(row.get("line_total", 0)),
-                ]
+                values = values_builder(row)
                 for idx, val in enumerate(values):
                     cell = val[:26]
                     pdf.drawString(col_x[idx], y, cell)

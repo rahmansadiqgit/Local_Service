@@ -211,12 +211,35 @@ export default function ERPTaskCard({
           {[{
             title: 'Expertise (Modified)',
             rows: snapshotExpertise,
+            columns: [
+              { key: 'name', label: 'Name' },
+              { key: 'duration', label: 'Duration' },
+              { key: 'unit', label: 'Unit' },
+              { key: 'unit_cost', label: 'Unit Cost' },
+              { key: 'quantity', label: 'People' },
+              { key: 'line_total', label: 'Line Total' },
+            ],
           }, {
             title: 'Services (Modified)',
             rows: snapshotServices,
+            columns: [
+              { key: 'name', label: 'Name' },
+              { key: 'duration', label: 'Duration' },
+              { key: 'unit', label: 'Unit' },
+              { key: 'unit_cost', label: 'Unit Cost' },
+              { key: 'quantity', label: 'Packages' },
+              { key: 'line_total', label: 'Line Total' },
+            ],
           }, {
             title: 'Products (Modified)',
             rows: snapshotProducts,
+            columns: [
+              { key: 'name', label: 'Name' },
+              { key: 'unit', label: 'Unit' },
+              { key: 'quantity', label: 'Qty' },
+              { key: 'unit_cost', label: 'Unit Cost' },
+              { key: 'line_total', label: 'Line Total' },
+            ],
           }].map((section) => (
             section.rows.length > 0 ? (
               <div key={section.title} className="rounded-xl border border-slate-200 bg-white p-3">
@@ -225,23 +248,52 @@ export default function ERPTaskCard({
                   <table className="min-w-full text-left text-xs">
                     <thead>
                       <tr className="border-b border-slate-200 text-slate-500">
-                        <th className="px-2 py-1">Name</th>
-                        <th className="px-2 py-1">Unit</th>
-                        <th className="px-2 py-1">Qty</th>
-                        <th className="px-2 py-1">Duration</th>
-                        <th className="px-2 py-1">Unit Cost</th>
-                        <th className="px-2 py-1">Line Total</th>
+                        {section.columns.map((column) => (
+                          <th key={`${section.title}-${column.key}`} className="px-2 py-1">
+                            {column.label}
+                          </th>
+                        ))}
                       </tr>
                     </thead>
                     <tbody>
                       {section.rows.map((row) => (
                         <tr key={`${section.title}-${row.id}`} className="border-b border-slate-100 last:border-none">
-                          <td className="px-2 py-1 font-medium text-slate-700">{row.name || '-'}</td>
-                          <td className="px-2 py-1">{row.unit || '-'}</td>
-                          <td className="px-2 py-1">{Number(row.quantity || 0)}</td>
-                          <td className="px-2 py-1">{Number(row.duration || 0)}</td>
-                          <td className="px-2 py-1">${Number(row.unit_cost || 0).toFixed(2)}</td>
-                          <td className="px-2 py-1 font-semibold text-slate-700">${Number(row.line_total || 0).toFixed(2)}</td>
+                          {section.columns.map((column) => {
+                            const value = row[column.key]
+
+                            if (column.key === 'name') {
+                              return (
+                                <td key={`${section.title}-${row.id}-${column.key}`} className="px-2 py-1 font-medium text-slate-700">
+                                  {value || '-'}
+                                </td>
+                              )
+                            }
+
+                            if (column.key === 'unit_cost' || column.key === 'line_total') {
+                              return (
+                                <td
+                                  key={`${section.title}-${row.id}-${column.key}`}
+                                  className={`px-2 py-1 ${column.key === 'line_total' ? 'font-semibold text-slate-700' : ''}`}
+                                >
+                                  ${Number(value || 0).toFixed(2)}
+                                </td>
+                              )
+                            }
+
+                            if (column.key === 'quantity' || column.key === 'duration') {
+                              return (
+                                <td key={`${section.title}-${row.id}-${column.key}`} className="px-2 py-1">
+                                  {Number(value || 0)}
+                                </td>
+                              )
+                            }
+
+                            return (
+                              <td key={`${section.title}-${row.id}-${column.key}`} className="px-2 py-1">
+                                {value || '-'}
+                              </td>
+                            )
+                          })}
                         </tr>
                       ))}
                     </tbody>
