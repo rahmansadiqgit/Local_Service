@@ -135,7 +135,7 @@ export default function YourCart() {
           <img
             src="/images/cart.png"
             alt="Cart header illustration"
-            className="pointer-events-none absolute right-14 top-1/2 h-28 w-28 -translate-y-1/2 object-contain sm:h-32 sm:w-32 lg:h-36 lg:w-36"
+            className="pointer-events-none absolute right-10 top-1/2 h-36 w-36 -translate-y-1/2 object-contain sm:h-40 sm:w-40 lg:h-44 lg:w-44"
           />
         </div>
       </section>
