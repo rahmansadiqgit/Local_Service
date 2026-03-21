@@ -12,6 +12,7 @@ export default function ManagePost() {
   const [erpItems, setErpItems] = useState([])
   const [skillWorkers, setSkillWorkers] = useState({})
   const [expertisePersons, setExpertisePersons] = useState({})
+  const [expertiseDurations, setExpertiseDurations] = useState({})
   const [serviceWorkers, setServiceWorkers] = useState({})
   const [serviceDurations, setServiceDurations] = useState({})
   const [productUnits, setProductUnits] = useState({})
@@ -166,7 +167,8 @@ export default function ManagePost() {
     
     const newExpertiseTotal = newExpertiseRows.reduce((sum, expertise) => {
       const persons = Number(expertisePersons[`expertise-${expertise.id}`] || 0)
-      return sum + persons * Number(expertise.cost || 0)
+      const duration = Number(expertiseDurations[`expertise-${expertise.id}-duration`] || 0)
+      return sum + persons * duration * Number(expertise.cost || 0)
     }, 0)
     
     const serviceTotal = serviceRows.reduce((sum, row) => {
@@ -209,6 +211,7 @@ export default function ManagePost() {
     const newExpertise = newExpertiseRows
       .map((row) => {
         const quantity = Number(expertisePersons[`expertise-${row.id}`] || 0)
+        const duration = Number(expertiseDurations[`expertise-${row.id}-duration`] || 0)
         const unitCost = Number(row.cost || 0)
         return {
           id: row.id,
@@ -216,12 +219,12 @@ export default function ManagePost() {
           experience: row.experience,
           unit: row.unit,
           quantity,
-          duration: 0,
+          duration,
           unit_cost: unitCost,
-          line_total: quantity * unitCost,
+          line_total: quantity * duration * unitCost,
         }
       })
-      .filter((row) => row.quantity > 0)
+      .filter((row) => row.quantity > 0 || row.duration > 0)
 
     const expertise = [...skillExpertise, ...newExpertise]
 
@@ -497,7 +500,9 @@ export default function ManagePost() {
                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                         {(expertisesByPost[post.id] || []).map((expertise) => {
                           const persons = Number(expertisePersons[`expertise-${expertise.id}`] || 0)
-                          const totalCost = persons * Number(expertise.cost || 0)
+                          const duration = Number(expertiseDurations[`expertise-${expertise.id}-duration`] || 0)
+                          const durationUnit = expertise.unit || 'duration unit'
+                          const totalCost = persons * duration * Number(expertise.cost || 0)
                           return (
                             <div key={expertise.id} className="bg-gradient-to-br from-purple-50 to-pink-50 dark:from-slate-800 dark:to-slate-700/50 rounded-2xl p-6 border-2 border-slate-200 dark:border-slate-600 hover:border-purple-400 dark:hover:border-purple-500 transition">
                               <p className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2">Expertise Service</p>
@@ -507,13 +512,20 @@ export default function ManagePost() {
                               </p>
                               <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">Available Person: {expertise.available_person}</p>
                               
-                              <div className="mb-4">
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
                                 <CounterControl
                                   value={persons}
                                   onChange={(val) => setExpertisePersons((prev) => ({ ...prev, [`expertise-${expertise.id}`]: val }))}
                                   max={Math.max(expertise.available_person || 1, 1)}
                                   label="Required Person"
                                   unit={persons === 1 ? 'person' : 'persons'}
+                                />
+                                <CounterControl
+                                  value={duration}
+                                  onChange={(val) => setExpertiseDurations((prev) => ({ ...prev, [`expertise-${expertise.id}-duration`]: val }))}
+                                  max={365}
+                                  label="Duration Needed"
+                                  unit={durationUnit}
                                 />
                               </div>
                               
