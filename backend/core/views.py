@@ -103,6 +103,14 @@ class ChangePasswordView(APIView):
             return Response({"detail": "Old password is incorrect."}, status=400)
         user.set_password(serializer.validated_data["new_password"])
         user.save()
+
+        changed_at = timezone.localtime(timezone.now()).strftime("%Y-%m-%d %I:%M %p")
+        Notification.objects.create(
+            user=user,
+            title="Password Changed",
+            message=f"You have changed your password at {changed_at}.",
+        )
+
         return Response({"detail": "Password changed."})
 
 
@@ -148,6 +156,14 @@ class PasswordResetConfirmView(APIView):
             return Response({"detail": "Invalid token."}, status=400)
         user.set_password(new_password)
         user.save()
+
+        changed_at = timezone.localtime(timezone.now()).strftime("%Y-%m-%d %I:%M %p")
+        Notification.objects.create(
+            user=user,
+            title="Password Changed",
+            message=f"You have changed your password at {changed_at}.",
+        )
+
         return Response({"detail": "Password reset successful."})
 
 
