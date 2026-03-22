@@ -1,6 +1,7 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { Link, useNavigate, useLocation } from "react-router-dom"
 import useAuth from "../context/useAuth"
+import api from "../api/client"
 
 export default function Header() {
   const { user, isAuthenticated, logout } = useAuth()
@@ -8,10 +9,45 @@ export default function Header() {
   const location = useLocation()
 
   const [openDropdown, setOpenDropdown] = useState(null)
+  const [notifications, setNotifications] = useState([])
+  const [loadingNotifications, setLoadingNotifications] = useState(false)
+  const [notificationsError, setNotificationsError] = useState("")
 
   useEffect(() => {
     setOpenDropdown(null)
   }, [location])
+
+  const fetchNotifications = useCallback(async () => {
+    if (!isAuthenticated) {
+      setNotifications([])
+      setNotificationsError("")
+      return
+    }
+
+    setLoadingNotifications(true)
+    setNotificationsError("")
+    try {
+      const { data } = await api.get("/notifications/")
+      const list = Array.isArray(data) ? data : []
+      setNotifications(list)
+    } catch (error) {
+      console.error("Failed to load notifications:", error)
+      setNotificationsError("Could not load notifications right now.")
+    } finally {
+      setLoadingNotifications(false)
+    }
+  }, [isAuthenticated])
+
+  useEffect(() => {
+    if (!isAuthenticated) return
+    fetchNotifications()
+  }, [isAuthenticated, fetchNotifications])
+
+  useEffect(() => {
+    if (openDropdown === "notif") {
+      fetchNotifications()
+    }
+  }, [openDropdown, fetchNotifications])
 
   useEffect(() => {
     const handleDocumentMouseDown = (event) => {
@@ -45,6 +81,15 @@ export default function Header() {
 
   const toggleDropdown = (name) => {
     setOpenDropdown(openDropdown === name ? null : name)
+  }
+
+  const unreadCount = notifications.filter((item) => !item?.is_read).length
+
+  const formatNotificationTime = (value) => {
+    if (!value) return ""
+    const parsed = new Date(value)
+    if (Number.isNaN(parsed.getTime())) return ""
+    return parsed.toLocaleString()
   }
 
   const resolveMediaUrl = (value) => {
@@ -102,16 +147,43 @@ export default function Header() {
             <div className="relative" data-header-dropdown>
               <button
                 onClick={() => toggleDropdown("notif")}
-                className={iconButtonClass}
+                className={`${iconButtonClass} relative inline-flex items-center justify-center`}
               >
                 🔔
               </button>
+              {unreadCount > 0 && (
+                <span className="pointer-events-none absolute -left-1 -top-1 inline-flex min-h-5 min-w-5 items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-bold leading-none text-white shadow">
+                  {unreadCount > 9 ? "9+" : unreadCount}
+                </span>
+              )}
               {openDropdown === "notif" && (
                 <div className={`${dropdownPanelClass} w-72`}>
                   <p className="mb-2 px-2 text-xs font-bold uppercase tracking-wide text-slate-500">Notifications</p>
-                  <div className="rounded-xl bg-slate-50 px-3 py-3 text-sm text-slate-600">
-                    No new notifications
-                  </div>
+
+                  {loadingNotifications ? (
+                    <div className="rounded-xl bg-slate-50 px-3 py-3 text-sm text-slate-600">Loading...</div>
+                  ) : notificationsError ? (
+                    <div className="rounded-xl bg-rose-50 px-3 py-3 text-sm text-rose-700">{notificationsError}</div>
+                  ) : notifications.length === 0 ? (
+                    <div className="rounded-xl bg-slate-50 px-3 py-3 text-sm text-slate-600">No new notifications</div>
+                  ) : (
+                    <div className="max-h-80 space-y-2 overflow-y-auto pr-1">
+                      {notifications.slice(0, 10).map((item) => (
+                        <div
+                          key={item.id}
+                          className={`rounded-xl border px-3 py-2 text-sm ${
+                            item?.is_read
+                              ? "border-slate-200 bg-slate-50 text-slate-600"
+                              : "border-violet-200 bg-violet-50 text-slate-700"
+                          }`}
+                        >
+                          <p className="font-semibold text-slate-800">{item.title || "Notification"}</p>
+                          <p className="mt-0.5 text-xs">{item.message || ""}</p>
+                          <p className="mt-1 text-[11px] text-slate-500">{formatNotificationTime(item.created_at)}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
             </div>

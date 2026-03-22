@@ -9,19 +9,36 @@ export default function ChangePasswordPage() {
     new_password: '',
   })
   const [message, setMessage] = useState('')
+  const [messageType, setMessageType] = useState('info')
   const [saving, setSaving] = useState(false)
 
   const handleSubmit = async (event) => {
     event.preventDefault()
     setSaving(true)
     setMessage('')
+    setMessageType('info')
     try {
       await api.post('/users/change-password/', passwordForm)
       setPasswordForm({ old_password: '', new_password: '' })
       setMessage('Password updated successfully.')
+      setMessageType('success')
     } catch (error) {
       console.error(error)
-      setMessage('Failed to update password.')
+      const detail = error?.response?.data
+      if (typeof detail?.detail === 'string' && detail.detail.trim()) {
+        setMessage(detail.detail)
+      } else if (detail && typeof detail === 'object') {
+        const text = Object.entries(detail)
+          .map(([field, messages]) => {
+            const content = Array.isArray(messages) ? messages.join(' ') : String(messages)
+            return `${field}: ${content}`
+          })
+          .join(' | ')
+        setMessage(text || 'Failed to update password.')
+      } else {
+        setMessage('Failed to update password.')
+      }
+      setMessageType('error')
     } finally {
       setSaving(false)
     }
@@ -85,7 +102,19 @@ export default function ChangePasswordPage() {
               >
                 {saving ? 'Updating...' : 'Update Password'}
               </button>
-              {message && <p className="mt-2 text-sm text-slate-600">{message}</p>}
+              {message && (
+                <p
+                  className={`mt-2 text-sm ${
+                    messageType === 'error'
+                      ? 'text-rose-600'
+                      : messageType === 'success'
+                        ? 'text-emerald-700'
+                        : 'text-slate-600'
+                  }`}
+                >
+                  {message}
+                </p>
+              )}
             </div>
           </form>
         </div>

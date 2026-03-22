@@ -104,11 +104,10 @@ class ChangePasswordView(APIView):
         user.set_password(serializer.validated_data["new_password"])
         user.save()
 
-        changed_at = timezone.localtime(timezone.now()).strftime("%Y-%m-%d %I:%M %p")
         Notification.objects.create(
             user=user,
             title="Password Changed",
-            message=f"You have changed your password at {changed_at}.",
+            message="You have changed your password.",
         )
 
         return Response({"detail": "Password changed."})
@@ -157,11 +156,10 @@ class PasswordResetConfirmView(APIView):
         user.set_password(new_password)
         user.save()
 
-        changed_at = timezone.localtime(timezone.now()).strftime("%Y-%m-%d %I:%M %p")
         Notification.objects.create(
             user=user,
             title="Password Changed",
-            message=f"You have changed your password at {changed_at}.",
+            message="You have changed your password.",
         )
 
         return Response({"detail": "Password reset successful."})
