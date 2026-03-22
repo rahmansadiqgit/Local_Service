@@ -76,13 +76,15 @@ export default function Login() {
             className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm "
           />
         </div>
-        <button
-          type="submit"
-          disabled={loading}
-         className="px-6 py-2 rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-700 active:scale-95 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {loading ? 'Signing in...' : 'Login'}
-        </button>
+        <div className="flex justify-center">
+          <button
+            type="submit"
+            disabled={loading}
+            className="inline-flex items-center rounded-xl bg-gradient-to-r from-violet-600 to-fuchsia-600 px-6 py-2.5 text-sm font-semibold text-white shadow-md transition hover:from-violet-700 hover:to-fuchsia-700 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {loading ? 'Signing in...' : 'Login'}
+          </button>
+        </div>
         {message && <p className="text-sm text-rose-500">{message}</p>}
         <p className="text-sm text-slate-500">
           <a href="/reset-password" className="font-semibold text-brand-600">

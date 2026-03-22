@@ -202,6 +202,13 @@ export default function Header() {
                   >
                     ERP
                   </Link>
+                  <Link
+                    to="/cart"
+                    onClick={() => setOpenDropdown(null)}
+                    className={dropdownItemClass}
+                  >
+                    Your Cart
+                  </Link>
                 </div>
               )}
             </div>

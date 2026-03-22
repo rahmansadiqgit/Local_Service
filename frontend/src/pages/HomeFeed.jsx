@@ -1,21 +1,19 @@
-/*
-Hook	Analogy	Purpose
-useState	Notebook	Store and update local data
-useEffect	Personal assistant	Perform side-effects after render
-createContext/useContext	Bulletin board	Share data globally across components
-useCallback	Shortcut	Keep function from being recreated
-useMemo	Smart calculator	Keep calculation result from recalculating
-*/
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import api from '../api/client'
 import PostCard from '../components/PostCard'
 import useAuth from '../context/useAuth'
+import useCart from '../context/useCart'
 
 export default function HomeFeed() {
 
   const navigate = useNavigate()
+
+  // ✅ FIXED: include user
   const { isAuthenticated, user } = useAuth()
+
+  // ✅ FIXED: missing cart functions
+  const { addToCart, isInCart } = useCart()
 
   const [posts, setPosts] = useState([])
   const [skills, setSkills] = useState([])
@@ -38,23 +36,26 @@ export default function HomeFeed() {
 
   useEffect(() => {
     let active = true
+
     const load = async () => {
       try {
-
         const postRes = await api.get('/posts/')
         if (!active) return
         setPosts(postRes.data)
+
         const [skillRes, expertiseRes, productRes, ratingRes] = await Promise.all([
           api.get('/skills/'),
           api.get('/expertises/'),
           api.get('/products/'),
           api.get('/ratings/'),
         ])
+
         if (!active) return
         setSkills(skillRes.data)
         setExpertises(expertiseRes.data)
         setProducts(productRes.data)
         setRatings(ratingRes.data)
+
       } catch (error) {
         console.error(error)
       } finally {
@@ -66,6 +67,7 @@ export default function HomeFeed() {
 
     const handlePostCreated = () => load()
     const handlePostDeleted = () => load()
+
     window.addEventListener('post-created', handlePostCreated)
     window.addEventListener('post-deleted', handlePostDeleted)
 
@@ -101,8 +103,6 @@ export default function HomeFeed() {
     }, {})
   }, [products])
 
-
-
   const ratingByPost = useMemo(() => {
     return ratings.reduce((acc, rating) => {
       acc[rating.post] = rating
@@ -110,16 +110,14 @@ export default function HomeFeed() {
     }, {})
   }, [ratings])
 
-
-
   const costSummaryByPost = useMemo(() => {
-
     const map = {}
 
     posts.forEach((post) => {
       const skillCosts = (skillsByPost[post.id] || []).map((item) =>
         Number(item.cost_per_unit || 0)
       )
+
       const productCosts = (productsByPost[post.id] || []).map((item) =>
         Number(item.cost_per_unit || 0)
       )
@@ -130,7 +128,6 @@ export default function HomeFeed() {
       const max = allCosts.length ? Math.max(...allCosts) : 0
 
       map[post.id] = { min, max }
-
     })
 
     return map
@@ -138,38 +135,39 @@ export default function HomeFeed() {
   }, [posts, productsByPost, skillsByPost])
 
   const filteredPosts = useMemo(() => {
-
     return posts.filter((post) => {
 
       if (filters.postType && post.post_type !== filters.postType) return false
-      if (filters.location && !post.location?.toLowerCase().includes(filters.location.toLowerCase())) return false
-      if (filters.search) {
 
+      if (filters.location &&
+          !post.location?.toLowerCase().includes(filters.location.toLowerCase())) {
+        return false
+      }
+
+      if (filters.search) {
         const query = filters.search.toLowerCase()
 
         const haystack =
           `${post.post_name} ${post.brand_company_name || ''} ${post.description || ''}`
-          .toLowerCase()
+            .toLowerCase()
 
         if (!haystack.includes(query)) return false
       }
+
       const cost = costSummaryByPost[post.id] || { min: 0, max: 0 }
 
       if (filters.minCost && cost.min < Number(filters.minCost)) return false
       if (filters.maxCost && cost.max > Number(filters.maxCost)) return false
+
       const ratingValue = ratingByPost[post.id]?.rating_value || 0
 
       if (filters.rating && ratingValue < Number(filters.rating)) return false
 
       return true
     })
-
   }, [posts, filters, costSummaryByPost, ratingByPost])
 
-
-
   const handleFilterChange = (event) => {
-
     const { name, value } = event.target
 
     setFilters(prev => ({
@@ -179,7 +177,6 @@ export default function HomeFeed() {
   }
 
   const handleAction = async (post, actionType) => {
-
     setActionMessage('')
 
     const postOwnerId = post.owner_id || post.owner
@@ -194,7 +191,6 @@ export default function HomeFeed() {
     }
 
     try {
-
       const cost = costSummaryByPost[post.id] || { min: 0 }
 
       const erpPayload = {
@@ -205,7 +201,6 @@ export default function HomeFeed() {
 
       let erpCreated = false
 
-      // Try to create ERP task
       try {
         await api.post('/erp/', erpPayload)
         erpCreated = true
@@ -230,7 +225,6 @@ export default function HomeFeed() {
         return
       }
 
-      // Send notification
       try {
         const title = actionType === 'apply' ? 'New Application' : 'New Booking'
         await api.post('/notifications/', {
@@ -247,47 +241,44 @@ export default function HomeFeed() {
       }
 
       setActionMessage('Action sent. Navigating to manage post...')
-      // Navigate to ManagePost page
       setTimeout(() => {
         navigate(`/manage-post/${post.id}`)
       }, 800)
     } catch (error) {
-
       console.error(error)
-
       setActionMessage('Action failed. Please try again.')
-
     }
-
   }
 
-  const filterLabelClass = 'text-[11px] font-semibold uppercase tracking-[0.14em] text-orange-900/90'
-  const filterInputClass =
-    'mt-1.5 w-full rounded-xl border border-white/50 bg-white/45 px-3 py-2 text-sm text-slate-800 shadow-sm transition placeholder:text-slate-500 focus:border-orange-300 focus:outline-none focus:ring-2 focus:ring-orange-200/80'
+  const handleAddToCart = (post) => {
+    const added = addToCart(post, {
+      minCost: costSummaryByPost[post.id]?.min || 0,
+    })
 
-
+    setActionMessage(
+      added
+        ? 'Post added to your cart.'
+        : 'This post is already in your cart.'
+    )
+  }
 
   return (
     <div className="space-y-6">
 
       {/* HERO BANNER SECTION */}
       <section
-        className="relative rounded-3xl overflow-hidden shadow-lg"
+        className="relative overflow-hidden rounded-3xl shadow-lg"
         style={{
           backgroundImage: `url(/images/hero.png)`,
           backgroundSize: 'cover',
           backgroundPosition: 'center',
         }}
       >
-        {/* Dimmed overlay for lower image opacity */}
-        <div className="absolute inset-0 bg-black/30"></div>
+        <div className="absolute inset-0 bg-black/30" />
+        <div className="absolute inset-0 bg-gradient-to-r from-brand-600/20 via-brand-700/20 to-brand-800/20" />
 
-        {/* Gradient overlay */}
-        <div className="absolute inset-0 bg-gradient-to-r from-brand-600/20 via-brand-700/20 to-brand-800/20"></div>
-
-        {/* Background pattern overlay */}
         <div className="absolute inset-0 opacity-20">
-          <svg className="w-full h-full" viewBox="0 0 1200 400" preserveAspectRatio="none">
+          <svg className="h-full w-full" viewBox="0 0 1200 400" preserveAspectRatio="none">
             <defs>
               <pattern id="grid" width="100" height="100" patternUnits="userSpaceOnUse">
                 <path d="M 100 0 L 0 0 0 100" fill="none" stroke="white" strokeWidth="0.5" />
@@ -297,41 +288,44 @@ export default function HomeFeed() {
           </svg>
         </div>
 
-        {/* Content */}
         <div className="relative z-10 px-6 py-16 sm:px-10 lg:px-16">
-          <div className="max-w-4xl mx-auto text-center space-y-8">
-
-            {/* Heading */}
+          <div className="mx-auto max-w-4xl space-y-8 text-center">
             <div className="space-y-4">
-              <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-yellow-200" style={{ textShadow: '0 4px 12px rgba(0, 0, 0, 0.9)' }}>
+              <h1
+                className="text-4xl font-bold text-yellow-200 sm:text-5xl lg:text-6xl"
+                style={{ textShadow: '0 4px 12px rgba(0, 0, 0, 0.9)' }}
+              >
                 Find Trusted Local Services Near You
               </h1>
-              <p className="text-lg sm:text-xl lg:text-2xl text-amber-100 font-bold" style={{ textShadow: '0 3px 10px rgba(0, 0, 0, 0.9)' }}>
+              <p
+                className="text-lg font-bold text-amber-100 sm:text-xl lg:text-2xl"
+                style={{ textShadow: '0 3px 10px rgba(0, 0, 0, 0.9)' }}
+              >
                 Connect with plumbers, electricians, cleaners, and other professionals in your area.
               </p>
             </div>
 
-            {/* Hero CTA */}
             <div className="space-y-2 text-center">
               <div className="flex justify-center">
                 <Link
                   to={isAuthenticated ? '/create-post' : '/login?next=%2Fcreate-post'}
-                  className="h-11 rounded-xl bg-yellow-400 px-8 text-center text-base font-bold text-black shadow-md transition hover:bg-yellow-500 hover:shadow-lg whitespace-nowrap inline-flex items-center justify-center"
+                  className="inline-flex h-11 items-center justify-center whitespace-nowrap rounded-xl bg-yellow-400 px-8 text-center text-base font-bold text-black shadow-md transition hover:bg-yellow-500 hover:shadow-lg"
                   style={{ color: '#000000' }}
                 >
                   Create post
                 </Link>
               </div>
-              <p className="text-sm font-semibold text-amber-100" style={{ textShadow: '0 2px 8px rgba(0, 0, 0, 0.7)' }}>
+              <p
+                className="text-sm font-semibold text-amber-100"
+                style={{ textShadow: '0 2px 8px rgba(0, 0, 0, 0.7)' }}
+              >
                 Request your Demand or Offer a Service
               </p>
             </div>
-
           </div>
         </div>
       </section>
 
-      {/* HOME FEED SECTION */}
       <section className="space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
@@ -367,66 +361,66 @@ export default function HomeFeed() {
           </div>
 
           <div className="relative grid gap-4 lg:grid-cols-6">
-          <div className="lg:col-span-2">
-            <label className={filterLabelClass}>Search</label>
-            <input
-              name="search"
-              value={filters.search}
-              onChange={handleFilterChange}
-              placeholder="Post name or brand"
-              className={filterInputClass}
-            />
-          </div>
+            <div className="lg:col-span-2">
+              <label className="text-[11px] font-semibold uppercase tracking-[0.14em] text-orange-900/90">Search</label>
+              <input
+                name="search"
+                value={filters.search}
+                onChange={handleFilterChange}
+                placeholder="Post name or brand"
+                className="mt-1.5 w-full rounded-xl border border-white/50 bg-white/45 px-3 py-2 text-sm text-slate-800 shadow-sm transition placeholder:text-slate-500 focus:border-orange-300 focus:outline-none focus:ring-2 focus:ring-orange-200/80"
+              />
+            </div>
 
-          <div>
-            <label className={filterLabelClass}>Location</label>
-            <input
-              name="location"
-              value={filters.location}
-              onChange={handleFilterChange}
-              placeholder="City"
-              className={filterInputClass}
-            />
-          </div>
+            <div>
+              <label className="text-[11px] font-semibold uppercase tracking-[0.14em] text-orange-900/90">Location</label>
+              <input
+                name="location"
+                value={filters.location}
+                onChange={handleFilterChange}
+                placeholder="City"
+                className="mt-1.5 w-full rounded-xl border border-white/50 bg-white/45 px-3 py-2 text-sm text-slate-800 shadow-sm transition placeholder:text-slate-500 focus:border-orange-300 focus:outline-none focus:ring-2 focus:ring-orange-200/80"
+              />
+            </div>
 
-          <div>
-            <label className={filterLabelClass}>Min Cost</label>
-            <input
-              name="minCost"
-              type="number"
-              value={filters.minCost}
-              onChange={handleFilterChange}
-              className={filterInputClass}
-            />
-          </div>
+            <div>
+              <label className="text-[11px] font-semibold uppercase tracking-[0.14em] text-orange-900/90">Min Cost</label>
+              <input
+                name="minCost"
+                type="number"
+                value={filters.minCost}
+                onChange={handleFilterChange}
+                className="mt-1.5 w-full rounded-xl border border-white/50 bg-white/45 px-3 py-2 text-sm text-slate-800 shadow-sm transition placeholder:text-slate-500 focus:border-orange-300 focus:outline-none focus:ring-2 focus:ring-orange-200/80"
+              />
+            </div>
 
-          <div>
-            <label className={filterLabelClass}>Max Cost</label>
-            <input
-              name="maxCost"
-              type="number"
-              value={filters.maxCost}
-              onChange={handleFilterChange}
-              className={filterInputClass}
-            />
-          </div>
+            <div>
+              <label className="text-[11px] font-semibold uppercase tracking-[0.14em] text-orange-900/90">Max Cost</label>
+              <input
+                name="maxCost"
+                type="number"
+                value={filters.maxCost}
+                onChange={handleFilterChange}
+                className="mt-1.5 w-full rounded-xl border border-white/50 bg-white/45 px-3 py-2 text-sm text-slate-800 shadow-sm transition placeholder:text-slate-500 focus:border-orange-300 focus:outline-none focus:ring-2 focus:ring-orange-200/80"
+              />
+            </div>
 
-          <div>
-            <label className={filterLabelClass}>Rating</label>
-            <select
-              name="rating"
-              value={filters.rating}
-              onChange={handleFilterChange}
-              className={filterInputClass}
-            >
-              <option value="">Any</option>
-              <option value="5">5⭐</option>
-              <option value="4">4⭐</option>
-              <option value="3">3⭐</option>
-              <option value="2">2⭐</option>
-              <option value="1">1⭐</option>
-            </select>
-          </div>
+            <div>
+              <label className="text-[11px] font-semibold uppercase tracking-[0.14em] text-orange-900/90">Rating</label>
+              <select
+                name="rating"
+                value={filters.rating}
+                onChange={handleFilterChange}
+                className="mt-1.5 w-full rounded-xl border border-white/50 bg-white/45 px-3 py-2 text-sm text-slate-800 shadow-sm transition placeholder:text-slate-500 focus:border-orange-300 focus:outline-none focus:ring-2 focus:ring-orange-200/80"
+              >
+                <option value="">Any</option>
+                <option value="5">5⭐</option>
+                <option value="4">4⭐</option>
+                <option value="3">3⭐</option>
+                <option value="2">2⭐</option>
+                <option value="1">1⭐</option>
+              </select>
+            </div>
           </div>
         </div>
 
@@ -436,47 +430,44 @@ export default function HomeFeed() {
           </div>
         )}
 
-          {loading ? (
-
-            <div className="card">Loading feed...</div>
-
-          ) : filteredPosts.length === 0 ? (
-
-            <div className="card">No posts match your filters.</div>
-
-          ) : (
-
-            <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-              {filteredPosts.map(post => (
-
-                <PostCard
-                  key={post.id}
-                  post={post}
-                  skills={skillsByPost[post.id] || []}
-                  expertises={expertisesByPost[post.id] || []}
-                  products={productsByPost[post.id] || []}
-                  rating={ratingByPost[post.id]}
-                  isOwnPost={Boolean(currentUserId) && String(post.owner_id || post.owner) === String(currentUserId)}
-                  profile={{
-                    id: post.owner_id || post.owner || null,
-                    name: post.owner_name ||
-                          post.brand_company_name ||
-                          'Localix Member',
-                    supplyStatus: post.owner_supply_status || '',
-                    demandStatus: post.owner_demand_status || '',
-                    photo: post.owner_profile_photo || '',
-                  }}
-                  onAction={handleAction}
-                />
-
-              ))}
-            </div>
-
-          )}
-
-        </section>
+        {loading ? (
+          <div className="card">Loading feed...</div>
+        ) : filteredPosts.length === 0 ? (
+          <div className="card">No posts match your filters.</div>
+        ) : (
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+            {filteredPosts.map(post => (
+              <PostCard
+                key={post.id}
+                post={post}
+                skills={skillsByPost[post.id] || []}
+                expertises={expertisesByPost[post.id] || []}
+                products={productsByPost[post.id] || []}
+                rating={ratingByPost[post.id]}
+                isOwnPost={
+                  Boolean(currentUserId) &&
+                  String(post.owner_id || post.owner) === String(currentUserId)
+                }
+                profile={{
+                  id: post.owner_id || post.owner || null,
+                  name:
+                    post.owner_name ||
+                    post.owner_username ||
+                    post.brand_company_name ||
+                    'Localix Member',
+                  supplyStatus: post.owner_supply_status || '',
+                  demandStatus: post.owner_demand_status || '',
+                  photo: post.owner_profile_photo || '',
+                }}
+                onAction={handleAction}
+                onAddToCart={handleAddToCart}
+                inCart={isInCart(post.id)}
+              />
+            ))}
+          </div>
+        )}
+      </section>
 
     </div>
-
   )
 }

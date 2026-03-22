@@ -19,6 +19,7 @@ import Register from './pages/Register'
 import ResetPassword from './pages/ResetPassword'
 import ResetPasswordConfirm from './pages/ResetPasswordConfirm'
 import Services from './pages/Services'
+import YourCart from './pages/YourCart'
 
 export default function App() {
   return (
@@ -54,6 +55,7 @@ export default function App() {
               <Route path="/manage-post/:id" element={<ManagePost />} />
               <Route path="/connections" element={<Connections />} />
               <Route path="/erp" element={<ERP />} />
+              <Route path="/cart" element={<YourCart />} />
             </Route>
 
             <Route path="*" element={<Navigate to="/" replace />} />

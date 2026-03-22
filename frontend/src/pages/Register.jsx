@@ -117,13 +117,15 @@ export default function Register() {
           </div>
         </div>
 
-        <button
-  type="submit"
-  disabled={loading}
-  className="px-6 py-2 rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-700 active:scale-95 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
->
-          {loading ? 'Creating...' : 'Create Account'}
-        </button>
+        <div className="flex justify-center">
+          <button
+            type="submit"
+            disabled={loading}
+            className="inline-flex items-center rounded-xl bg-gradient-to-r from-violet-600 to-fuchsia-600 px-6 py-2.5 text-sm font-semibold text-white shadow-md transition hover:from-violet-700 hover:to-fuchsia-700 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {loading ? 'Creating...' : 'Create Account'}
+          </button>
+        </div>
         {message && <p className="text-sm text-rose-500">{message}</p>}
         <p className="text-sm text-slate-500">
           Already have an account?{' '}
