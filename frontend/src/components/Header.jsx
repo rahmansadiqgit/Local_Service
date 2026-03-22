@@ -12,6 +12,8 @@ export default function Header() {
   const [notifications, setNotifications] = useState([])
   const [loadingNotifications, setLoadingNotifications] = useState(false)
   const [notificationsError, setNotificationsError] = useState("")
+  const [openNotificationMenuId, setOpenNotificationMenuId] = useState(null)
+  const [actionNotificationId, setActionNotificationId] = useState(null)
 
   useEffect(() => {
     setOpenDropdown(null)
@@ -57,7 +59,9 @@ export default function Header() {
   useEffect(() => {
     if (openDropdown === "notif") {
       fetchNotifications()
+      return
     }
+    setOpenNotificationMenuId(null)
   }, [openDropdown, fetchNotifications])
 
   useEffect(() => {
@@ -158,6 +162,47 @@ export default function Header() {
     }
   }
 
+  const handleToggleNotificationMenu = (notificationId) => {
+    setOpenNotificationMenuId((prev) => (prev === notificationId ? null : notificationId))
+  }
+
+  const handleMarkAsUnread = async (notificationId) => {
+    setActionNotificationId(notificationId)
+    try {
+      await api.patch(`/notifications/${notificationId}/`, { is_read: false })
+      setNotifications((prev) =>
+        prev.map((item) =>
+          item.id === notificationId
+            ? {
+                ...item,
+                is_read: false,
+              }
+            : item,
+        ),
+      )
+    } catch (error) {
+      console.error("Failed to mark notification as unread:", error)
+      setNotificationsError("Could not update this notification.")
+    } finally {
+      setOpenNotificationMenuId(null)
+      setActionNotificationId(null)
+    }
+  }
+
+  const handleDeleteNotification = async (notificationId) => {
+    setActionNotificationId(notificationId)
+    try {
+      await api.delete(`/notifications/${notificationId}/`)
+      setNotifications((prev) => prev.filter((item) => item.id !== notificationId))
+    } catch (error) {
+      console.error("Failed to delete notification:", error)
+      setNotificationsError("Could not delete this notification.")
+    } finally {
+      setOpenNotificationMenuId(null)
+      setActionNotificationId(null)
+    }
+  }
+
   const resolveMediaUrl = (value) => {
     if (!value) return ""
     if (/^https?:\/\//i.test(value) || value.startsWith("data:") || value.startsWith("blob:")) {
@@ -223,7 +268,20 @@ export default function Header() {
                 </span>
               )}
               {openDropdown === "notif" && (
-                <div className={`${dropdownPanelClass} w-72`}>
+                <div
+                  className={`${dropdownPanelClass} w-72`}
+                  onClick={(event) => {
+                    const target = event.target
+                    if (!(target instanceof Element)) return
+                    if (
+                      target.closest("[data-notification-menu-root]") ||
+                      target.closest("[data-notification-menu-button]")
+                    ) {
+                      return
+                    }
+                    setOpenNotificationMenuId(null)
+                  }}
+                >
                   <div className="mb-2 flex items-center justify-between gap-2 px-2">
                     <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Notifications</p>
                     <button
@@ -253,7 +311,42 @@ export default function Header() {
                               : "border-violet-200 bg-violet-50 text-slate-700"
                           }`}
                         >
-                          <p className="font-semibold text-slate-800">{item.title || "Notification"}</p>
+                          <div className="flex items-start justify-between gap-2">
+                            <p className="font-semibold text-slate-800">{item.title || "Notification"}</p>
+                            <div className="relative" data-notification-menu-root>
+                              <button
+                                type="button"
+                                onClick={() => handleToggleNotificationMenu(item.id)}
+                                disabled={actionNotificationId === item.id}
+                                className="rounded-full px-2 py-0.5 text-base font-bold text-slate-500 transition hover:bg-slate-200/70 hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+                                aria-label="Notification options"
+                                data-notification-menu-button
+                              >
+                                ...
+                              </button>
+
+                              {openNotificationMenuId === item.id && (
+                                <div className="absolute right-0 z-20 mt-1 w-40 rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleMarkAsUnread(item.id)}
+                                    disabled={actionNotificationId === item.id}
+                                    className="block w-full px-3 py-2 text-left text-xs font-semibold text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
+                                  >
+                                    Mark as unread
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteNotification(item.id)}
+                                    disabled={actionNotificationId === item.id}
+                                    className="block w-full px-3 py-2 text-left text-xs font-semibold text-rose-600 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"
+                                  >
+                                    Delete notification
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          </div>
                           <p className="mt-0.5 text-xs">{item.message || ""}</p>
                           <p className="mt-1 text-[11px] text-slate-500">{formatNotificationTime(item.created_at)}</p>
                         </div>
