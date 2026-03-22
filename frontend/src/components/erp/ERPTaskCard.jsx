@@ -217,7 +217,10 @@ export default function ERPTaskCard({
           }, {
             title: 'Products (Modified)',
             rows: snapshotProducts,
-          }].map((section) => (
+          }].map((section) => {
+            const showDuration = section.title !== 'Products (Modified)'
+
+            return (
             section.rows.length > 0 ? (
               <div key={section.title} className="rounded-xl border border-slate-200 bg-white p-3">
                 <h4 className="text-sm font-semibold text-slate-800">{section.title}</h4>
@@ -228,7 +231,7 @@ export default function ERPTaskCard({
                         <th className="px-2 py-1">Name</th>
                         <th className="px-2 py-1">Unit</th>
                         <th className="px-2 py-1">Qty</th>
-                        <th className="px-2 py-1">Duration</th>
+                        {showDuration ? <th className="px-2 py-1">Duration</th> : null}
                         <th className="px-2 py-1">Unit Cost</th>
                         <th className="px-2 py-1">Line Total</th>
                       </tr>
@@ -239,7 +242,7 @@ export default function ERPTaskCard({
                           <td className="px-2 py-1 font-medium text-slate-700">{row.name || '-'}</td>
                           <td className="px-2 py-1">{row.unit || '-'}</td>
                           <td className="px-2 py-1">{Number(row.quantity || 0)}</td>
-                          <td className="px-2 py-1">{Number(row.duration || 0)}</td>
+                          {showDuration ? <td className="px-2 py-1">{Number(row.duration || 0)}</td> : null}
                           <td className="px-2 py-1">${Number(row.unit_cost || 0).toFixed(2)}</td>
                           <td className="px-2 py-1 font-semibold text-slate-700">${Number(row.line_total || 0).toFixed(2)}</td>
                         </tr>
@@ -249,7 +252,8 @@ export default function ERPTaskCard({
                 </div>
               </div>
             ) : null
-          ))}
+            )
+          })}
 
           <div className="rounded-xl border border-slate-200 bg-white p-3">
             <h4 className="text-sm font-semibold text-slate-800">Final Cost Summary</h4>
