@@ -92,6 +92,27 @@ export default function Header() {
     return parsed.toLocaleString()
   }
 
+  const handleMarkAllAsRead = async () => {
+    const unreadItems = notifications.filter((item) => item && !item.is_read)
+    if (!unreadItems.length) return
+
+    try {
+      await Promise.all(
+        unreadItems.map((item) => api.patch(`/notifications/${item.id}/`, { is_read: true })),
+      )
+
+      setNotifications((prev) =>
+        prev.map((item) => ({
+          ...item,
+          is_read: true,
+        })),
+      )
+    } catch (error) {
+      console.error("Failed to mark notifications as read:", error)
+      setNotificationsError("Could not mark notifications as read.")
+    }
+  }
+
   const resolveMediaUrl = (value) => {
     if (!value) return ""
     if (/^https?:\/\//i.test(value) || value.startsWith("data:") || value.startsWith("blob:")) {
@@ -158,7 +179,17 @@ export default function Header() {
               )}
               {openDropdown === "notif" && (
                 <div className={`${dropdownPanelClass} w-72`}>
-                  <p className="mb-2 px-2 text-xs font-bold uppercase tracking-wide text-slate-500">Notifications</p>
+                  <div className="mb-2 flex items-center justify-between gap-2 px-2">
+                    <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Notifications</p>
+                    <button
+                      type="button"
+                      onClick={handleMarkAllAsRead}
+                      disabled={unreadCount === 0 || loadingNotifications}
+                      className="rounded-md border border-violet-200 bg-violet-50 px-2 py-1 text-[11px] font-semibold text-violet-700 transition hover:bg-violet-100 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      Mark all as read
+                    </button>
+                  </div>
 
                   {loadingNotifications ? (
                     <div className="rounded-xl bg-slate-50 px-3 py-3 text-sm text-slate-600">Loading...</div>
