@@ -17,6 +17,7 @@ const initialPost = {
 export default function CreatePost() {
   const navigate = useNavigate()
   const imageInputRef = useRef(null)
+  const categoryMenuRef = useRef(null)
   const [post, setPost] = useState(initialPost)
   const [selectedCategories, setSelectedCategories] = useState([])
   const [showCategoryMenu, setShowCategoryMenu] = useState(false)
@@ -37,6 +38,23 @@ export default function CreatePost() {
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState('')
 
+  // Handle click outside dropdown to close it
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (categoryMenuRef.current && !categoryMenuRef.current.contains(event.target)) {
+        setShowCategoryMenu(false)
+      }
+    }
+
+    if (showCategoryMenu) {
+      document.addEventListener('mousedown', handleClickOutside)
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [showCategoryMenu])
+
   useEffect(() => {
     if (imageFile) {
       const reader = new FileReader()
@@ -52,6 +70,8 @@ export default function CreatePost() {
   const handleChange = (event) => {
     const { name, value } = event.target
     setPost((prev) => ({ ...prev, [name]: value }))
+    // Close dropdown when interacting with other form fields
+    setShowCategoryMenu(false)
   }
 
   const toggleCategory = (category) => {
@@ -67,6 +87,7 @@ export default function CreatePost() {
 
       return next
     })
+    // Don't close dropdown on category selection
   }
 
   const handleSubmit = async (event) => {
@@ -186,6 +207,7 @@ export default function CreatePost() {
               name="post_type"
               value={post.post_type}
               onChange={handleChange}
+              onFocus={() => setShowCategoryMenu(false)}
               className={profileLikeInputClass}
             >
               <option value="Supply">Available</option>
@@ -194,7 +216,7 @@ export default function CreatePost() {
           </div>
           <div>
             <label className="text-xs font-semibold text-black">Post Categories</label>
-            <div className="relative mt-1">
+            <div className="relative mt-1" ref={categoryMenuRef}>
               <button
                 type="button"
                 onClick={() => setShowCategoryMenu((prev) => !prev)}
@@ -239,6 +261,7 @@ export default function CreatePost() {
               name="post_title"
               value={post.post_title}
               onChange={handleChange}
+              onFocus={() => setShowCategoryMenu(false)}
               placeholder="Give your post a descriptive title"
               className={profileLikeInputClass}
             />
@@ -249,6 +272,7 @@ export default function CreatePost() {
               name="description"
               value={post.description}
               onChange={handleChange}
+              onFocus={() => setShowCategoryMenu(false)}
               rows={3}
               className={profileLikeInputClass}
             />
@@ -259,6 +283,7 @@ export default function CreatePost() {
               name="brand_company_name"
               value={post.brand_company_name}
               onChange={handleChange}
+              onFocus={() => setShowCategoryMenu(false)}
               className={profileLikeInputClass}
             />
           </div>
@@ -268,6 +293,7 @@ export default function CreatePost() {
               name="location"
               value={post.location}
               onChange={handleChange}
+              onFocus={() => setShowCategoryMenu(false)}
               required
               className={profileLikeInputClass}
             />
@@ -322,6 +348,7 @@ export default function CreatePost() {
               name="website_link"
               value={post.website_link}
               onChange={handleChange}
+              onFocus={() => setShowCategoryMenu(false)}
               className={profileLikeInputClass}
             />
           </div>
@@ -330,7 +357,7 @@ export default function CreatePost() {
         {showExpertiseSection && (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <p className="text-base font-bold text-slate-700 dark:text-slate-200">Expertise Services</p>
+            <p className="text-base font-bold text-slate-700 dark:text-slate-200">Expertise</p>
             <button
               type="button"
               onClick={() =>
