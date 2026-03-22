@@ -17,24 +17,35 @@ export default function Header() {
     setOpenDropdown(null)
   }, [location])
 
-  const fetchNotifications = useCallback(async () => {
+  const fetchNotifications = useCallback(async ({ silent = false } = {}) => {
     if (!isAuthenticated) {
       setNotifications([])
       setNotificationsError("")
       return
     }
 
-    setLoadingNotifications(true)
-    setNotificationsError("")
+    if (!silent) {
+      setLoadingNotifications(true)
+      setNotificationsError("")
+    }
     try {
       const { data } = await api.get("/notifications/")
       const list = Array.isArray(data) ? data : []
-      setNotifications(list)
+      const sortedList = [...list].sort((a, b) => {
+        const left = new Date(a?.created_at || 0).getTime()
+        const right = new Date(b?.created_at || 0).getTime()
+        return right - left
+      })
+      setNotifications(sortedList)
     } catch (error) {
       console.error("Failed to load notifications:", error)
-      setNotificationsError("Could not load notifications right now.")
+      if (!silent) {
+        setNotificationsError("Could not load notifications right now.")
+      }
     } finally {
-      setLoadingNotifications(false)
+      if (!silent) {
+        setLoadingNotifications(false)
+      }
     }
   }, [isAuthenticated])
 
@@ -48,6 +59,31 @@ export default function Header() {
       fetchNotifications()
     }
   }, [openDropdown, fetchNotifications])
+
+  useEffect(() => {
+    if (!isAuthenticated) return
+
+    const intervalId = window.setInterval(() => {
+      fetchNotifications({ silent: true })
+    }, 5000)
+
+    const handleFocusRefresh = () => {
+      fetchNotifications({ silent: true })
+    }
+
+    const handleNotificationRefresh = () => {
+      fetchNotifications({ silent: true })
+    }
+
+    window.addEventListener("focus", handleFocusRefresh)
+    window.addEventListener("localix:notifications-refresh", handleNotificationRefresh)
+
+    return () => {
+      window.clearInterval(intervalId)
+      window.removeEventListener("focus", handleFocusRefresh)
+      window.removeEventListener("localix:notifications-refresh", handleNotificationRefresh)
+    }
+  }, [isAuthenticated, fetchNotifications])
 
   useEffect(() => {
     const handleDocumentMouseDown = (event) => {
@@ -86,10 +122,19 @@ export default function Header() {
   const unreadCount = notifications.filter((item) => !item?.is_read).length
 
   const formatNotificationTime = (value) => {
-    if (!value) return ""
+    if (!value) return "Unknown time"
     const parsed = new Date(value)
-    if (Number.isNaN(parsed.getTime())) return ""
-    return parsed.toLocaleString()
+    if (Number.isNaN(parsed.getTime())) return "Unknown time"
+
+    return new Intl.DateTimeFormat(undefined, {
+      year: "numeric",
+      month: "short",
+      day: "2-digit",
+      hour: "numeric",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: true,
+    }).format(parsed)
   }
 
   const handleMarkAllAsRead = async () => {

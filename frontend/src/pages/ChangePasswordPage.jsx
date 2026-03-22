@@ -22,6 +22,7 @@ export default function ChangePasswordPage() {
       setPasswordForm({ old_password: '', new_password: '' })
       setMessage('Password updated successfully.')
       setMessageType('success')
+      window.dispatchEvent(new Event('localix:notifications-refresh'))
     } catch (error) {
       console.error(error)
       const detail = error?.response?.data
