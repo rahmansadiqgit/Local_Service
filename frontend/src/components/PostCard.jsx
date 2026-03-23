@@ -204,7 +204,7 @@ export default function PostCard({
 
       <div className="rounded-2xl border border-slate-200 bg-white px-4 py-2.5">
         {post.description ? (
-          <p className="text-sm leading-6 text-slate-700">{post.description}</p>
+          <p className="text-sm leading-6 text-slate-700 break-words [overflow-wrap:anywhere]">{post.description}</p>
         ) : (
           <p className="text-sm text-slate-400">No description provided.</p>
         )}
