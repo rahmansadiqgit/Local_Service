@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import api from '../api/client'
 import useAuth from '../context/useAuth'
@@ -10,6 +10,7 @@ export default function YourCart() {
   const { items, removeFromCart } = useCart()
   const [actionMessage, setActionMessage] = useState('')
   const [processingPostId, setProcessingPostId] = useState(null)
+  const [unavailablePostIds, setUnavailablePostIds] = useState({})
 
   const currentUserId = user?.id
 
@@ -50,9 +51,56 @@ export default function YourCart() {
     })
   }, [items])
 
+  useEffect(() => {
+    let isActive = true
+
+    const checkAvailability = async () => {
+      if (!items.length) {
+        if (isActive) setUnavailablePostIds({})
+        return
+      }
+
+      const checks = await Promise.all(
+        items.map(async (item) => {
+          const postId = item?.post?.id
+          if (!postId) return null
+
+          try {
+            await api.get(`/posts/${postId}/`)
+            return { postId, unavailable: false }
+          } catch (error) {
+            const statusCode = error?.response?.status
+            return { postId, unavailable: statusCode === 404 }
+          }
+        }),
+      )
+
+      if (!isActive) return
+
+      const nextUnavailable = {}
+      checks.forEach((result) => {
+        if (result?.unavailable) {
+          nextUnavailable[result.postId] = true
+        }
+      })
+      setUnavailablePostIds(nextUnavailable)
+    }
+
+    checkAvailability()
+
+    return () => {
+      isActive = false
+    }
+  }, [items])
+
   const handleBookFromCart = async (item) => {
     const post = item?.post
     if (!post?.id) return
+
+    if (unavailablePostIds[post.id]) {
+      setActionMessage('This post is no longer available. Please remove it from your cart.')
+      return
+    }
 
     setActionMessage('')
     const postOwnerId = post.owner_id || post.owner
@@ -96,6 +144,11 @@ export default function YourCart() {
 
       const statusCode = error?.response?.status
       const detail = error?.response?.data
+      if (statusCode === 404) {
+        setUnavailablePostIds((prev) => ({ ...prev, [post.id]: true }))
+        setActionMessage('This post is no longer available. Please remove it from your cart.')
+        return
+      }
       if (statusCode === 400 && typeof detail === 'object' && detail !== null) {
         const text = Object.entries(detail)
           .map(([field, messages]) => {
@@ -154,6 +207,7 @@ export default function YourCart() {
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
           {sortedItems.map((item) => {
             const post = item.post
+            const isUnavailable = Boolean(unavailablePostIds[post?.id])
             const isOwnPost = Boolean(currentUserId) &&
               String(post?.owner_id || post?.owner) === String(currentUserId)
             const postImageSrc = toMediaUrl(post?.image)
@@ -210,6 +264,12 @@ export default function YourCart() {
                     </p>
 
                     <p className="mt-1 text-xs text-slate-600">{toSnippet(post.description)}</p>
+
+                    {isUnavailable && (
+                      <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-2 py-1 text-xs font-medium text-amber-700">
+                        This post is no longer available. You can remove it from your cart.
+                      </p>
+                    )}
                   </div>
                 </div>
 
@@ -217,10 +277,12 @@ export default function YourCart() {
                   <button
                     type="button"
                     onClick={() => handleBookFromCart(item)}
-                    disabled={isOwnPost || processingPostId === post.id}
+                    disabled={isUnavailable || isOwnPost || processingPostId === post.id}
                     className="rounded-full bg-gradient-to-r from-sky-600 to-blue-700 px-4 py-2 text-sm font-semibold text-white transition hover:from-sky-700 hover:to-blue-800 disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    {isOwnPost
+                    {isUnavailable
+                      ? 'No Longer Available'
+                      : isOwnPost
                       ? 'Your Post'
                       : processingPostId === post.id
                         ? 'Processing...'

@@ -1,6 +1,7 @@
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
+import re
 from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
@@ -42,6 +43,15 @@ class UserRegisterSerializer(serializers.ModelSerializer):
         user.set_password(password)
         user.save()
         return user
+
+    def validate_whatsapp_link(self, value):
+        raw = str(value or "").strip()
+        if not raw:
+            return ""
+        digits_only = re.sub(r"\D", "", raw)
+        if not digits_only:
+            raise serializers.ValidationError("Enter a valid WhatsApp number.")
+        return digits_only
 
 
 class EmailTokenObtainPairSerializer(TokenObtainPairSerializer):
@@ -90,6 +100,15 @@ class UserSerializer(serializers.ModelSerializer):
             "whatsapp_link",
         )
         read_only_fields = ("id", "username", "email")
+
+    def validate_whatsapp_link(self, value):
+        raw = str(value or "").strip()
+        if not raw:
+            return ""
+        digits_only = re.sub(r"\D", "", raw)
+        if not digits_only:
+            raise serializers.ValidationError("Enter a valid WhatsApp number.")
+        return digits_only
 
 
 class ChangePasswordSerializer(serializers.Serializer):
