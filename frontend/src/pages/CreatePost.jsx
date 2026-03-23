@@ -30,7 +30,7 @@ export default function CreatePost() {
     { name: '', experience: '', unit: '', cost: '', available_person: 0 },
   ])
   const [services, setServices] = useState([
-    { service_name: '', description: '', unit: '', cost_per_unit: '', available_workers: 0 },
+    { service_name: '', description: '', unit: '', cost_per_unit: '' },
   ])
   const [products, setProducts] = useState([
     { product_name: '', description: '', unit: '', cost_per_unit: '', available_units: 0 },
@@ -143,7 +143,6 @@ export default function CreatePost() {
             description: item.description,
             unit: item.unit,
             cost_per_unit: item.cost_per_unit,
-            available_workers: item.available_workers,
             post: createdPost.id,
           }),
         ),
@@ -156,7 +155,7 @@ export default function CreatePost() {
       setImageFile(null)
       setSkills([{ skill_name: '', unit: '', cost_per_unit: '', available_workers: 0 }])
       setExpertises([{ name: '', experience: '', unit: '', cost: '', available_person: 0 }])
-      setServices([{ service_name: '', description: '', unit: '', cost_per_unit: '', available_workers: 0 }])
+      setServices([{ service_name: '', description: '', unit: '', cost_per_unit: '' }])
       setProducts([{ product_name: '', description: '', unit: '', cost_per_unit: '', available_units: 0 }])
       window.dispatchEvent(new Event('post-created'))
       navigate('/')
@@ -210,8 +209,8 @@ export default function CreatePost() {
               onFocus={() => setShowCategoryMenu(false)}
               className={profileLikeInputClass}
             >
-              <option value="Supply">Available</option>
-              <option value="Demand">Demand</option>
+              <option value="Supply">Sell / Offer Something (Available)</option>
+              <option value="Demand">Ask / Request Something (Demand)</option>
             </select>
           </div>
           <div>
@@ -405,7 +404,7 @@ export default function CreatePost() {
                 />
               </div>
               <div>
-                <label className="text-xs font-semibold text-black">Charge Unit</label>
+                <label className="text-xs font-semibold text-black">Work Duration</label>
                 <input
                   placeholder="e.g., hour, day"
                   value={row.unit}
@@ -478,7 +477,7 @@ export default function CreatePost() {
               onClick={() =>
                 setServices((prev) => [
                   ...prev,
-                  { service_name: '', description: '', unit: '', cost_per_unit: '', available_workers: 0 },
+                  { service_name: '', description: '', unit: '', cost_per_unit: '' },
                 ])
               }
               className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600"
@@ -549,31 +548,14 @@ export default function CreatePost() {
                   className={profileLikeInputClass}
                 />
               </div>
-              <div>
-                <label className="text-xs font-semibold text-black">Available Workers</label>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    placeholder="Enter available workers"
-                    value={row.available_workers}
-                    onChange={(event) =>
-                      setServices((prev) =>
-                        prev.map((item, i) =>
-                          i === index ? { ...item, available_workers: event.target.value } : item,
-                        ),
-                      )
-                    }
-                    className={profileLikeInputClass}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setServices((prev) => prev.filter((_, i) => i !== index))}
-                    className="px-6 py-2 rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-700 active:scale-95 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    Remove
-                  </button>
-                </div>
+              <div className="flex items-end">
+                <button
+                  type="button"
+                  onClick={() => setServices((prev) => prev.filter((_, i) => i !== index))}
+                  className="w-full px-6 py-2 rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-700 active:scale-95 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Remove
+                </button>
               </div>
             </div>
           ))}
