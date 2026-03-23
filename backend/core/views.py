@@ -298,19 +298,7 @@ class ERPViewSet(viewsets.ModelViewSet):
     serializer_class = ERPSerializer
     permission_classes = [permissions.IsAuthenticated]
 
-    def get_queryset(self):
-        user = self.request.user
-        return ERP.objects.filter(
-            Q(provider=user) | Q(receiver=user) | Q(post__owner=user) | Q(assigned_workers=user)
-        ).distinct()
-
-    def perform_create(self, serializer):
-        actor = self.request.user
-        post = serializer.validated_data.get("post")
-
-        if not post:
-            raise ValidationError({"post": "Post is required."})
-
+    def _resolve_roles(self, actor, post):
         owner = post.owner
 
         if post.post_type == "Demand":
@@ -324,6 +312,49 @@ class ERPViewSet(viewsets.ModelViewSet):
             raise ValidationError({"detail": "Cannot assign ERP roles for this post."})
 
         category = "Provided" if actor == provider else "Received"
+        return provider, receiver, category
+
+    def get_queryset(self):
+        user = self.request.user
+        return ERP.objects.filter(
+            Q(provider=user) | Q(receiver=user) | Q(post__owner=user) | Q(assigned_workers=user)
+        ).distinct()
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        actor = request.user
+        post = serializer.validated_data.get("post")
+
+        if not post:
+            raise ValidationError({"post": "Post is required."})
+
+        provider, receiver, category = self._resolve_roles(actor, post)
+
+        existing = (
+            ERP.objects.filter(post=post, provider=provider, receiver=receiver)
+            .order_by("-updated_at", "-id")
+            .first()
+        )
+
+        if existing:
+            data = self.get_serializer(existing).data
+            return Response(data, status=status.HTTP_200_OK)
+
+        instance = serializer.save(provider=provider, receiver=receiver, category=category)
+        data = self.get_serializer(instance).data
+        headers = self.get_success_headers(data)
+        return Response(data, status=status.HTTP_201_CREATED, headers=headers)
+
+    def perform_create(self, serializer):
+        actor = self.request.user
+        post = serializer.validated_data.get("post")
+
+        if not post:
+            raise ValidationError({"post": "Post is required."})
+
+        provider, receiver, category = self._resolve_roles(actor, post)
 
         serializer.save(provider=provider, receiver=receiver, category=category)
 
@@ -478,8 +509,37 @@ class ERPViewSet(viewsets.ModelViewSet):
                 return
 
             draw_section(title)
-            headers = ["Name", "Unit", "Qty", "Duration", "Unit Cost", "Line Total"]
-            col_x = [left, left + 160, left + 235, left + 290, left + 355, left + 435]
+            if "Expertise" in title:
+                headers = ["Name", "Duration", "Unit", "Unit Cost", "People", "Line Total"]
+                values_builder = lambda row: [
+                    as_text(row.get("name") or "-"),
+                    as_text(row.get("duration", 0)),
+                    as_text(row.get("unit") or "-"),
+                    as_money(row.get("unit_cost", 0)),
+                    as_text(row.get("quantity", 0)),
+                    as_money(row.get("line_total", 0)),
+                ]
+            elif "Services" in title:
+                headers = ["Name", "Duration", "Unit", "Unit Cost", "Packages", "Line Total"]
+                values_builder = lambda row: [
+                    as_text(row.get("name") or "-"),
+                    as_text(row.get("duration", 0)),
+                    as_text(row.get("unit") or "-"),
+                    as_money(row.get("unit_cost", 0)),
+                    as_text(row.get("quantity", 0)),
+                    as_money(row.get("line_total", 0)),
+                ]
+            else:
+                headers = ["Name", "Unit", "Qty", "Unit Cost", "Line Total"]
+                values_builder = lambda row: [
+                    as_text(row.get("name") or "-"),
+                    as_text(row.get("unit") or "-"),
+                    as_text(row.get("quantity", 0)),
+                    as_money(row.get("unit_cost", 0)),
+                    as_money(row.get("line_total", 0)),
+                ]
+
+            col_x = [left, left + 155, left + 235, left + 315, left + 390, left + 465][: len(headers)]
 
             def draw_header():
                 nonlocal y
@@ -495,14 +555,7 @@ class ERPViewSet(viewsets.ModelViewSet):
             for row in rows:
                 ensure_space(14)
                 pdf.setFont("Helvetica", 8)
-                values = [
-                    as_text(row.get("name") or "-"),
-                    as_text(row.get("unit") or "-"),
-                    as_text(row.get("quantity", 0)),
-                    as_text(row.get("duration", 0)),
-                    as_money(row.get("unit_cost", 0)),
-                    as_money(row.get("line_total", 0)),
-                ]
+                values = values_builder(row)
                 for idx, val in enumerate(values):
                     cell = val[:26]
                     pdf.drawString(col_x[idx], y, cell)

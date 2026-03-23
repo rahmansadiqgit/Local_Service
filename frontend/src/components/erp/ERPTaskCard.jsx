@@ -1,3 +1,5 @@
+import { useState } from 'react'
+
 import defaultAvatar from '../../assets/default-avatar.svg'
 
 export default function ERPTaskCard({
@@ -16,6 +18,8 @@ export default function ERPTaskCard({
   onOpenOwner,
   toMediaUrl,
 }) {
+  const [isMembersMenuOpen, setIsMembersMenuOpen] = useState(false)
+
   const phases = ['Pending', 'On Process', 'Completed']
   const activePhaseIndex = phases.indexOf(erp.stage)
 
@@ -100,6 +104,31 @@ export default function ERPTaskCard({
         >
           Generate PDF
         </button>
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => setIsMembersMenuOpen((prev) => !prev)}
+            className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600"
+          >
+            Members
+          </button>
+          {isMembersMenuOpen && (
+            <div className="absolute left-0 top-full z-10 mt-2 min-w-[150px] rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
+              <button
+                type="button"
+                className="block w-full rounded-lg px-3 py-2 text-left text-xs font-medium text-slate-700 hover:bg-slate-50"
+              >
+                Expertise
+              </button>
+              <button
+                type="button"
+                className="block w-full rounded-lg px-3 py-2 text-left text-xs font-medium text-slate-700 hover:bg-slate-50"
+              >
+                Skill provider
+              </button>
+            </div>
+          )}
+        </div>
         <button
           type="button"
           onClick={() => onToggleDetails(erp.id)}
@@ -211,13 +240,32 @@ export default function ERPTaskCard({
           {[{
             title: 'Expertise (Modified)',
             rows: snapshotExpertise,
+            columns: [
+              { key: 'name', label: 'Name' },
+              { key: 'duration', label: 'Duration' },
+              { key: 'unit', label: 'Unit' },
+              { key: 'unit_cost', label: 'Unit Cost' },
+              { key: 'quantity', label: 'People' },
+              { key: 'line_total', label: 'Line Total' },
+            ],
           }, {
             title: 'Services (Modified)',
             rows: snapshotServices,
+            columns: [
+              { key: 'name', label: 'Name' },
+              { key: 'duration', label: 'Duration' },
+              { key: 'unit', label: 'Unit' },
+              { key: 'unit_cost', label: 'Unit Cost' },
+              { key: 'quantity', label: 'Packages' },
+              { key: 'line_total', label: 'Line Total' },
+            ],
           }, {
             title: 'Products (Modified)',
             rows: snapshotProducts,
-          }].map((section) => (
+          }].map((section) => {
+            const showDuration = section.title !== 'Products (Modified)'
+
+            return (
             section.rows.length > 0 ? (
               <div key={section.title} className="rounded-xl border border-slate-200 bg-white p-3">
                 <h4 className="text-sm font-semibold text-slate-800">{section.title}</h4>
@@ -228,7 +276,7 @@ export default function ERPTaskCard({
                         <th className="px-2 py-1">Name</th>
                         <th className="px-2 py-1">Unit</th>
                         <th className="px-2 py-1">Qty</th>
-                        <th className="px-2 py-1">Duration</th>
+                        {showDuration ? <th className="px-2 py-1">Duration</th> : null}
                         <th className="px-2 py-1">Unit Cost</th>
                         <th className="px-2 py-1">Line Total</th>
                       </tr>
@@ -239,7 +287,7 @@ export default function ERPTaskCard({
                           <td className="px-2 py-1 font-medium text-slate-700">{row.name || '-'}</td>
                           <td className="px-2 py-1">{row.unit || '-'}</td>
                           <td className="px-2 py-1">{Number(row.quantity || 0)}</td>
-                          <td className="px-2 py-1">{Number(row.duration || 0)}</td>
+                          {showDuration ? <td className="px-2 py-1">{Number(row.duration || 0)}</td> : null}
                           <td className="px-2 py-1">${Number(row.unit_cost || 0).toFixed(2)}</td>
                           <td className="px-2 py-1 font-semibold text-slate-700">${Number(row.line_total || 0).toFixed(2)}</td>
                         </tr>
@@ -249,7 +297,8 @@ export default function ERPTaskCard({
                 </div>
               </div>
             ) : null
-          ))}
+            )
+          })}
 
           <div className="rounded-xl border border-slate-200 bg-white p-3">
             <h4 className="text-sm font-semibold text-slate-800">Final Cost Summary</h4>

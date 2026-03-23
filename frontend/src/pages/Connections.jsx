@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import api from '../api/client'
+import defaultAvatar from '../assets/default-avatar.svg'
 
 const statusStyles = {
   Active: 'bg-emerald-100 text-emerald-700',
@@ -64,23 +65,90 @@ export default function Connections() {
   const profileLikeBoxClass =
     'card relative overflow-hidden border border-violet-200/70 bg-gradient-to-br from-white/55 via-violet-100/45 to-fuchsia-100/40 shadow-xl backdrop-blur-md'
 
+  const resolveMediaUrl = (value) => {
+    if (!value) return ''
+    if (/^https?:\/\//i.test(value) || value.startsWith('data:') || value.startsWith('blob:')) {
+      return value
+    }
+
+    const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api'
+    const backendOrigin = apiBase.replace(/\/api\/?$/, '')
+    return value.startsWith('/') ? `${backendOrigin}${value}` : `${backendOrigin}/${value}`
+  }
+
+  const normalizeFacebookHref = (value) => {
+    const raw = String(value || '').trim()
+    if (!raw) return ''
+    if (/^https?:\/\//i.test(raw)) return raw
+    return `https://${raw}`
+  }
+
+  const normalizeWhatsAppHref = (value) => {
+    const raw = String(value || '').trim()
+    if (!raw) return ''
+    if (/^https?:\/\//i.test(raw)) return raw
+    const digitsOnly = raw.replace(/\D/g, '')
+    return digitsOnly ? `https://wa.me/${digitsOnly}` : ''
+  }
+
+  const handleCardKeyDown = (event, person, type) => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault()
+      setSelected({ ...person, type })
+    }
+  }
+
   const renderCard = (person, type) => (
-    <button
+    <div
       key={person.id}
-      type="button"
+      role="button"
+      tabIndex={0}
       onClick={() => setSelected({ ...person, type })}
+      onKeyDown={(event) => handleCardKeyDown(event, person, type)}
       className={`${profileLikeBoxClass} text-left transition hover:border-violet-300`}
     >
-      <div className="flex items-center gap-3">
-        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-brand-100 text-brand-600">
-          {(person.name || person.username || 'U')
-            .split(' ')
-            .map((word) => word[0])
-            .join('')}
+      <div className="flex items-start gap-3">
+        <div className="h-12 w-12 shrink-0 overflow-hidden rounded-full border border-violet-200 bg-white">
+          <img
+            src={resolveMediaUrl(person.profile_photo) || defaultAvatar}
+            alt={person.name || person.username || 'User'}
+            className="h-full w-full object-cover"
+          />
         </div>
-        <div>
+        <div className="min-w-0 flex-1">
           <p className="font-semibold">{person.name || person.username}</p>
-          {/* Removed role display */}
+          <div className="mt-2 space-y-1 text-xs text-slate-600">
+            <p><span className="font-semibold text-slate-700">Phone:</span> {person.phone || '-'}</p>
+            <p className="truncate"><span className="font-semibold text-slate-700">Email:</span> {person.email || '-'}</p>
+            {person.whatsapp_link ? (
+              <p className="truncate">
+                <span className="font-semibold text-slate-700">WhatsApp:</span>{' '}
+                <a
+                  href={normalizeWhatsAppHref(person.whatsapp_link)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={(event) => event.stopPropagation()}
+                  className="text-brand-600 hover:underline"
+                >
+                  {person.whatsapp_link}
+                </a>
+              </p>
+            ) : null}
+            {person.facebook_link ? (
+              <p className="truncate">
+                <span className="font-semibold text-slate-700">Facebook:</span>{' '}
+                <a
+                  href={normalizeFacebookHref(person.facebook_link)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={(event) => event.stopPropagation()}
+                  className="text-brand-600 hover:underline"
+                >
+                  {person.facebook_link}
+                </a>
+              </p>
+            ) : null}
+          </div>
         </div>
         <span
           className={`ml-auto rounded-full px-2 py-1 text-xs font-semibold ${
@@ -90,8 +158,8 @@ export default function Connections() {
           {person.status || 'Inactive'}
         </span>
       </div>
-      <p className="mt-4 text-sm text-slate-500">{person.location}</p>
-    </button>
+      <p className="mt-3 text-sm text-slate-500">{person.location}</p>
+    </div>
   )
 
   return (

@@ -94,13 +94,53 @@ export default function EditProfile() {
     })
   }
 
+  const normalizeOptionalUrl = (value) => {
+    const raw = String(value || '').trim()
+    if (!raw) return ''
+    if (/^https?:\/\//i.test(raw)) return raw
+    return `https://${raw}`
+  }
+
+  const normalizeWhatsAppValue = (value) => {
+    const raw = String(value || '').trim()
+    if (!raw) return ''
+    const digitsOnly = raw.replace(/\D/g, '')
+    return digitsOnly
+  }
+
+  const extractApiErrorMessage = (error) => {
+    const data = error?.response?.data
+    if (!data) return 'Failed to update profile.'
+    if (typeof data === 'string') return data
+    if (typeof data.detail === 'string') return data.detail
+
+    const firstEntry = Object.entries(data)[0]
+    if (!firstEntry) return 'Failed to update profile.'
+
+    const [field, value] = firstEntry
+    if (Array.isArray(value) && value.length) {
+      return `${field}: ${value[0]}`
+    }
+    if (typeof value === 'string') {
+      return `${field}: ${value}`
+    }
+
+    return 'Failed to update profile.'
+  }
+
   const handleSubmit = async (event) => {
     event.preventDefault()
     setSaving(true)
     setMessage('')
     try {
       const payload = new FormData()
-      Object.entries(form).forEach(([key, value]) => {
+      const normalizedForm = {
+        ...form,
+        facebook_link: normalizeOptionalUrl(form.facebook_link),
+        whatsapp_link: normalizeWhatsAppValue(form.whatsapp_link),
+      }
+
+      Object.entries(normalizedForm).forEach(([key, value]) => {
         if (Array.isArray(value)) {
           payload.append(key, value.join(', '))
         } else {
@@ -122,7 +162,7 @@ export default function EditProfile() {
       await refreshUser(data)
     } catch (error) {
       console.error(error)
-      setMessage('Failed to update profile.')
+      setMessage(extractApiErrorMessage(error))
     } finally {
       setSaving(false)
     }
@@ -199,15 +239,33 @@ export default function EditProfile() {
         <div className="grid gap-3.5 lg:grid-cols-2">
           <div>
             <label className={formLabelClass}>Name</label>
-            <input name="name" value={form.name} onChange={handleChange} className={formInputClass} />
+            <input
+              name="name"
+              value={form.name}
+              onChange={handleChange}
+              className={formInputClass}
+              placeholder="Enter your full name"
+            />
           </div>
           <div>
             <label className={formLabelClass}>Phone no</label>
-            <input name="phone" value={form.phone} onChange={handleChange} className={formInputClass} />
+            <input
+              name="phone"
+              value={form.phone}
+              onChange={handleChange}
+              className={formInputClass}
+              placeholder="Enter phone number (e.g. 01610011010)"
+            />
           </div>
           <div>
             <label className={formLabelClass}>Location</label>
-            <input name="location" value={form.location} onChange={handleChange} className={formInputClass} />
+            <input
+              name="location"
+              value={form.location}
+              onChange={handleChange}
+              className={formInputClass}
+              placeholder="Enter your city or area"
+            />
           </div>
           <div className="lg:col-span-2">
             <label className={formLabelClass}>Available Status</label>
@@ -253,19 +311,45 @@ export default function EditProfile() {
           </div>
           <div className="lg:col-span-2">
             <label className={formLabelClass}>Education & Skills</label>
-            <textarea name="education_skills" value={form.education_skills} onChange={handleChange} rows={3} className={formInputClass} />
+            <textarea
+              name="education_skills"
+              value={form.education_skills}
+              onChange={handleChange}
+              rows={3}
+              className={formInputClass}
+              placeholder="Write your education and key skills"
+            />
           </div>
           <div className="lg:col-span-2">
             <label className={formLabelClass}>Experience</label>
-            <textarea name="experience" value={form.experience} onChange={handleChange} rows={3} className={formInputClass} />
+            <textarea
+              name="experience"
+              value={form.experience}
+              onChange={handleChange}
+              rows={3}
+              className={formInputClass}
+              placeholder="Describe your work experience"
+            />
           </div>
           <div>
             <label className={formLabelClass}>Facebook</label>
-            <input name="facebook_link" value={form.facebook_link} onChange={handleChange} className={formInputClass} placeholder="https://facebook.com/your-profile" />
+            <input
+              name="facebook_link"
+              value={form.facebook_link}
+              onChange={handleChange}
+              className={formInputClass}
+              placeholder="Facebook profile link (e.g. facebook.com/username)"
+            />
           </div>
           <div>
             <label className={formLabelClass}>WhatsApp</label>
-            <input name="whatsapp_link" value={form.whatsapp_link} onChange={handleChange} className={formInputClass} placeholder="https://wa.me/your-number" />
+            <input
+              name="whatsapp_link"
+              value={form.whatsapp_link}
+              onChange={handleChange}
+              className={formInputClass}
+              placeholder="WhatsApp number or link (e.g. 01610011010 or wa.me/01610011010)"
+            />
           </div>
           <div className="lg:col-span-2">
             <button
