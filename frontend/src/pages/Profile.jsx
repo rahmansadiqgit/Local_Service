@@ -55,6 +55,21 @@ export default function Profile() {
 
   const currentAvailableStatus = profile?.supply_status || 'None'
   const currentDemandStatus = profile?.demand_status || 'None'
+  const facebookLink = String(profile?.facebook_link || '').trim()
+  const whatsappValue = String(profile?.whatsapp_link || '').trim()
+
+  const normalizeFacebookHref = (value) => {
+    if (!value) return ''
+    if (/^https?:\/\//i.test(value)) return value
+    return `https://${value}`
+  }
+
+  const normalizeWhatsAppHref = (value) => {
+    if (!value) return ''
+    if (/^https?:\/\//i.test(value)) return value
+    const digitsOnly = value.replace(/\D/g, '')
+    return digitsOnly ? `https://wa.me/${digitsOnly}` : ''
+  }
 
   return (
     <div className="space-y-6">
@@ -221,6 +236,32 @@ export default function Profile() {
                 <p className="text-xs uppercase tracking-[0.12em] text-violet-800">Experience</p>
                 <p className="mt-1 text-lg font-semibold text-slate-900">{profile?.experience || '-'}</p>
               </div>
+              {facebookLink ? (
+                <div>
+                  <p className="text-xs uppercase tracking-[0.12em] text-violet-800">Facebook</p>
+                  <a
+                    href={normalizeFacebookHref(facebookLink)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-1 inline-block text-base font-semibold text-violet-700 hover:underline"
+                  >
+                    {facebookLink}
+                  </a>
+                </div>
+              ) : null}
+              {whatsappValue ? (
+                <div>
+                  <p className="text-xs uppercase tracking-[0.12em] text-violet-800">WhatsApp</p>
+                  <a
+                    href={normalizeWhatsAppHref(whatsappValue)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-1 inline-block text-base font-semibold text-violet-700 hover:underline"
+                  >
+                    {whatsappValue}
+                  </a>
+                </div>
+              ) : null}
             </div>
           </div>
         </div>
