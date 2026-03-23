@@ -1,3 +1,5 @@
+import { useState } from 'react'
+
 import defaultAvatar from '../../assets/default-avatar.svg'
 
 export default function ERPTaskCard({
@@ -16,6 +18,8 @@ export default function ERPTaskCard({
   onOpenOwner,
   toMediaUrl,
 }) {
+  const [isMembersMenuOpen, setIsMembersMenuOpen] = useState(false)
+
   const phases = ['Pending', 'On Process', 'Completed']
   const activePhaseIndex = phases.indexOf(erp.stage)
 
@@ -100,6 +104,31 @@ export default function ERPTaskCard({
         >
           Generate PDF
         </button>
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => setIsMembersMenuOpen((prev) => !prev)}
+            className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600"
+          >
+            Members
+          </button>
+          {isMembersMenuOpen && (
+            <div className="absolute left-0 top-full z-10 mt-2 min-w-[150px] rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
+              <button
+                type="button"
+                className="block w-full rounded-lg px-3 py-2 text-left text-xs font-medium text-slate-700 hover:bg-slate-50"
+              >
+                Expertise
+              </button>
+              <button
+                type="button"
+                className="block w-full rounded-lg px-3 py-2 text-left text-xs font-medium text-slate-700 hover:bg-slate-50"
+              >
+                Skill provider
+              </button>
+            </div>
+          )}
+        </div>
         <button
           type="button"
           onClick={() => onToggleDetails(erp.id)}
