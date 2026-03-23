@@ -18,7 +18,7 @@ class User(AbstractUser):
     supply_status = models.CharField(max_length=100, blank=True)
     demand_status = models.CharField(max_length=100, blank=True)
     facebook_link = models.URLField(blank=True)
-    whatsapp_link = models.URLField(blank=True)
+    whatsapp_link = models.CharField(max_length=30, blank=True)
 
     class Role(models.TextChoices):
         CUSTOMER = "Customer", "Customer"

@@ -138,6 +138,21 @@ export default function ERP() {
     })
   }, [erpItems, filters, postMap, averageRatingByPost])
 
+  const uniqueFilteredTasks = useMemo(() => {
+    const byKey = new Map()
+
+    filteredTasks.forEach((erp) => {
+      const key = `${erp.post}-${erp.provider || 'none'}-${erp.receiver || 'none'}-${erp.category}`
+      const existing = byKey.get(key)
+
+      if (!existing || Number(erp.id || 0) > Number(existing.id || 0)) {
+        byKey.set(key, erp)
+      }
+    })
+
+    return Array.from(byKey.values())
+  }, [filteredTasks])
+
   const notify = async (title, messageText) => {
     try {
       await api.post('/notifications/', { title, message: messageText })
@@ -268,10 +283,10 @@ export default function ERP() {
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        {filteredTasks.length === 0 ? (
+        {uniqueFilteredTasks.length === 0 ? (
           <div className="card">No ERP tasks found.</div>
         ) : (
-          filteredTasks.map((erp) => (
+          uniqueFilteredTasks.map((erp) => (
             <ERPTaskCard
               key={erp.id}
               erp={erp}
