@@ -161,7 +161,7 @@ export default function Profile() {
         <div className="flex flex-col gap-4 border-b border-violet-100/80 pb-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="text-xs uppercase tracking-[0.18em] text-violet-500">Account</p>
-            <h3 className="text-2xl font-bold text-slate-900">{profile?.name || profile?.username}</h3>
+            <h3 className="text-2xl font-bold text-slate-900">{profile?.username || '-'}</h3>
             <p className="text-sm text-slate-600">{profile?.email}</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
