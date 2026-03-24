@@ -49,12 +49,12 @@ export default function ExpertiseTable({ expertises = [] }) {
             </th>
             <th className="px-3 py-2 whitespace-nowrap">
               <button type="button" onClick={() => handleSort('unit')}>
-                Charge Unit
+                Work Duration
               </button>
             </th>
             <th className="px-3 py-2 whitespace-nowrap">
               <button type="button" onClick={() => handleSort('cost')}>
-                Cost ($)
+                Charge $
               </button>
             </th>
             <th className="px-3 py-2 whitespace-nowrap">

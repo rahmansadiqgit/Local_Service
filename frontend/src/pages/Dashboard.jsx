@@ -380,7 +380,7 @@ export default function Dashboard() {
               <div className="space-y-2">
                 <p className="text-sm font-semibold text-slate-700">Product</p>
                 {productRows.length ? (
-                  <ProductTable products={productRows} />
+                  <ProductTable products={productRows} postType={post.post_type} />
                 ) : (
                   <p className="text-sm text-slate-400">No product detail listed.</p>
                 )}

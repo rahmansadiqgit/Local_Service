@@ -63,7 +63,6 @@ class Skill(models.Model):
     description = models.TextField(blank=True)
     unit = models.CharField(max_length=50)
     cost_per_unit = models.DecimalField(max_digits=12, decimal_places=2)
-    available_workers = models.PositiveIntegerField(default=0)
 
     def __str__(self) -> str:
         return f"{self.skill_name} ({self.post.post_name})"

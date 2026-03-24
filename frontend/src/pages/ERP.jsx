@@ -171,23 +171,81 @@ export default function ERP() {
     }
   }
 
+  const parsePostCategories = (value) =>
+    String(value || '')
+      .split(',')
+      .map((item) => String(item || '').trim().toLowerCase())
+      .filter(Boolean)
+
   const getPhaseTasks = (erp) => {
+    const isProvider = currentUserId && String(erp.provider) === String(currentUserId)
+    const post = postMap[erp.post] || {}
+    const snapshot = erp.configuration_snapshot || {}
+    const snapshotPost = snapshot.post || {}
+    const snapshotExpertise = Array.isArray(snapshot.expertise) ? snapshot.expertise : []
+    const snapshotServices = Array.isArray(snapshot.services) ? snapshot.services : []
+    const snapshotProducts = Array.isArray(snapshot.products) ? snapshot.products : []
+    const memberAssignments = snapshot.members || {}
+    const categories = parsePostCategories(post.post_name || snapshotPost.name || '')
+
     const hasWorkers = Array.isArray(erp.assigned_workers) && erp.assigned_workers.length > 0
     const hasPdfSlip = Boolean(erp.pdf_slip)
     const hasTotalCost = Number(erp.total_cost || 0) > 0
     const hasLinkedPost = Boolean(erp.post)
 
+    const hasExpertiseCategory =
+      categories.includes('expertise') || snapshotExpertise.some((row) => Number(row.quantity || 0) > 0)
+    const hasServicesCategory =
+      categories.includes('services') || categories.includes('service') || snapshotServices.length > 0
+    const hasProductCategory =
+      categories.includes('product') || categories.includes('products') || snapshotProducts.some((row) => Number(row.quantity || 0) > 0)
+
+    const requiredExpertiseQty = snapshotExpertise.reduce(
+      (sum, row) => sum + Math.max(0, Number(row.quantity || 0)),
+      0,
+    )
+    const assignedExpertiseQty = Number(memberAssignments.expertise?.assigned_qty || 0)
+    const hasAssignedSkillProvider =
+      Array.isArray(memberAssignments.skill_provider?.assignee_ids)
+        ? memberAssignments.skill_provider.assignee_ids.length > 0
+        : hasWorkers
+    const hasAssignedSupplier =
+      Array.isArray(memberAssignments.supplier?.assignee_ids)
+        ? memberAssignments.supplier.assignee_ids.length > 0
+        : hasWorkers
+
+    const pendingTasks = []
+
+    if (isProvider) {
+      pendingTasks.push({
+        label: 'Post linked to ERP task',
+        done: hasLinkedPost,
+      })
+
+      if (hasExpertiseCategory) {
+        pendingTasks.push({
+          label: `Assign Expertise qty in Members → Expertise${requiredExpertiseQty > 0 ? ` (required: ${requiredExpertiseQty})` : ''}`,
+          done: requiredExpertiseQty > 0 ? assignedExpertiseQty >= requiredExpertiseQty : hasWorkers,
+        })
+      }
+
+      if (hasServicesCategory) {
+        pendingTasks.push({
+          label: 'Assign Skill provider in Members → Skill provider (at least one)',
+          done: hasAssignedSkillProvider,
+        })
+      }
+
+      if (hasProductCategory) {
+        pendingTasks.push({
+          label: 'Assign Supplier in Members → Supplier (at least one)',
+          done: hasAssignedSupplier,
+        })
+      }
+    }
+
     return {
-      Pending: [
-        {
-          label: 'Post linked to ERP task',
-          done: hasLinkedPost,
-        },
-        {
-          label: 'Assign at least one worker',
-          done: hasWorkers,
-        },
-      ],
+      Pending: pendingTasks,
       'On Process': [
         {
           label: 'Generate PDF slip',
@@ -210,6 +268,13 @@ export default function ERP() {
   const handleTrackStage = async (erp) => {
     if (erp.stage === 'Completed') {
       setMessage(`Task ${erp.id} is already in Completed phase.`)
+      return
+    }
+
+    const isProvider = currentUserId && String(erp.provider) === String(currentUserId)
+
+    if (erp.stage === 'Pending' && !isProvider) {
+      setMessage('Only provider can complete Pending assignments and move task to On Process.')
       return
     }
 

@@ -469,13 +469,12 @@ export default function ManagePost() {
                               <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">
                                 Experience: <span className="font-semibold">{skill.unit}</span> | Charge: <span className="font-semibold">${skill.cost_per_unit}</span>
                               </p>
-                              <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">Available Person: {Number(skill.available_workers || 0)}</p>
                               
                               <div className="mb-4">
                                 <CounterControl
                                   value={workers}
                                   onChange={(val) => setSkillWorkers((prev) => ({ ...prev, [`skill-${skill.id}`]: val }))}
-                                  max={Math.max(Number(skill.available_workers || 0), 1)}
+                                  max={1000}
                                   label="Required Person"
                                   unit={workers === 1 ? 'person' : 'persons'}
                                 />
@@ -572,13 +571,12 @@ export default function ManagePost() {
                               <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">
                                 Service Cost: <span className="font-semibold">${service.cost_per_unit}</span> / {durationUnit}
                               </p>
-                              <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">Available Workers: {Number(service.available_workers || 0)}</p>
 
                               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
                                 <CounterControl
                                   value={workers}
                                   onChange={(val) => setServiceWorkers((prev) => ({ ...prev, [`service-${service.id}-workers`]: val }))}
-                                  max={Math.max(Number(service.available_workers || 0), 1)}
+                                  max={1000}
                                   label="Workers Needed"
                                   unit={workers === 1 ? 'worker' : 'workers'}
                                 />

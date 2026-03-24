@@ -181,7 +181,6 @@ class SkillSerializer(serializers.ModelSerializer):
             "description",
             "unit",
             "cost_per_unit",
-            "available_workers",
         )
 
 

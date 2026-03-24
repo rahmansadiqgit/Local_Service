@@ -57,7 +57,7 @@ class PostAdmin(admin.ModelAdmin):
 
 @admin.register(Skill)
 class SkillAdmin(admin.ModelAdmin):
-    list_display = ("skill_name", "post", "unit", "cost_per_unit", "available_workers")
+    list_display = ("skill_name", "post", "unit", "cost_per_unit")
     search_fields = ("skill_name", "post__post_name")
 
 

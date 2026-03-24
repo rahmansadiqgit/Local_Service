@@ -170,30 +170,38 @@ export default function ERPTaskCard({
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="rounded-lg border border-slate-200 bg-white p-2">
               <p className="font-semibold text-slate-800">Pending Tasks</p>
-              <ul className="mt-1 space-y-1">
-                {phaseTasks.Pending.map((task) => (
-                  <li key={`${erp.id}-pending-${task.label}`} className="flex items-center gap-1">
-                    <span className={task.done ? 'text-emerald-600' : 'text-amber-600'}>
-                      {task.done ? '✓' : '•'}
-                    </span>
-                    <span>{task.label}</span>
-                  </li>
-                ))}
-              </ul>
+              {(phaseTasks.Pending || []).length ? (
+                <ul className="mt-1 space-y-1">
+                  {(phaseTasks.Pending || []).map((task) => (
+                    <li key={`${erp.id}-pending-${task.label}`} className="flex items-center gap-1">
+                      <span className={task.done ? 'text-emerald-600' : 'text-amber-600'}>
+                        {task.done ? '✓' : '•'}
+                      </span>
+                      <span>{task.label}</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="mt-1 text-slate-500">No pending tasks for receiver.</p>
+              )}
             </div>
 
             <div className="rounded-lg border border-slate-200 bg-white p-2">
-              <p className="font-semibold text-slate-800">On Process Tasks</p>
-              <ul className="mt-1 space-y-1">
-                {phaseTasks['On Process'].map((task) => (
-                  <li key={`${erp.id}-onprocess-${task.label}`} className="flex items-center gap-1">
-                    <span className={task.done ? 'text-emerald-600' : 'text-amber-600'}>
-                      {task.done ? '✓' : '•'}
-                    </span>
-                    <span>{task.label}</span>
-                  </li>
-                ))}
-              </ul>
+              <p className="font-semibold text-slate-800">Completed Tasks</p>
+              {(phaseTasks.Completed || []).length ? (
+                <ul className="mt-1 space-y-1">
+                  {(phaseTasks.Completed || []).map((task) => (
+                    <li key={`${erp.id}-completed-${task.label}`} className="flex items-center gap-1">
+                      <span className={task.done ? 'text-emerald-600' : 'text-amber-600'}>
+                        {task.done ? '✓' : '•'}
+                      </span>
+                      <span>{task.label}</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="mt-1 text-slate-500">No completed tasks yet.</p>
+              )}
             </div>
           </div>
 
