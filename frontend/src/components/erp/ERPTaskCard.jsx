@@ -30,6 +30,26 @@ export default function ERPTaskCard({
   const snapshotProducts = Array.isArray(snapshot.products) ? snapshot.products : []
   const snapshotTotals = snapshot.totals || {}
 
+  const parsePostCategories = (value) =>
+    String(value || '')
+      .split(',')
+      .map((item) => String(item || '').trim().toLowerCase())
+      .filter(Boolean)
+
+  const categories = parsePostCategories(post?.post_name || snapshotPost?.name || '')
+  const hasExpertiseCategory =
+    categories.includes('expertise') || snapshotExpertise.some((row) => Number(row.quantity || 0) > 0)
+  const hasServicesCategory =
+    categories.includes('service') || categories.includes('services') || snapshotServices.length > 0
+  const hasProductCategory =
+    categories.includes('product') || categories.includes('products') || snapshotProducts.length > 0
+
+  const memberMenuOptions = [
+    hasExpertiseCategory ? 'Expertise' : null,
+    hasServicesCategory ? 'Skill provider' : null,
+    hasProductCategory ? 'Supplier' : null,
+  ].filter(Boolean)
+
   const viewerRole =
     currentUserId && String(erp.provider) === String(currentUserId)
       ? 'Provider'
@@ -114,24 +134,19 @@ export default function ERPTaskCard({
           </button>
           {isMembersMenuOpen && (
             <div className="absolute left-0 top-full z-10 mt-2 min-w-[150px] rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
-              <button
-                type="button"
-                className="block w-full rounded-lg px-3 py-2 text-left text-xs font-medium text-slate-700 hover:bg-slate-50"
-              >
-                Expertise
-              </button>
-              <button
-                type="button"
-                className="block w-full rounded-lg px-3 py-2 text-left text-xs font-medium text-slate-700 hover:bg-slate-50"
-              >
-                Skill provider
-              </button>
-              <button
-                type="button"
-                className="block w-full rounded-lg px-3 py-2 text-left text-xs font-medium text-slate-700 hover:bg-slate-50"
-              >
-                Supplier
-              </button>
+              {memberMenuOptions.length ? (
+                memberMenuOptions.map((option) => (
+                  <button
+                    key={option}
+                    type="button"
+                    className="block w-full rounded-lg px-3 py-2 text-left text-xs font-medium text-slate-700 hover:bg-slate-50"
+                  >
+                    {option}
+                  </button>
+                ))
+              ) : (
+                <p className="px-3 py-2 text-xs text-slate-500">No members available</p>
+              )}
             </div>
           )}
         </div>
