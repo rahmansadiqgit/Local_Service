@@ -14,6 +14,9 @@ export default function Connections() {
   const [selected, setSelected] = useState(null)
   const [posts, setPosts] = useState([])
   const [users, setUsers] = useState([])
+  const [erpItems, setErpItems] = useState([])
+  const [currentUserId, setCurrentUserId] = useState(null)
+  const [selfAssignLoading, setSelfAssignLoading] = useState('')
   const [message, setMessage] = useState('')
 
   useEffect(() => {
@@ -21,13 +24,17 @@ export default function Connections() {
 
     const load = async () => {
       try {
-        const [postRes, userRes] = await Promise.all([
+        const [postRes, userRes, erpRes, meRes] = await Promise.all([
           api.get('/posts/'),
           api.get('/users/'),
+          api.get('/erp/'),
+          api.get('/auth/me/'),
         ])
         if (!active) return
         setPosts(postRes.data)
         setUsers(userRes.data)
+        setErpItems(erpRes.data)
+        setCurrentUserId(meRes.data?.id ?? null)
       } catch (error) {
         console.error(error)
       }
@@ -47,6 +54,28 @@ export default function Connections() {
       .slice(0, 3)
   }, [posts, selected])
 
+  const roleEntries = [
+    { key: 'expertise', label: 'Expertise' },
+    { key: 'skill_provider', label: 'Skill provider' },
+    { key: 'supplier', label: 'Supplier' },
+  ]
+
+  const openSelfAssignPosts = useMemo(() => {
+    return (erpItems || []).flatMap((erp) => {
+      const snapshot = erp.configuration_snapshot || {}
+      const members = snapshot.members || {}
+
+      return roleEntries
+        .filter(({ key }) => Boolean(members[key]?.self_assign_enabled))
+        .map(({ key, label }) => ({
+          erp,
+          role: key,
+          roleLabel: label,
+          assignedIds: Array.isArray(members[key]?.assignee_ids) ? members[key].assignee_ids : [],
+        }))
+    })
+  }, [erpItems])
+
   // If you want to filter users, use another property or remove these filters
   const customers = users;
   const providers = users;
@@ -59,6 +88,21 @@ export default function Connections() {
     } catch (error) {
       console.error(error)
       setMessage('Failed to send notification.')
+    }
+  }
+
+  const handleSelfAssign = async (erpId, role, assign) => {
+    const loadingKey = `${erpId}-${role}`
+    setSelfAssignLoading(loadingKey)
+    try {
+      const { data } = await api.post(`/erp/${erpId}/self_assign/`, { role, assign })
+      setErpItems((prev) => prev.map((item) => (item.id === data.id ? data : item)))
+      setMessage(assign ? 'You assigned yourself successfully.' : 'You removed yourself successfully.')
+    } catch (error) {
+      console.error(error)
+      setMessage('Failed to update self assignment.')
+    } finally {
+      setSelfAssignLoading('')
     }
   }
 
@@ -202,6 +246,42 @@ export default function Connections() {
         </div>
         <div className="grid gap-4 lg:grid-cols-3">
           {providers.map((person) => renderCard(person, 'provider'))}
+        </div>
+      </div>
+
+      <div className={profileLikeBoxClass}>
+        <h3 className="text-lg font-semibold">Self-Assign ERP Posts</h3>
+        <p className="mt-1 text-xs text-slate-500">If provider generated assignment post, you can assign or remove yourself here.</p>
+        <div className="mt-3 space-y-2">
+          {openSelfAssignPosts.length ? (
+            openSelfAssignPosts.map(({ erp, role, roleLabel, assignedIds }) => {
+              const isAssigned = assignedIds.map((id) => Number(id)).includes(Number(currentUserId))
+              const loadingKey = `${erp.id}-${role}`
+              const postName = posts.find((item) => Number(item.id) === Number(erp.post))?.post_name || `ERP #${erp.id}`
+              return (
+                <div key={`${erp.id}-${role}`} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white p-2">
+                  <div>
+                    <p className="text-sm font-semibold text-slate-800">{postName}</p>
+                    <p className="text-xs text-slate-500">Role: {roleLabel}</p>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={selfAssignLoading === loadingKey}
+                    onClick={() => handleSelfAssign(erp.id, role, !isAssigned)}
+                    className="rounded-full border border-brand-200 px-3 py-1 text-xs font-semibold text-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {selfAssignLoading === loadingKey
+                      ? 'Updating...'
+                      : isAssigned
+                        ? 'Remove Myself'
+                        : 'Assign Myself'}
+                  </button>
+                </div>
+              )
+            })
+          ) : (
+            <p className="text-sm text-slate-500">No open self-assign posts right now.</p>
+          )}
         </div>
       </div>
 

@@ -327,7 +327,7 @@ export default function PostCard({
                 <div className="space-y-2">
                   <p className="text-sm font-semibold text-slate-600 dark:text-slate-300">Products</p>
                   {productRows.length ? (
-                    <ProductTable products={productRows} />
+                    <ProductTable products={productRows} postType={post.post_type} />
                   ) : (
                     <p className="text-sm text-slate-400">No product detail listed.</p>
                   )}

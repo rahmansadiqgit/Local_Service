@@ -57,11 +57,6 @@ export default function ServiceTable({ services = [] }) {
                 Service Cost
               </button>
             </th>
-            <th className="px-3 py-2 whitespace-nowrap">
-              <button type="button" onClick={() => handleSort('available_workers')}>
-                Available Workers
-              </button>
-            </th>
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
@@ -73,7 +68,6 @@ export default function ServiceTable({ services = [] }) {
               <td className="px-3 py-2 text-slate-900 dark:text-slate-100 whitespace-nowrap">
                 ${!isNaN(parseFloat(row.cost_per_unit)) ? parseFloat(row.cost_per_unit).toFixed(2) : '0.00'}
               </td>
-              <td className="px-3 py-2 text-slate-900 dark:text-slate-100 whitespace-nowrap">{row.available_workers || 0}</td>
             </tr>
           ))}
         </tbody>

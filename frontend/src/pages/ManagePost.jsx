@@ -495,14 +495,14 @@ export default function ManagePost() {
                               <p className="text-sm text-slate-700 dark:text-slate-200 mb-4">
                                 Experience: <span className="font-semibold">{skill.unit}</span> | Charge: <span className="font-semibold">${skill.cost_per_unit}</span>
                               </p>
-                              <p className="text-xs text-slate-600 dark:text-slate-300 mb-4">Available Person: {Number(skill.available_workers || 0)}</p>
+                              <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">Available Person: {Number(skill.available_workers || 0)}</p>
                               
                               <div className="mb-4">
                                 <CounterControl
                                   value={workers}
                                   onChange={(val) => setSkillWorkers((prev) => ({ ...prev, [`skill-${skill.id}`]: val }))}
                                   max={Math.max(Number(skill.available_workers || 0), 1)}
-                                  label="Required People"
+                                  label="Required Person"
                                   unit={workers === 1 ? 'person' : 'persons'}
                                 />
                               </div>
@@ -597,6 +597,7 @@ export default function ManagePost() {
                               <p className="text-sm text-slate-700 dark:text-slate-200 mb-4">
                                 Service Cost: <span className="font-semibold">${service.cost_per_unit}</span> / {durationUnit}
                               </p>
+                              <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">Available Workers: {Number(service.available_workers || 0)}</p>
 
                               <div className="grid grid-cols-1 gap-4 mb-4">
                                 <CounterControl

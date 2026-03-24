@@ -23,12 +23,13 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 
-from .models import ERP, Expertise, Notification, Post, ProblemReport, Product, Rating, Skill
+from .models import ERP, ERPMessage, Expertise, Notification, Post, ProblemReport, Product, Rating, Skill
 from .serializers import (
     ChangePasswordSerializer,
     EmailTokenObtainPairSerializer,
     ExpertiseSerializer,
     ERPSerializer,
+    ERPMessageSerializer,
     NotificationSerializer,
     PasswordResetConfirmSerializer,
     PasswordResetRequestSerializer,
@@ -358,6 +359,154 @@ class ERPViewSet(viewsets.ModelViewSet):
 
         serializer.save(provider=provider, receiver=receiver, category=category)
 
+    def _allowed_member_roles(self):
+        return {"expertise", "skill_provider", "supplier"}
+
+    def _get_member_bucket(self, erp, role):
+        snapshot = erp.configuration_snapshot or {}
+        members = snapshot.get("members") or {}
+
+        role_bucket = members.get(role) or {}
+        existing_ids = role_bucket.get("assignee_ids") or []
+        assignee_ids = []
+        for raw_id in existing_ids:
+            try:
+                assignee_ids.append(int(raw_id))
+            except (TypeError, ValueError):
+                continue
+
+        role_bucket = {
+            "assignee_ids": sorted(list(set(assignee_ids))),
+            "self_assign_enabled": bool(role_bucket.get("self_assign_enabled", False)),
+        }
+        members[role] = role_bucket
+        snapshot["members"] = members
+        return snapshot, members, role_bucket
+
+    def _save_snapshot(self, erp, snapshot):
+        erp.configuration_snapshot = snapshot
+        erp.save(update_fields=["configuration_snapshot", "updated_at"])
+
+    @action(detail=True, methods=["get", "patch"])
+    def members(self, request, pk=None):
+        erp = self.get_object()
+
+        if request.method.lower() == "get":
+            snapshot = erp.configuration_snapshot or {}
+            members = snapshot.get("members") or {}
+            response = {}
+            for role in self._allowed_member_roles():
+                role_bucket = members.get(role) or {}
+                assignee_ids = role_bucket.get("assignee_ids") or []
+                response[role] = {
+                    "assignee_ids": [int(uid) for uid in assignee_ids if str(uid).isdigit()],
+                    "self_assign_enabled": bool(role_bucket.get("self_assign_enabled", False)),
+                }
+            return Response(response)
+
+        if not erp.provider or erp.provider.id != request.user.id:
+            raise PermissionDenied("Only provider can manage member assignments.")
+
+        role = str(request.data.get("role", "")).strip().lower()
+        if role not in self._allowed_member_roles():
+            return Response({"detail": "Invalid member role."}, status=status.HTTP_400_BAD_REQUEST)
+
+        mode = str(request.data.get("mode", "set")).strip().lower()
+        if mode not in {"set", "add", "remove"}:
+            return Response({"detail": "Invalid mode."}, status=status.HTTP_400_BAD_REQUEST)
+
+        incoming_ids = request.data.get("assignee_ids", [])
+        if not isinstance(incoming_ids, list):
+            return Response({"detail": "assignee_ids must be a list."}, status=status.HTTP_400_BAD_REQUEST)
+
+        clean_ids = []
+        for raw_id in incoming_ids:
+            try:
+                clean_ids.append(int(raw_id))
+            except (TypeError, ValueError):
+                continue
+
+        valid_ids = set(User.objects.filter(id__in=clean_ids).values_list("id", flat=True))
+
+        snapshot, members, role_bucket = self._get_member_bucket(erp, role)
+        existing = set(role_bucket.get("assignee_ids") or [])
+
+        if mode == "set":
+            updated = valid_ids
+        elif mode == "add":
+            updated = existing.union(valid_ids)
+        else:
+            updated = existing.difference(valid_ids)
+
+        role_bucket["assignee_ids"] = sorted(list(updated))
+        members[role] = role_bucket
+        snapshot["members"] = members
+        self._save_snapshot(erp, snapshot)
+
+        return Response(self.get_serializer(erp).data)
+
+    @action(detail=True, methods=["post"])
+    def publish_member_post(self, request, pk=None):
+        erp = self.get_object()
+
+        if not erp.provider or erp.provider.id != request.user.id:
+            raise PermissionDenied("Only provider can publish member assignment posts.")
+
+        role = str(request.data.get("role", "")).strip().lower()
+        if role not in self._allowed_member_roles():
+            return Response({"detail": "Invalid member role."}, status=status.HTTP_400_BAD_REQUEST)
+
+        snapshot, members, role_bucket = self._get_member_bucket(erp, role)
+        role_bucket["self_assign_enabled"] = True
+        members[role] = role_bucket
+        snapshot["members"] = members
+        self._save_snapshot(erp, snapshot)
+
+        role_title = role.replace("_", " ").title()
+        receivers = User.objects.exclude(id=request.user.id)
+        notifications = [
+            Notification(
+                user=target,
+                title=f"ERP Self-Assign Open: {role_title}",
+                message=f"ERP #{erp.id} is open for self-assignment as {role_title}. Visit Connections to assign yourself.",
+            )
+            for target in receivers
+        ]
+        if notifications:
+            Notification.objects.bulk_create(notifications)
+
+        return Response(self.get_serializer(erp).data)
+
+    @action(detail=True, methods=["post"])
+    def self_assign(self, request, pk=None):
+        erp = self.get_object()
+        role = str(request.data.get("role", "")).strip().lower()
+        if role not in self._allowed_member_roles():
+            return Response({"detail": "Invalid member role."}, status=status.HTTP_400_BAD_REQUEST)
+
+        snapshot, members, role_bucket = self._get_member_bucket(erp, role)
+        if not role_bucket.get("self_assign_enabled"):
+            return Response(
+                {"detail": "Self-assignment is not enabled for this role."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        assign = request.data.get("assign", True)
+        should_assign = bool(assign)
+
+        ids = set(role_bucket.get("assignee_ids") or [])
+        if should_assign:
+            ids.add(request.user.id)
+        else:
+            ids.discard(request.user.id)
+
+        role_bucket["assignee_ids"] = sorted(list(ids))
+        members[role] = role_bucket
+        snapshot["members"] = members
+        self._save_snapshot(erp, snapshot)
+
+        return Response(self.get_serializer(erp).data)
+
     @action(detail=True, methods=["patch"])
     def update_stage(self, request, pk=None):
         erp = self.get_object()
@@ -614,6 +763,44 @@ class ERPViewSet(viewsets.ModelViewSet):
         buffer.seek(0)
         erp.pdf_slip.save(f"erp_{erp.id}.pdf", ContentFile(buffer.read()), save=True)
         return Response(self.get_serializer(erp).data)
+
+    @action(detail=True, methods=["get", "post"])
+    def messages(self, request, pk=None):
+        erp = self.get_object()
+
+        if request.method.lower() == "get":
+            queryset = ERPMessage.objects.filter(erp=erp).select_related("sender", "parent")
+            serializer = ERPMessageSerializer(queryset, many=True)
+            return Response(serializer.data)
+
+        if erp.stage != "On Process":
+            return Response(
+                {"detail": "Messaging is available only in On Process state."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        message_text = str(request.data.get("message", "")).strip()
+        if not message_text:
+            return Response({"detail": "Message is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        parent = None
+        parent_id = request.data.get("parent")
+        if parent_id is not None and str(parent_id).strip() != "":
+            parent = ERPMessage.objects.filter(id=parent_id, erp=erp).first()
+            if parent is None:
+                return Response(
+                    {"detail": "Invalid reply target for this ERP thread."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+        instance = ERPMessage.objects.create(
+            erp=erp,
+            sender=request.user,
+            message=message_text,
+            parent=parent,
+        )
+        serializer = ERPMessageSerializer(instance)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
 
 
 class RatingViewSet(viewsets.ModelViewSet):
