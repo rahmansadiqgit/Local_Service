@@ -12,6 +12,7 @@ export default function ERP() {
   const [erpItems, setErpItems] = useState([])
   const [currentUserId, setCurrentUserId] = useState(null)
   const [posts, setPosts] = useState([])
+  const [users, setUsers] = useState([])
   const [ratings, setRatings] = useState([])
   const [expandedId, setExpandedId] = useState(null)
   const [trackOpenId, setTrackOpenId] = useState(null)
@@ -47,15 +48,17 @@ export default function ERP() {
 
     const load = async () => {
       try {
-        const [erpRes, postRes, ratingRes, meRes] = await Promise.all([
+        const [erpRes, postRes, userRes, ratingRes, meRes] = await Promise.all([
           api.get('/erp/'),
           api.get('/posts/'),
+          api.get('/users/'),
           api.get('/ratings/'),
           api.get('/auth/me/'),
         ])
         if (!active) return
         setErpItems(erpRes.data)
         setPosts(postRes.data)
+        setUsers(userRes.data)
         setRatings(ratingRes.data)
         setCurrentUserId(meRes.data?.id ?? null)
       } catch (error) {
@@ -303,6 +306,43 @@ export default function ERP() {
     }))
   }
 
+  const handleUpdateMemberAssignment = async (erp, role, userId, assign) => {
+    const isProvider = currentUserId && String(erp.provider) === String(currentUserId)
+    if (!isProvider) {
+      setMessage('Only provider can manage member assignments in Pending.')
+      return
+    }
+
+    try {
+      const { data } = await api.patch(`/erp/${erp.id}/members/`, {
+        role,
+        mode: assign ? 'add' : 'remove',
+        assignee_ids: [userId],
+      })
+      setErpItems((prev) => prev.map((item) => (item.id === data.id ? data : item)))
+    } catch (error) {
+      console.error(error)
+      setMessage('Failed to update member assignment.')
+    }
+  }
+
+  const handlePublishMemberPost = async (erp, role) => {
+    const isProvider = currentUserId && String(erp.provider) === String(currentUserId)
+    if (!isProvider) {
+      setMessage('Only provider can publish self-assign post.')
+      return
+    }
+
+    try {
+      const { data } = await api.post(`/erp/${erp.id}/publish_member_post/`, { role })
+      setErpItems((prev) => prev.map((item) => (item.id === data.id ? data : item)))
+      setMessage(`Self-assign post published for ${role.replace('_', ' ')}.`)
+    } catch (error) {
+      console.error(error)
+      setMessage('Failed to publish self-assign post.')
+    }
+  }
+
   const handleTrackStage = async (erp) => {
     if (erp.stage === 'Completed') {
       setMessage(`Task ${erp.id} is already in Completed phase.`)
@@ -405,6 +445,9 @@ export default function ERP() {
               onToggleDetails={(id) => setExpandedId((prev) => (prev === id ? null : id))}
               onTrackNext={handleTrackStage}
               onToggleReadyProduct={handleToggleReadyProduct}
+              users={users}
+              onUpdateMemberAssignment={handleUpdateMemberAssignment}
+              onPublishMemberPost={handlePublishMemberPost}
               onOpenOwner={(ownerId) => navigate(`/dashboard/${ownerId}`)}
               toMediaUrl={toMediaUrl}
             />

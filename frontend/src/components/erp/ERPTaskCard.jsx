@@ -17,10 +17,14 @@ export default function ERPTaskCard({
   onToggleDetails,
   onTrackNext,
   onToggleReadyProduct,
+  users = [],
+  onUpdateMemberAssignment,
+  onPublishMemberPost,
   onOpenOwner,
   toMediaUrl,
 }) {
   const [isMembersMenuOpen, setIsMembersMenuOpen] = useState(false)
+  const [selectedMemberRole, setSelectedMemberRole] = useState(null)
   const [messages, setMessages] = useState([])
   const [chatInput, setChatInput] = useState('')
   const [replyTargetId, setReplyTargetId] = useState(null)
@@ -56,6 +60,25 @@ export default function ERPTaskCard({
     hasServicesCategory ? 'Skill provider' : null,
     hasProductCategory ? 'Supplier' : null,
   ].filter(Boolean)
+
+  const roleLabelToKey = {
+    Expertise: 'expertise',
+    'Skill provider': 'skill_provider',
+    Supplier: 'supplier',
+  }
+
+  const roleKeyToLabel = {
+    expertise: 'Expertise',
+    skill_provider: 'Skill provider',
+    supplier: 'Supplier',
+  }
+
+  const membersState = snapshot.members || {}
+  const selectedRoleState = selectedMemberRole ? membersState[selectedMemberRole] || {} : {}
+  const selectedAssigneeIds = Array.isArray(selectedRoleState.assignee_ids)
+    ? selectedRoleState.assignee_ids.map((id) => Number(id))
+    : []
+  const selfAssignEnabled = Boolean(selectedRoleState.self_assign_enabled)
 
   const viewerRole =
     currentUserId && String(erp.provider) === String(currentUserId)
@@ -196,6 +219,10 @@ export default function ERPTaskCard({
                   <button
                     key={option}
                     type="button"
+                    onClick={() => {
+                      setSelectedMemberRole(roleLabelToKey[option] || null)
+                      setIsMembersMenuOpen(false)
+                    }}
                     className="block w-full rounded-lg px-3 py-2 text-left text-xs font-medium text-slate-700 hover:bg-slate-50"
                   >
                     {option}
@@ -215,6 +242,71 @@ export default function ERPTaskCard({
           {expandedId === erp.id ? 'Hide Details' : 'View Details'}
         </button>
       </div>
+
+      {selectedMemberRole ? (
+        <div className="space-y-2 rounded-lg border border-slate-200 bg-white p-3 text-xs">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="font-semibold text-slate-800">
+              Assign {roleKeyToLabel[selectedMemberRole] || 'Members'}
+            </p>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => onPublishMemberPost?.(erp, selectedMemberRole)}
+                disabled={!isProvider}
+                className="rounded-full border border-brand-200 px-2 py-1 text-[11px] font-semibold text-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Generate Self-Assign Post
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedMemberRole(null)}
+                className="rounded-full border border-slate-200 px-2 py-1 text-[11px] font-semibold text-slate-600"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+
+          <p className="text-[11px] text-slate-500">
+            Manual assign: provider can add/remove connections. Self-assign post: connections can assign themselves from Connections page.
+          </p>
+          <p className="text-[11px] text-slate-500">
+            Self-assign status: {selfAssignEnabled ? 'Open' : 'Closed'}
+          </p>
+
+          <div className="max-h-40 space-y-1 overflow-y-auto rounded-md border border-slate-100 bg-slate-50 p-2">
+            {users.length ? (
+              users.map((user) => {
+                const checked = selectedAssigneeIds.includes(Number(user.id))
+                return (
+                  <label
+                    key={`erp-member-${selectedMemberRole}-${user.id}`}
+                    className="flex cursor-pointer items-center justify-between gap-2 rounded-md px-2 py-1 hover:bg-white"
+                  >
+                    <span className="truncate text-slate-700">{user.name || user.username || `User #${user.id}`}</span>
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      disabled={!isProvider}
+                      onChange={(event) =>
+                        onUpdateMemberAssignment?.(
+                          erp,
+                          selectedMemberRole,
+                          Number(user.id),
+                          event.target.checked,
+                        )
+                      }
+                    />
+                  </label>
+                )
+              })
+            ) : (
+              <p className="text-[11px] text-slate-500">No connections found.</p>
+            )}
+          </div>
+        </div>
+      ) : null}
 
       {trackOpenId === erp.id && (
         <div className="space-y-3 rounded-xl border border-violet-200 bg-violet-50/50 p-3 text-xs text-slate-700">
