@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 
+import api from '../../api/client'
 import defaultAvatar from '../../assets/default-avatar.svg'
 
 export default function ERPTaskCard({
@@ -15,10 +16,16 @@ export default function ERPTaskCard({
   onGeneratePdf,
   onToggleDetails,
   onTrackNext,
+  onToggleReadyProduct,
   onOpenOwner,
   toMediaUrl,
 }) {
   const [isMembersMenuOpen, setIsMembersMenuOpen] = useState(false)
+  const [messages, setMessages] = useState([])
+  const [chatInput, setChatInput] = useState('')
+  const [replyTargetId, setReplyTargetId] = useState(null)
+  const [isLoadingMessages, setIsLoadingMessages] = useState(false)
+  const [isSendingMessage, setIsSendingMessage] = useState(false)
 
   const phases = ['Pending', 'On Process', 'Completed']
   const activePhaseIndex = phases.indexOf(erp.stage)
@@ -56,6 +63,7 @@ export default function ERPTaskCard({
       : currentUserId && String(erp.receiver) === String(currentUserId)
         ? 'Receiver'
         : 'Viewer'
+  const isProvider = viewerRole === 'Provider'
 
   const roleLabel =
     viewerRole === 'Provider' ? 'Providing' : viewerRole === 'Receiver' ? 'Receiving' : erp.category
@@ -66,6 +74,49 @@ export default function ERPTaskCard({
       : erp.stage === 'On Process'
         ? 'bg-blue-100 text-blue-700'
         : 'bg-amber-100 text-amber-700'
+
+  const loadMessages = useCallback(async () => {
+    if (erp.stage !== 'On Process') return
+    setIsLoadingMessages(true)
+    try {
+      const { data } = await api.get(`/erp/${erp.id}/messages/`)
+      setMessages(Array.isArray(data) ? data : [])
+    } catch (error) {
+      console.error(error)
+    } finally {
+      setIsLoadingMessages(false)
+    }
+  }, [erp.id, erp.stage])
+
+  useEffect(() => {
+    if (trackOpenId === erp.id && erp.stage === 'On Process') {
+      loadMessages()
+    }
+  }, [trackOpenId, erp.id, erp.stage, loadMessages])
+
+  const handleSendMessage = async () => {
+    const messageText = chatInput.trim()
+    if (!messageText || erp.stage !== 'On Process') return
+
+    setIsSendingMessage(true)
+    try {
+      const payload = {
+        message: messageText,
+      }
+      if (replyTargetId) {
+        payload.parent = replyTargetId
+      }
+
+      const { data } = await api.post(`/erp/${erp.id}/messages/`, payload)
+      setMessages((prev) => [...prev, data])
+      setChatInput('')
+      setReplyTargetId(null)
+    } catch (error) {
+      console.error(error)
+    } finally {
+      setIsSendingMessage(false)
+    }
+  }
 
   return (
     <div className="card space-y-4 transition-shadow hover:shadow-lg">
@@ -104,8 +155,14 @@ export default function ERPTaskCard({
         <button
           type="button"
           onClick={() => onSetPending(erp)}
+          disabled={!isProvider}
+          title={!isProvider ? 'Only provider can manage Pending actions' : ''}
           className={`rounded-full px-3 py-1 text-xs font-semibold ${
-            erp.stage === 'Pending' ? 'bg-brand-500 text-white' : 'border border-slate-200 text-slate-600'
+            erp.stage === 'Pending'
+              ? 'bg-brand-500 text-white'
+              : !isProvider
+                ? 'cursor-not-allowed border border-slate-200 text-slate-400'
+                : 'border border-slate-200 text-slate-600'
           }`}
         >
           Pending
@@ -189,9 +246,24 @@ export default function ERPTaskCard({
                 <ul className="mt-1 space-y-1">
                   {(phaseTasks.Pending || []).map((task) => (
                     <li key={`${erp.id}-pending-${task.label}`} className="flex items-center gap-1">
-                      <span className={task.done ? 'text-emerald-600' : 'text-amber-600'}>
-                        {task.done ? '✓' : '•'}
-                      </span>
+                      {task.toggleable && task.key === 'ready_product' ? (
+                        <button
+                          type="button"
+                          onClick={() => onToggleReadyProduct?.(erp.id)}
+                          disabled={!isProvider}
+                          aria-label={task.done ? 'Mark ready product as not filled' : 'Mark ready product as filled'}
+                          title={!isProvider ? 'Only provider can manage Pending actions' : ''}
+                          className={`h-4 w-4 rounded-full border transition ${
+                            task.done
+                              ? 'border-emerald-600 bg-emerald-500'
+                              : 'border-slate-400 bg-white hover:border-brand-400'
+                          }`}
+                        />
+                      ) : (
+                        <span className={task.done ? 'text-emerald-600' : 'text-amber-600'}>
+                          {task.done ? '✓' : '•'}
+                        </span>
+                      )}
                       <span>{task.label}</span>
                     </li>
                   ))}
@@ -230,6 +302,104 @@ export default function ERPTaskCard({
             </button>
             <p className="text-[11px] text-slate-500">Flow: Pending → On Process → Completed</p>
           </div>
+
+          {erp.stage === 'On Process' ? (
+            <div className="rounded-lg border border-slate-200 bg-white p-3">
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <p className="text-sm font-semibold text-slate-800">Group Messages</p>
+                <button
+                  type="button"
+                  onClick={loadMessages}
+                  className="rounded-full border border-slate-200 px-2 py-1 text-[11px] font-semibold text-slate-600"
+                >
+                  Refresh
+                </button>
+              </div>
+
+              <div className="max-h-40 space-y-2 overflow-y-auto rounded-md border border-slate-100 bg-slate-50 p-2">
+                {isLoadingMessages ? (
+                  <p className="text-[11px] text-slate-500">Loading messages...</p>
+                ) : messages.length ? (
+                  messages.map((msg) => {
+                    const isMine = String(msg.sender) === String(currentUserId)
+                    return (
+                      <div
+                        key={`erp-msg-${msg.id}`}
+                        className={`rounded-md border px-2 py-1 text-[11px] ${
+                          isMine
+                            ? 'border-brand-200 bg-brand-50'
+                            : 'border-slate-200 bg-white'
+                        }`}
+                      >
+                        <div className="mb-1 flex items-center gap-1 text-slate-500">
+                          <img
+                            src={toMediaUrl(msg.sender_profile_photo) || defaultAvatar}
+                            alt={msg.sender_name || 'Member'}
+                            className="h-4 w-4 rounded-full object-cover"
+                          />
+                          <span className="font-semibold text-slate-700">{msg.sender_name || `User #${msg.sender}`}</span>
+                          <span>•</span>
+                          <span>{new Date(msg.created_at).toLocaleString()}</span>
+                        </div>
+                        {msg.parent_id ? (
+                          <p className="mb-1 text-[10px] text-slate-500">Replying to message #{msg.parent_id}</p>
+                        ) : null}
+                        <p className="whitespace-pre-wrap text-slate-700">{msg.message}</p>
+                        <button
+                          type="button"
+                          onClick={() => setReplyTargetId(msg.id)}
+                          className="mt-1 text-[10px] font-semibold text-brand-600"
+                        >
+                          Reply
+                        </button>
+                      </div>
+                    )
+                  })
+                ) : (
+                  <p className="text-[11px] text-slate-500">No messages yet. Start the conversation.</p>
+                )}
+              </div>
+
+              {replyTargetId ? (
+                <div className="mt-2 flex items-center justify-between rounded-md border border-brand-200 bg-brand-50 px-2 py-1 text-[11px] text-brand-700">
+                  <span>Replying to message #{replyTargetId}</span>
+                  <button
+                    type="button"
+                    onClick={() => setReplyTargetId(null)}
+                    className="font-semibold"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              ) : null}
+
+              <div className="mt-2 flex gap-2">
+                <input
+                  type="text"
+                  value={chatInput}
+                  onChange={(event) => setChatInput(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' && !event.shiftKey) {
+                      event.preventDefault()
+                      handleSendMessage()
+                    }
+                  }}
+                  placeholder="Type a message for this ERP group"
+                  className="w-full rounded-md border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700 outline-none focus:border-brand-300"
+                />
+                <button
+                  type="button"
+                  onClick={handleSendMessage}
+                  disabled={isSendingMessage || !chatInput.trim()}
+                  className="rounded-md border border-brand-200 px-3 py-1 text-xs font-semibold text-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {isSendingMessage ? 'Sending...' : 'Send'}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <p className="text-[11px] text-slate-500">Messaging is available only in On Process stage.</p>
+          )}
         </div>
       )}
 

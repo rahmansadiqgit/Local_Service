@@ -15,6 +15,7 @@ export default function ERP() {
   const [ratings, setRatings] = useState([])
   const [expandedId, setExpandedId] = useState(null)
   const [trackOpenId, setTrackOpenId] = useState(null)
+  const [readyProductStatusByErp, setReadyProductStatusByErp] = useState({})
   const [workerPool, setWorkerPool] = useState('')
   const [filters, setFilters] = useState({
     category: '',
@@ -162,6 +163,12 @@ export default function ERP() {
   }
 
   const handleStageChange = async (erp, stage) => {
+    const isProvider = currentUserId && String(erp.provider) === String(currentUserId)
+    if (stage === 'Pending' && !isProvider) {
+      setMessage('Only provider can update Pending stage actions.')
+      return
+    }
+
     try {
       const { data } = await api.patch(`/erp/${erp.id}/update_stage/`, { stage })
       setErpItems((prev) => prev.map((item) => (item.id === data.id ? data : item)))
@@ -204,6 +211,14 @@ export default function ERP() {
       (sum, row) => sum + Math.max(0, Number(row.quantity || 0)),
       0,
     )
+    const requiredProductQty = snapshotProducts.reduce(
+      (sum, row) => sum + Math.max(0, Number(row.quantity || 0)),
+      0,
+    )
+    const isReadyProductDone =
+      readyProductStatusByErp[erp.id] === undefined
+        ? requiredProductQty > 0
+        : Boolean(readyProductStatusByErp[erp.id])
     const assignedExpertiseQty = Number(memberAssignments.expertise?.assigned_qty || 0)
     const hasAssignedSkillProvider =
       Array.isArray(memberAssignments.skill_provider?.assignee_ids)
@@ -241,6 +256,13 @@ export default function ERP() {
           label: 'Assign Supplier in Members → Supplier (at least one)',
           done: hasAssignedSupplier,
         })
+
+        pendingTasks.push({
+          label: 'Ready product',
+          done: isReadyProductDone,
+          key: 'ready_product',
+          toggleable: true,
+        })
       }
     }
 
@@ -263,6 +285,22 @@ export default function ERP() {
         },
       ],
     }
+  }
+
+  const handleToggleReadyProduct = (erpId) => {
+    const targetErp = erpItems.find((item) => Number(item.id) === Number(erpId))
+    const isProvider =
+      targetErp && currentUserId && String(targetErp.provider) === String(currentUserId)
+
+    if (!isProvider) {
+      setMessage('Only provider can mark Ready product in Pending tasks.')
+      return
+    }
+
+    setReadyProductStatusByErp((prev) => ({
+      ...prev,
+      [erpId]: !Boolean(prev[erpId]),
+    }))
   }
 
   const handleTrackStage = async (erp) => {
@@ -366,6 +404,7 @@ export default function ERP() {
               onGeneratePdf={handleGeneratePdf}
               onToggleDetails={(id) => setExpandedId((prev) => (prev === id ? null : id))}
               onTrackNext={handleTrackStage}
+              onToggleReadyProduct={handleToggleReadyProduct}
               onOpenOwner={(ownerId) => navigate(`/dashboard/${ownerId}`)}
               toMediaUrl={toMediaUrl}
             />

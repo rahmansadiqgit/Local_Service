@@ -23,12 +23,13 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 
-from .models import ERP, Expertise, Notification, Post, ProblemReport, Product, Rating, Skill
+from .models import ERP, ERPMessage, Expertise, Notification, Post, ProblemReport, Product, Rating, Skill
 from .serializers import (
     ChangePasswordSerializer,
     EmailTokenObtainPairSerializer,
     ExpertiseSerializer,
     ERPSerializer,
+    ERPMessageSerializer,
     NotificationSerializer,
     PasswordResetConfirmSerializer,
     PasswordResetRequestSerializer,
@@ -614,6 +615,44 @@ class ERPViewSet(viewsets.ModelViewSet):
         buffer.seek(0)
         erp.pdf_slip.save(f"erp_{erp.id}.pdf", ContentFile(buffer.read()), save=True)
         return Response(self.get_serializer(erp).data)
+
+    @action(detail=True, methods=["get", "post"])
+    def messages(self, request, pk=None):
+        erp = self.get_object()
+
+        if request.method.lower() == "get":
+            queryset = ERPMessage.objects.filter(erp=erp).select_related("sender", "parent")
+            serializer = ERPMessageSerializer(queryset, many=True)
+            return Response(serializer.data)
+
+        if erp.stage != "On Process":
+            return Response(
+                {"detail": "Messaging is available only in On Process state."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        message_text = str(request.data.get("message", "")).strip()
+        if not message_text:
+            return Response({"detail": "Message is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        parent = None
+        parent_id = request.data.get("parent")
+        if parent_id is not None and str(parent_id).strip() != "":
+            parent = ERPMessage.objects.filter(id=parent_id, erp=erp).first()
+            if parent is None:
+                return Response(
+                    {"detail": "Invalid reply target for this ERP thread."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+        instance = ERPMessage.objects.create(
+            erp=erp,
+            sender=request.user,
+            message=message_text,
+            parent=parent,
+        )
+        serializer = ERPMessageSerializer(instance)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
 
 
 class RatingViewSet(viewsets.ModelViewSet):
