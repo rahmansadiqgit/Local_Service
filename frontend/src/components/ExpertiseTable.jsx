@@ -29,7 +29,7 @@ export default function ExpertiseTable({ expertises = [] }) {
   }
 
   if (!expertises.length) {
-    return <p className="text-sm text-slate-500">No expertise services listed.</p>
+    return <p className="text-sm text-slate-500">No expertise detail listed.</p>
   }
 
   return (
@@ -49,12 +49,12 @@ export default function ExpertiseTable({ expertises = [] }) {
             </th>
             <th className="px-3 py-2 whitespace-nowrap">
               <button type="button" onClick={() => handleSort('unit')}>
-                Charge Unit
+                Work Duration
               </button>
             </th>
             <th className="px-3 py-2 whitespace-nowrap">
               <button type="button" onClick={() => handleSort('cost')}>
-                Cost ($)
+                Charge ($)
               </button>
             </th>
             <th className="px-3 py-2 whitespace-nowrap">

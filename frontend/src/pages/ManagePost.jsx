@@ -13,7 +13,6 @@ export default function ManagePost() {
   const [skillWorkers, setSkillWorkers] = useState({})
   const [expertisePersons, setExpertisePersons] = useState({})
   const [expertiseDurations, setExpertiseDurations] = useState({})
-  const [serviceWorkers, setServiceWorkers] = useState({})
   const [serviceDurations, setServiceDurations] = useState({})
   const [productUnits, setProductUnits] = useState({})
   const [loading, setLoading] = useState(true)
@@ -28,6 +27,20 @@ export default function ManagePost() {
 
   const isExpertiseSkill = (value) => /^__expertise__::/i.test(String(value || ''))
   const isServiceSkill = (value) => /^__service__::/i.test(String(value || ''))
+
+  const normalizeCategoryLabel = (value) => {
+    const normalized = String(value || '').trim().toLowerCase()
+    if (normalized === 'expertise') return 'Expertise'
+    if (normalized === 'services' || normalized === 'service') return 'Service'
+    if (normalized === 'product' || normalized === 'products') return 'Product'
+    return ''
+  }
+
+  const parsePostCategories = (value) =>
+    String(value || '')
+      .split(',')
+      .map((item) => normalizeCategoryLabel(item))
+      .filter(Boolean)
 
   const showMessage = useCallback((msg, type = 'info') => {
     setMessage(msg)
@@ -172,9 +185,8 @@ export default function ManagePost() {
     }, 0)
     
     const serviceTotal = serviceRows.reduce((sum, row) => {
-      const workers = Number(serviceWorkers[`service-${row.id}-workers`] || 0)
       const duration = Number(serviceDurations[`service-${row.id}-duration`] || 0)
-      return sum + workers * duration * Number(row.cost_per_unit || 0)
+      return sum + duration * Number(row.cost_per_unit || 0)
     }, 0)
     
     const productTotal = productRows.reduce((sum, row) => {
@@ -230,20 +242,19 @@ export default function ManagePost() {
 
     const services = serviceRows
       .map((row) => {
-        const quantity = Number(serviceWorkers[`service-${row.id}-workers`] || 0)
         const duration = Number(serviceDurations[`service-${row.id}-duration`] || 0)
         const unitCost = Number(row.cost_per_unit || 0)
         return {
           id: row.id,
           name: row.service_name,
           unit: row.unit,
-          quantity,
+          quantity: duration > 0 ? 1 : 0,
           duration,
           unit_cost: unitCost,
-          line_total: quantity * duration * unitCost,
+          line_total: duration * unitCost,
         }
       })
-      .filter((row) => row.quantity > 0 || row.duration > 0)
+      .filter((row) => row.duration > 0)
 
     const products = productRows
       .map((row) => {
@@ -329,7 +340,7 @@ export default function ManagePost() {
   const CounterControl = ({ value, onChange, max, label, unit }) => {
     return (
       <div className="flex flex-col items-center gap-2">
-        <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">{label}</span>
+        <span className="text-xs font-semibold uppercase tracking-wide text-slate-700 dark:text-slate-300">{label}</span>
         <div className="flex items-center gap-2 bg-slate-100 dark:bg-slate-800 rounded-xl p-2">
           <button
             onClick={() => onChange(Math.max(0, value - 1))}
@@ -352,7 +363,7 @@ export default function ManagePost() {
             +
           </button>
         </div>
-        <span className="text-xs text-slate-500">{unit}</span>
+        <span className="text-xs text-slate-600 dark:text-slate-300">{unit}</span>
       </div>
     )
   }
@@ -412,8 +423,8 @@ export default function ManagePost() {
           {!loading && visiblePosts.length === 0 && (
             <div className="card rounded-3xl p-16 text-center bg-white dark:bg-slate-900 shadow-lg">
               <div className="text-6xl mb-6">📭</div>
-              <p className="text-2xl font-bold text-slate-700 dark:text-slate-200 mb-2">No Posts to Manage</p>
-              <p className="text-slate-500 dark:text-slate-400 text-lg">Book or apply from a post to start managing it here</p>
+              <p className="text-2xl font-bold text-slate-700 dark:text-slate-200 mb-2">No posts to manage</p>
+              <p className="text-slate-500 dark:text-slate-400 text-lg">Book or apply to a post to start managing it here.</p>
             </div>
           )}
 
@@ -421,18 +432,36 @@ export default function ManagePost() {
           {!loading && visiblePosts.length > 0 && (
             <div className="space-y-8">
               {visiblePosts.map((post) => (
-                <div key={post.id} className="card rounded-3xl bg-white dark:bg-slate-900 shadow-xl overflow-hidden border-2 border-slate-200 dark:border-slate-700">
+                <div key={post.id} className="card rounded-3xl bg-gradient-to-br from-slate-100 to-indigo-100/80 dark:from-slate-900 dark:to-slate-800 shadow-xl overflow-hidden border-2 border-slate-200 dark:border-slate-700">
                   {/* Post Header */}
-                  <div className="p-8 bg-gradient-to-r from-blue-50 to-brand-50 dark:from-blue-900/20 dark:to-brand-900/20 border-b-2 border-slate-200 dark:border-slate-700">
+                  <div className="relative overflow-hidden rounded-t-3xl border-b-2 border-slate-300/70 bg-gradient-to-br from-[#08174f] via-[#1e3a8a] to-[#6d28d9] p-8 text-white dark:from-[#050d2f] dark:via-[#102a6b] dark:to-[#4c1d95]">
+                    <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.24),transparent_50%)]" />
+                    <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/25 via-transparent to-transparent" />
                     <div className="flex flex-wrap justify-between items-start gap-4 mb-4">
                       <div className="flex-1">
-                        <span className="inline-block px-4 py-2 bg-blue-200 dark:bg-blue-900/50 text-blue-900 dark:text-blue-200 text-sm font-bold rounded-full mb-3">
+                        <span className="inline-block rounded-full border border-white/30 bg-white/15 px-4 py-2 text-sm font-bold tracking-wide text-cyan-100 shadow-sm backdrop-blur-sm mb-3">
                           {post.post_type === 'Supply' ? '📦 SUPPLY' : '🔍 DEMAND'}
                         </span>
-                        <h2 className="text-3xl font-bold text-slate-900 dark:text-white">{post.post_name}</h2>
-                        <p className="text-slate-600 dark:text-slate-300 mt-2 flex items-center gap-2">
+                        <h2 className="text-3xl font-bold text-white drop-shadow-sm">{post.post_title || 'Post Details'}</h2>
+                        <p className="mt-2 flex items-center gap-2 text-blue-100/95">
                           <span>📍</span> {post.location || 'Location not specified'}
                         </p>
+                        <div className="mt-3 flex flex-wrap items-center gap-2">
+                          {parsePostCategories(post.post_name).length > 0 ? (
+                            parsePostCategories(post.post_name).map((category) => (
+                              <span
+                                key={`${post.id}-${category}`}
+                                className="inline-flex items-center rounded-full border border-white/35 bg-white/15 px-4 py-1.5 text-sm font-semibold tracking-wide text-cyan-100 shadow-sm backdrop-blur-sm"
+                              >
+                                {category}
+                              </span>
+                            ))
+                          ) : (
+                            <span className="inline-flex items-center rounded-full border border-white/25 bg-white/10 px-4 py-1.5 text-sm font-semibold text-blue-100/90 backdrop-blur-sm">
+                              Uncategorized
+                            </span>
+                          )}
+                        </div>
                       </div>
                       {ownPostIds.has(post.id) && (
                         <button
@@ -443,9 +472,6 @@ export default function ManagePost() {
                         </button>
                       )}
                     </div>
-                    {post.description && (
-                      <p className="text-slate-700 dark:text-slate-300 text-base leading-relaxed">{post.description}</p>
-                    )}
                   </div>
 
                   {/* Skills Management Section */}
@@ -464,25 +490,25 @@ export default function ManagePost() {
                           const totalCost = workers * Number(skill.cost_per_unit || 0)
                           return (
                             <div key={skill.id} className="bg-gradient-to-br from-slate-50 to-blue-50 dark:from-slate-800 dark:to-slate-700/50 rounded-2xl p-6 border-2 border-slate-200 dark:border-slate-600 hover:border-brand-400 dark:hover:border-brand-500 transition">
-                              <p className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2">Expertise</p>
+                              <p className="text-sm font-bold text-slate-700 dark:text-slate-300 uppercase tracking-widest mb-2">Expertise</p>
                               <h4 className="text-xl font-bold text-slate-900 dark:text-white mb-1">{skill.skill_name}</h4>
-                              <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">
+                              <p className="text-sm text-slate-700 dark:text-slate-200 mb-4">
                                 Experience: <span className="font-semibold">{skill.unit}</span> | Charge: <span className="font-semibold">${skill.cost_per_unit}</span>
                               </p>
-                              <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">Available Person: {Number(skill.available_workers || 0)}</p>
+                              <p className="text-xs text-slate-600 dark:text-slate-300 mb-4">Available Person: {Number(skill.available_workers || 0)}</p>
                               
                               <div className="mb-4">
                                 <CounterControl
                                   value={workers}
                                   onChange={(val) => setSkillWorkers((prev) => ({ ...prev, [`skill-${skill.id}`]: val }))}
                                   max={Math.max(Number(skill.available_workers || 0), 1)}
-                                  label="Required Person"
+                                  label="Required People"
                                   unit={workers === 1 ? 'person' : 'persons'}
                                 />
                               </div>
                               
                               <div className="pt-4 border-t-2 border-slate-300 dark:border-slate-600">
-                                <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">TOTAL COST</p>
+                                <p className="text-xs text-slate-600 dark:text-slate-300 mb-1">TOTAL COST</p>
                                 <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">${totalCost.toFixed(2)}</p>
                               </div>
                             </div>
@@ -497,9 +523,9 @@ export default function ManagePost() {
                     <div className="p-8 border-b-2 border-slate-200 dark:border-slate-700">
                       <div className="flex items-center gap-3 mb-8">
                         <span className="text-3xl">💼</span>
-                        <h3 className="text-2xl font-bold text-slate-900 dark:text-white">Expertise Services</h3>
+                        <h3 className="text-2xl font-bold text-slate-900 dark:text-white">Expertise</h3>
                         <span className="ml-auto px-3 py-1 bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 rounded-full font-semibold">
-                          {(expertisesByPost[post.id] || []).length} services
+                          {(expertisesByPost[post.id] || []).length} expertise
                         </span>
                       </div>
                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -510,19 +536,19 @@ export default function ManagePost() {
                           const totalCost = persons * duration * Number(expertise.cost || 0)
                           return (
                             <div key={expertise.id} className="bg-gradient-to-br from-purple-50 to-pink-50 dark:from-slate-800 dark:to-slate-700/50 rounded-2xl p-6 border-2 border-slate-200 dark:border-slate-600 hover:border-purple-400 dark:hover:border-purple-500 transition">
-                              <p className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2">Expertise Service</p>
+                              <p className="text-sm font-bold text-slate-700 dark:text-slate-300 uppercase tracking-widest mb-2">Expertise</p>
                               <h4 className="text-xl font-bold text-slate-900 dark:text-white mb-1">{expertise.name}</h4>
-                              <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">
+                              <p className="text-sm text-slate-700 dark:text-slate-200 mb-4">
                                 Experience: <span className="font-semibold">{expertise.experience}</span> | Cost: <span className="font-semibold">${expertise.cost}</span>/{expertise.unit}
                               </p>
-                              <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">Available Person: {expertise.available_person}</p>
+                              <p className="text-xs text-slate-600 dark:text-slate-300 mb-4">Available Person: {expertise.available_person}</p>
                               
                               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
                                 <CounterControl
                                   value={persons}
                                   onChange={(val) => setExpertisePersons((prev) => ({ ...prev, [`expertise-${expertise.id}`]: val }))}
                                   max={Math.max(expertise.available_person || 1, 1)}
-                                  label="Required Person"
+                                  label="Required People"
                                   unit={persons === 1 ? 'person' : 'persons'}
                                 />
                                 <CounterControl
@@ -535,7 +561,7 @@ export default function ManagePost() {
                               </div>
                               
                               <div className="pt-4 border-t-2 border-slate-300 dark:border-slate-600">
-                                <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">TOTAL COST</p>
+                                <p className="text-xs text-slate-600 dark:text-slate-300 mb-1">TOTAL COST</p>
                                 <p className="text-2xl font-bold text-purple-600 dark:text-purple-400">${totalCost.toFixed(2)}</p>
                               </div>
                             </div>
@@ -550,38 +576,29 @@ export default function ManagePost() {
                     <div className="p-8 border-b-2 border-slate-200 dark:border-slate-700">
                       <div className="flex items-center gap-3 mb-8">
                         <span className="text-3xl">🧹</span>
-                        <h3 className="text-2xl font-bold text-slate-900 dark:text-white">Services Management</h3>
+                        <h3 className="text-2xl font-bold text-slate-900 dark:text-white">Service</h3>
                         <span className="ml-auto px-3 py-1 bg-cyan-100 dark:bg-cyan-900/40 text-cyan-700 dark:text-cyan-300 rounded-full font-semibold">
                           {(skillBreakdownByPost[post.id]?.services || []).length} services
                         </span>
                       </div>
                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                         {(skillBreakdownByPost[post.id]?.services || []).map((service) => {
-                          const workers = Number(serviceWorkers[`service-${service.id}-workers`] || 0)
                           const duration = Number(serviceDurations[`service-${service.id}-duration`] || 0)
-                          const totalCost = workers * duration * Number(service.cost_per_unit || 0)
+                          const totalCost = duration * Number(service.cost_per_unit || 0)
                           const durationUnit = service.unit || 'duration unit'
 
                           return (
                             <div key={service.id} className="bg-gradient-to-br from-cyan-50 to-sky-50 dark:from-slate-800 dark:to-slate-700/50 rounded-2xl p-6 border-2 border-slate-200 dark:border-slate-600 hover:border-cyan-400 dark:hover:border-cyan-500 transition">
-                              <p className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2">Service</p>
+                              <p className="text-sm font-bold text-slate-700 dark:text-slate-300 uppercase tracking-widest mb-2">Service</p>
                               <h4 className="text-xl font-bold text-slate-900 dark:text-white mb-1">{service.service_name}</h4>
-                              <p className="text-sm text-slate-600 dark:text-slate-400 mb-2">
+                              <p className="text-sm text-slate-700 dark:text-slate-200 mb-2">
                                 Service Duration: <span className="font-semibold">{durationUnit}</span>
                               </p>
-                              <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">
+                              <p className="text-sm text-slate-700 dark:text-slate-200 mb-4">
                                 Service Cost: <span className="font-semibold">${service.cost_per_unit}</span> / {durationUnit}
                               </p>
-                              <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">Available Workers: {Number(service.available_workers || 0)}</p>
 
-                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
-                                <CounterControl
-                                  value={workers}
-                                  onChange={(val) => setServiceWorkers((prev) => ({ ...prev, [`service-${service.id}-workers`]: val }))}
-                                  max={Math.max(Number(service.available_workers || 0), 1)}
-                                  label="Workers Needed"
-                                  unit={workers === 1 ? 'worker' : 'workers'}
-                                />
+                              <div className="grid grid-cols-1 gap-4 mb-4">
                                 <CounterControl
                                   value={duration}
                                   onChange={(val) => setServiceDurations((prev) => ({ ...prev, [`service-${service.id}-duration`]: val }))}
@@ -592,7 +609,7 @@ export default function ManagePost() {
                               </div>
 
                               <div className="pt-4 border-t-2 border-slate-300 dark:border-slate-600">
-                                <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">TOTAL COST</p>
+                                <p className="text-xs text-slate-600 dark:text-slate-300 mb-1">TOTAL COST</p>
                                 <p className="text-2xl font-bold text-cyan-600 dark:text-cyan-400">${totalCost.toFixed(2)}</p>
                               </div>
                             </div>
@@ -607,7 +624,7 @@ export default function ManagePost() {
                     <div className="p-8 border-b-2 border-slate-200 dark:border-slate-700">
                       <div className="flex items-center gap-3 mb-8">
                         <span className="text-3xl">📦</span>
-                        <h3 className="text-2xl font-bold text-slate-900 dark:text-white">Products Management</h3>
+                        <h3 className="text-2xl font-bold text-slate-900 dark:text-white">Product</h3>
                         <span className="ml-auto px-3 py-1 bg-orange-100 dark:bg-orange-900/40 text-orange-700 dark:text-orange-300 rounded-full font-semibold">
                           {(productsByPost[post.id] || []).length} products
                         </span>
@@ -618,9 +635,9 @@ export default function ManagePost() {
                           const totalCost = units * Number(product.cost_per_unit || 0)
                           return (
                             <div key={product.id} className="bg-gradient-to-br from-amber-50 to-orange-50 dark:from-slate-800 dark:to-slate-700/50 rounded-2xl p-6 border-2 border-slate-200 dark:border-slate-600 hover:border-orange-400 dark:hover:border-orange-500 transition">
-                              <p className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2">Product</p>
+                              <p className="text-sm font-bold text-slate-700 dark:text-slate-300 uppercase tracking-widest mb-2">Product</p>
                               <h4 className="text-xl font-bold text-slate-900 dark:text-white mb-1">{product.product_name}</h4>
-                              <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">
+                              <p className="text-sm text-slate-700 dark:text-slate-200 mb-4">
                                 Unit: <span className="font-semibold">{product.unit}</span> | Cost: <span className="font-semibold">${product.cost_per_unit}</span>
                               </p>
                               
@@ -635,7 +652,7 @@ export default function ManagePost() {
                               </div>
                               
                               <div className="pt-4 border-t-2 border-slate-300 dark:border-slate-600">
-                                <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">TOTAL COST</p>
+                                <p className="text-xs text-slate-600 dark:text-slate-300 mb-1">TOTAL COST</p>
                                 <p className="text-2xl font-bold text-orange-600 dark:text-orange-400">${totalCost.toFixed(2)}</p>
                               </div>
                             </div>
@@ -646,23 +663,32 @@ export default function ManagePost() {
                   )}
 
                   {/* Summary Section */}
-                  <div className="p-8 bg-gradient-to-r from-emerald-50 to-blue-50 dark:from-emerald-900/10 dark:to-blue-900/10 border-t-2 border-slate-200 dark:border-slate-700">
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+                  <div className="rounded-b-3xl border-t-2 border-slate-200 bg-gradient-to-r from-emerald-50 to-blue-50 p-8 dark:from-emerald-900/10 dark:to-blue-900/10 dark:border-slate-700">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
                       <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-md">
-                        <p className="text-sm text-slate-500 dark:text-slate-400 font-semibold mb-2">Skills Total</p>
-                        <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
+                        <p className="text-sm text-slate-500 dark:text-slate-400 font-semibold mb-2">Expertise Charge</p>
+                        <p className="text-2xl font-bold text-violet-600 dark:text-violet-400">
                           ${((skillBreakdownByPost[post.id]?.expertise || []).reduce((sum, row) => {
                             const workers = Number(skillWorkers[`skill-${row.id}`] || 0)
                             return sum + workers * Number(row.cost_per_unit || 0)
-                          }, 0) + (skillBreakdownByPost[post.id]?.services || []).reduce((sum, row) => {
-                            const workers = Number(serviceWorkers[`service-${row.id}-workers`] || 0)
-                            const duration = Number(serviceDurations[`service-${row.id}-duration`] || 0)
-                            return sum + workers * duration * Number(row.cost_per_unit || 0)
+                          }, 0) + (expertisesByPost[post.id] || []).reduce((sum, row) => {
+                            const persons = Number(expertisePersons[`expertise-${row.id}`] || 0)
+                            const duration = Number(expertiseDurations[`expertise-${row.id}-duration`] || 0)
+                            return sum + persons * duration * Number(row.cost || 0)
                           }, 0)).toFixed(2)}
                         </p>
                       </div>
                       <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-md">
-                        <p className="text-sm text-slate-500 dark:text-slate-400 font-semibold mb-2">Products Total</p>
+                        <p className="text-sm text-slate-500 dark:text-slate-400 font-semibold mb-2">Service Cost</p>
+                        <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
+                          ${((skillBreakdownByPost[post.id]?.services || []).reduce((sum, row) => {
+                            const duration = Number(serviceDurations[`service-${row.id}-duration`] || 0)
+                            return sum + duration * Number(row.cost_per_unit || 0)
+                          }, 0)).toFixed(2)}
+                        </p>
+                      </div>
+                      <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-md">
+                        <p className="text-sm text-slate-500 dark:text-slate-400 font-semibold mb-2">Product Cost</p>
                         <p className="text-2xl font-bold text-orange-600 dark:text-orange-400">
                           ${((productsByPost[post.id] || []).reduce((sum, row) => {
                             const units = Number(productUnits[`product-${row.id}`] || 0)
@@ -671,7 +697,7 @@ export default function ManagePost() {
                         </p>
                       </div>
                       <div className="bg-gradient-to-br from-emerald-500 to-teal-500 dark:from-emerald-600 dark:to-teal-600 rounded-2xl p-6 shadow-lg text-white">
-                        <p className="text-sm font-semibold mb-2 opacity-90">Project Total Cost</p>
+                        <p className="text-sm font-semibold mb-2 opacity-90">Total Cost</p>
                         <p className="text-3xl font-bold">${getTotalForPost(post.id).toFixed(2)}</p>
                       </div>
                     </div>
