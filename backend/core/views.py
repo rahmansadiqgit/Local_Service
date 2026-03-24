@@ -394,6 +394,34 @@ class ERPViewSet(viewsets.ModelViewSet):
         erp.configuration_snapshot = snapshot
         erp.save(update_fields=["configuration_snapshot", "updated_at"])
 
+    def _get_connection_member_ids(self, user):
+        accepted = Connection.objects.filter(
+            status=ConnectionStatus.ACCEPTED
+        ).filter(Q(requester=user) | Q(addressee=user))
+
+        accepted_ids = set()
+        for conn in accepted:
+            other_id = conn.addressee_id if conn.requester_id == user.id else conn.requester_id
+            if other_id and int(other_id) != int(user.id):
+                accepted_ids.add(int(other_id))
+
+        erp_items = ERP.objects.filter(Q(provider=user) | Q(receiver=user)).select_related(
+            "post"
+        )
+        erp_history_ids = set()
+        for item in erp_items:
+            participants = {
+                item.provider_id,
+                item.receiver_id,
+                getattr(item.post, "owner_id", None),
+            }
+            for participant_id in participants:
+                if participant_id and int(participant_id) != int(user.id):
+                    erp_history_ids.add(int(participant_id))
+
+        # Connection members can belong to live/new/recent categories.
+        return accepted_ids.union(erp_history_ids)
+
     @action(detail=True, methods=["get", "patch"])
     def members(self, request, pk=None):
         erp = self.get_object()
@@ -470,7 +498,8 @@ class ERPViewSet(viewsets.ModelViewSet):
         self._save_snapshot(erp, snapshot)
 
         role_title = role.replace("_", " ").title()
-        receivers = User.objects.exclude(id=request.user.id)
+        target_ids = self._get_connection_member_ids(request.user)
+        receivers = User.objects.filter(id__in=list(target_ids)).exclude(id=request.user.id)
         notifications = [
             Notification(
                 user=target,
@@ -497,6 +526,10 @@ class ERPViewSet(viewsets.ModelViewSet):
                 {"detail": "Self-assignment is not enabled for this role."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+
+        allowed_member_ids = self._get_connection_member_ids(erp.provider) if erp.provider else set()
+        if request.user.id not in allowed_member_ids:
+            raise PermissionDenied("Only connection members can self-assign to this ERP role.")
 
         assign = request.data.get("assign", True)
         should_assign = bool(assign)
