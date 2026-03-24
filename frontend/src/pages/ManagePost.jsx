@@ -717,7 +717,7 @@ export default function ManagePost() {
               ))}
             </div>
           )}
-        </div>
+git        </div>
       </div>
     </>
   )
