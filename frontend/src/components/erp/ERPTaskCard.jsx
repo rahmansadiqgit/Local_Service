@@ -126,6 +126,12 @@ export default function ERPTaskCard({
               >
                 Skill provider
               </button>
+              <button
+                type="button"
+                className="block w-full rounded-lg px-3 py-2 text-left text-xs font-medium text-slate-700 hover:bg-slate-50"
+              >
+                Supplier
+              </button>
             </div>
           )}
         </div>
