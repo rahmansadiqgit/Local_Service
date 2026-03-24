@@ -1,7 +1,7 @@
-import { useState, useEffect, useCallback } from "react"
-import { Link, useNavigate, useLocation } from "react-router-dom"
-import useAuth from "../context/useAuth"
+import { useCallback, useEffect, useState } from "react"
+import { Link, useLocation, useNavigate } from "react-router-dom"
 import api from "../api/client"
+import useAuth from "../context/useAuth"
 
 export default function Header() {
   const { user, isAuthenticated, logout } = useAuth()
@@ -195,6 +195,17 @@ export default function Header() {
     }
   }
 
+  const isConnectionRequestNotification = (item) => {
+    const title = String(item?.title || "").toLowerCase()
+    return title.includes("connection request")
+  }
+
+  const handleNotificationClick = (item) => {
+    if (!isConnectionRequestNotification(item)) return
+    setOpenDropdown(null)
+    navigate("/connections")
+  }
+
   const resolveMediaUrl = (value) => {
     if (!value) return ""
     if (/^https?:\/\//i.test(value) || value.startsWith("data:") || value.startsWith("blob:")) {
@@ -297,18 +308,39 @@ export default function Header() {
                       {notifications.slice(0, 10).map((item) => (
                         <div
                           key={item.id}
+                          role={isConnectionRequestNotification(item) ? "button" : undefined}
+                          tabIndex={isConnectionRequestNotification(item) ? 0 : undefined}
+                          onClick={() => handleNotificationClick(item)}
+                          onKeyDown={(event) => {
+                            if (!isConnectionRequestNotification(item)) return
+                            if (event.key === "Enter" || event.key === " ") {
+                              event.preventDefault()
+                              handleNotificationClick(item)
+                            }
+                          }}
                           className={`rounded-xl border px-3 py-2 text-sm ${
                             item?.is_read
                               ? "border-slate-200 bg-slate-50 text-slate-600"
                               : "border-violet-200 bg-violet-50 text-slate-700"
+                          } ${
+                            isConnectionRequestNotification(item)
+                              ? "cursor-pointer transition hover:border-violet-300 hover:bg-violet-100"
+                              : ""
                           }`}
                         >
                           <div className="flex items-start justify-between gap-2">
                             <p className="font-semibold text-slate-800">{item.title || "Notification"}</p>
-                            <div className="relative" data-notification-menu-root>
+                            <div
+                              className="relative"
+                              data-notification-menu-root
+                              onClick={(event) => event.stopPropagation()}
+                            >
                               <button
                                 type="button"
-                                onClick={() => handleToggleNotificationMenu(item.id)}
+                                onClick={(event) => {
+                                  event.stopPropagation()
+                                  handleToggleNotificationMenu(item.id)
+                                }}
                                 disabled={actionNotificationId === item.id}
                                 className="rounded-full px-2 py-0.5 text-base font-bold text-slate-500 transition hover:bg-slate-200/70 hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
                                 aria-label="Notification options"
