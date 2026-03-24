@@ -12,9 +12,11 @@ export default function ERP() {
   const [erpItems, setErpItems] = useState([])
   const [currentUserId, setCurrentUserId] = useState(null)
   const [posts, setPosts] = useState([])
+  const [users, setUsers] = useState([])
   const [ratings, setRatings] = useState([])
   const [expandedId, setExpandedId] = useState(null)
   const [trackOpenId, setTrackOpenId] = useState(null)
+  const [readyProductStatusByErp, setReadyProductStatusByErp] = useState({})
   const [workerPool, setWorkerPool] = useState('')
   const [filters, setFilters] = useState({
     category: '',
@@ -46,15 +48,17 @@ export default function ERP() {
 
     const load = async () => {
       try {
-        const [erpRes, postRes, ratingRes, meRes] = await Promise.all([
+        const [erpRes, postRes, userRes, ratingRes, meRes] = await Promise.all([
           api.get('/erp/'),
           api.get('/posts/'),
+          api.get('/users/'),
           api.get('/ratings/'),
           api.get('/auth/me/'),
         ])
         if (!active) return
         setErpItems(erpRes.data)
         setPosts(postRes.data)
+        setUsers(userRes.data)
         setRatings(ratingRes.data)
         setCurrentUserId(meRes.data?.id ?? null)
       } catch (error) {
@@ -162,6 +166,12 @@ export default function ERP() {
   }
 
   const handleStageChange = async (erp, stage) => {
+    const isProvider = currentUserId && String(erp.provider) === String(currentUserId)
+    if (stage === 'Pending' && !isProvider) {
+      setMessage('Only provider can update Pending stage actions.')
+      return
+    }
+
     try {
       const { data } = await api.patch(`/erp/${erp.id}/update_stage/`, { stage })
       setErpItems((prev) => prev.map((item) => (item.id === data.id ? data : item)))
@@ -171,23 +181,96 @@ export default function ERP() {
     }
   }
 
+  const parsePostCategories = (value) =>
+    String(value || '')
+      .split(',')
+      .map((item) => String(item || '').trim().toLowerCase())
+      .filter(Boolean)
+
   const getPhaseTasks = (erp) => {
+    const isProvider = currentUserId && String(erp.provider) === String(currentUserId)
+    const post = postMap[erp.post] || {}
+    const snapshot = erp.configuration_snapshot || {}
+    const snapshotPost = snapshot.post || {}
+    const snapshotExpertise = Array.isArray(snapshot.expertise) ? snapshot.expertise : []
+    const snapshotServices = Array.isArray(snapshot.services) ? snapshot.services : []
+    const snapshotProducts = Array.isArray(snapshot.products) ? snapshot.products : []
+    const memberAssignments = snapshot.members || {}
+    const categories = parsePostCategories(post.post_name || snapshotPost.name || '')
+
     const hasWorkers = Array.isArray(erp.assigned_workers) && erp.assigned_workers.length > 0
     const hasPdfSlip = Boolean(erp.pdf_slip)
     const hasTotalCost = Number(erp.total_cost || 0) > 0
     const hasLinkedPost = Boolean(erp.post)
 
+    const hasExpertiseCategory =
+      categories.includes('expertise') || snapshotExpertise.some((row) => Number(row.quantity || 0) > 0)
+    const hasServicesCategory =
+      categories.includes('services') || categories.includes('service') || snapshotServices.length > 0
+    const hasProductCategory =
+      categories.includes('product') || categories.includes('products') || snapshotProducts.some((row) => Number(row.quantity || 0) > 0)
+
+    const requiredExpertiseQty = snapshotExpertise.reduce(
+      (sum, row) => sum + Math.max(0, Number(row.quantity || 0)),
+      0,
+    )
+    const requiredProductQty = snapshotProducts.reduce(
+      (sum, row) => sum + Math.max(0, Number(row.quantity || 0)),
+      0,
+    )
+    const isReadyProductDone =
+      readyProductStatusByErp[erp.id] === undefined
+        ? requiredProductQty > 0
+        : Boolean(readyProductStatusByErp[erp.id])
+    const assignedExpertiseQty = Number(memberAssignments.expertise?.assigned_qty || 0)
+    const hasAssignedSkillProvider =
+      Array.isArray(memberAssignments.skill_provider?.assignee_ids)
+        ? memberAssignments.skill_provider.assignee_ids.length > 0
+        : hasWorkers
+    const hasAssignedSupplier =
+      Array.isArray(memberAssignments.supplier?.assignee_ids)
+        ? memberAssignments.supplier.assignee_ids.length > 0
+        : hasWorkers
+
+    const pendingTasks = []
+
+    if (isProvider) {
+      pendingTasks.push({
+        label: 'Post linked to ERP task',
+        done: hasLinkedPost,
+      })
+
+      if (hasExpertiseCategory) {
+        pendingTasks.push({
+          label: `Assign Expertise qty in Members → Expertise${requiredExpertiseQty > 0 ? ` (required: ${requiredExpertiseQty})` : ''}`,
+          done: requiredExpertiseQty > 0 ? assignedExpertiseQty >= requiredExpertiseQty : hasWorkers,
+        })
+      }
+
+      if (hasServicesCategory) {
+        pendingTasks.push({
+          label: 'Assign Skill provider in Members → Skill provider (at least one)',
+          done: hasAssignedSkillProvider,
+        })
+      }
+
+      if (hasProductCategory) {
+        pendingTasks.push({
+          label: 'Assign Supplier in Members → Supplier (at least one)',
+          done: hasAssignedSupplier,
+        })
+
+        pendingTasks.push({
+          label: 'Ready product',
+          done: isReadyProductDone,
+          key: 'ready_product',
+          toggleable: true,
+        })
+      }
+    }
+
     return {
-      Pending: [
-        {
-          label: 'Post linked to ERP task',
-          done: hasLinkedPost,
-        },
-        {
-          label: 'Assign at least one worker',
-          done: hasWorkers,
-        },
-      ],
+      Pending: pendingTasks,
       'On Process': [
         {
           label: 'Generate PDF slip',
@@ -207,9 +290,69 @@ export default function ERP() {
     }
   }
 
+  const handleToggleReadyProduct = (erpId) => {
+    const targetErp = erpItems.find((item) => Number(item.id) === Number(erpId))
+    const isProvider =
+      targetErp && currentUserId && String(targetErp.provider) === String(currentUserId)
+
+    if (!isProvider) {
+      setMessage('Only provider can mark Ready product in Pending tasks.')
+      return
+    }
+
+    setReadyProductStatusByErp((prev) => ({
+      ...prev,
+      [erpId]: !Boolean(prev[erpId]),
+    }))
+  }
+
+  const handleUpdateMemberAssignment = async (erp, role, userId, assign) => {
+    const isProvider = currentUserId && String(erp.provider) === String(currentUserId)
+    if (!isProvider) {
+      setMessage('Only provider can manage member assignments in Pending.')
+      return
+    }
+
+    try {
+      const { data } = await api.patch(`/erp/${erp.id}/members/`, {
+        role,
+        mode: assign ? 'add' : 'remove',
+        assignee_ids: [userId],
+      })
+      setErpItems((prev) => prev.map((item) => (item.id === data.id ? data : item)))
+    } catch (error) {
+      console.error(error)
+      setMessage('Failed to update member assignment.')
+    }
+  }
+
+  const handlePublishMemberPost = async (erp, role) => {
+    const isProvider = currentUserId && String(erp.provider) === String(currentUserId)
+    if (!isProvider) {
+      setMessage('Only provider can publish self-assign post.')
+      return
+    }
+
+    try {
+      const { data } = await api.post(`/erp/${erp.id}/publish_member_post/`, { role })
+      setErpItems((prev) => prev.map((item) => (item.id === data.id ? data : item)))
+      setMessage(`Self-assign post published for ${role.replace('_', ' ')}.`)
+    } catch (error) {
+      console.error(error)
+      setMessage('Failed to publish self-assign post.')
+    }
+  }
+
   const handleTrackStage = async (erp) => {
     if (erp.stage === 'Completed') {
       setMessage(`Task ${erp.id} is already in Completed phase.`)
+      return
+    }
+
+    const isProvider = currentUserId && String(erp.provider) === String(currentUserId)
+
+    if (erp.stage === 'Pending' && !isProvider) {
+      setMessage('Only provider can complete Pending assignments and move task to On Process.')
       return
     }
 
@@ -301,6 +444,10 @@ export default function ERP() {
               onGeneratePdf={handleGeneratePdf}
               onToggleDetails={(id) => setExpandedId((prev) => (prev === id ? null : id))}
               onTrackNext={handleTrackStage}
+              onToggleReadyProduct={handleToggleReadyProduct}
+              users={users}
+              onUpdateMemberAssignment={handleUpdateMemberAssignment}
+              onPublishMemberPost={handlePublishMemberPost}
               onOpenOwner={(ownerId) => navigate(`/dashboard/${ownerId}`)}
               toMediaUrl={toMediaUrl}
             />

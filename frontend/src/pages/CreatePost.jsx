@@ -24,7 +24,7 @@ export default function CreatePost() {
   const [imageFile, setImageFile] = useState(null)
   const [previewUrl, setPreviewUrl] = useState(null)
   const [skills, setSkills] = useState([
-    { skill_name: '', unit: '', cost_per_unit: '', available_workers: 0 },
+    { skill_name: '', unit: '', cost_per_unit: '' },
   ])
   const [expertises, setExpertises] = useState([
     { name: '', experience: '', unit: '', cost: '', available_person: 0 },
@@ -153,7 +153,7 @@ export default function CreatePost() {
       setSelectedCategories([])
       setShowCategoryMenu(false)
       setImageFile(null)
-      setSkills([{ skill_name: '', unit: '', cost_per_unit: '', available_workers: 0 }])
+      setSkills([{ skill_name: '', unit: '', cost_per_unit: '' }])
       setExpertises([{ name: '', experience: '', unit: '', cost: '', available_person: 0 }])
       setServices([{ service_name: '', description: '', unit: '', cost_per_unit: '' }])
       setProducts([{ product_name: '', description: '', unit: '', cost_per_unit: '', available_units: 0 }])
@@ -436,12 +436,12 @@ export default function CreatePost() {
                 />
               </div>
               <div>
-                <label className="text-xs font-semibold text-black">Available Person</label>
+                <label className="text-xs font-semibold text-black">{post.post_type === 'Demand' ? 'Required Person' : 'Available Person'}</label>
                 <div className="flex gap-2">
                   <input
                     type="text"
                     inputMode="numeric"
-                    placeholder="Enter available persons"
+                    placeholder={post.post_type === 'Demand' ? 'Enter required persons' : 'Enter available persons'}
                     value={row.available_person}
                     onChange={(event) =>
                       setExpertises((prev) =>
@@ -643,12 +643,12 @@ export default function CreatePost() {
                 />
               </div>
               <div>
-                <label className="text-xs font-semibold text-black">Available Units</label>
+                <label className="text-xs font-semibold text-black">{post.post_type === 'Demand' ? 'Required Units' : 'Available Units'}</label>
                 <div className="flex gap-2">
                   <input
                     type="text"
                     inputMode="numeric"
-                    placeholder="Enter available units"
+                    placeholder={post.post_type === 'Demand' ? 'Enter required units' : 'Enter available units'}
                     value={row.available_units}
                     onChange={(event) =>
                       setProducts((prev) =>

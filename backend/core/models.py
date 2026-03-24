@@ -63,7 +63,6 @@ class Skill(models.Model):
     description = models.TextField(blank=True)
     unit = models.CharField(max_length=50)
     cost_per_unit = models.DecimalField(max_digits=12, decimal_places=2)
-    available_workers = models.PositiveIntegerField(default=0)
 
     def __str__(self) -> str:
         return f"{self.skill_name} ({self.post.post_name})"
@@ -135,6 +134,30 @@ class ERP(models.Model):
 
     def __str__(self) -> str:
         return f"{self.post.post_name} - {self.category}"
+
+
+class ERPMessage(models.Model):
+    erp = models.ForeignKey(ERP, on_delete=models.CASCADE, related_name="messages")
+    sender = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="erp_messages",
+    )
+    message = models.TextField()
+    parent = models.ForeignKey(
+        "self",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="replies",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["created_at", "id"]
+
+    def __str__(self) -> str:
+        return f"ERP #{self.erp_id} by {self.sender_id}"
 
 
 class Rating(models.Model):

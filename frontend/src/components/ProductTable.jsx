@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 
-export default function ProductTable({ products = [] }) {
+export default function ProductTable({ products = [], postType = 'Supply' }) {
   const [sortKey, setSortKey] = useState('product_name')
   const [sortDir, setSortDir] = useState('asc')
 
@@ -55,7 +55,7 @@ export default function ProductTable({ products = [] }) {
             </th>
             <th className="px-3 py-2 whitespace-nowrap">
               <button type="button" onClick={() => handleSort('available_units')}>
-                Available Units
+                {postType === 'Demand' ? 'Required Units' : 'Available Units'}
               </button>
             </th>
           </tr>

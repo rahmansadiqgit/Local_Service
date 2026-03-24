@@ -5,7 +5,7 @@ import re
 from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
-from .models import ERP, Expertise, Notification, Post, ProblemReport, Product, Rating, Skill
+from .models import ERP, ERPMessage, Expertise, Notification, Post, ProblemReport, Product, Rating, Skill
 
 User = get_user_model()
 
@@ -181,7 +181,6 @@ class SkillSerializer(serializers.ModelSerializer):
             "description",
             "unit",
             "cost_per_unit",
-            "available_workers",
         )
 
 
@@ -230,6 +229,38 @@ class ERPSerializer(serializers.ModelSerializer):
             "pdf_slip",
         )
         read_only_fields = ("provider", "receiver", "category")
+
+
+class ERPMessageSerializer(serializers.ModelSerializer):
+    sender_name = serializers.SerializerMethodField(read_only=True)
+    sender_profile_photo = serializers.ImageField(source="sender.profile_photo", read_only=True)
+    parent_id = serializers.IntegerField(source="parent.id", read_only=True)
+
+    class Meta:
+        model = ERPMessage
+        fields = (
+            "id",
+            "erp",
+            "sender",
+            "sender_name",
+            "sender_profile_photo",
+            "message",
+            "parent",
+            "parent_id",
+            "created_at",
+        )
+        read_only_fields = (
+            "id",
+            "erp",
+            "sender",
+            "sender_name",
+            "sender_profile_photo",
+            "parent_id",
+            "created_at",
+        )
+
+    def get_sender_name(self, obj):
+        return obj.sender.name or obj.sender.username or obj.sender.email
 
 
 class RatingSerializer(serializers.ModelSerializer):
