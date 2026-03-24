@@ -98,6 +98,34 @@ export default function ERPTaskCard({
         ? 'bg-blue-100 text-blue-700'
         : 'bg-amber-100 text-amber-700'
 
+  const pendingChecklist = phaseTasks.Pending || []
+  const openPendingTasks = pendingChecklist.filter((task) => !task.done)
+  const donePendingTasks = pendingChecklist.filter((task) => task.done)
+  const completedStageTasks = (phaseTasks.Completed || []).filter((task) => task.done)
+  const completedTasks = [...donePendingTasks, ...completedStageTasks]
+
+  const renderTaskRow = (task, listType) => (
+    <li key={`${erp.id}-${listType}-${task.key || task.label}`} className="flex items-center gap-1">
+      {task.toggleable && task.key === 'ready_product' ? (
+        <button
+          type="button"
+          onClick={() => onToggleReadyProduct?.(erp.id)}
+          disabled={!isProvider}
+          aria-label={task.done ? 'Mark ready product as not filled' : 'Mark ready product as filled'}
+          title={!isProvider ? 'Only provider can manage Pending actions' : ''}
+          className={`h-4 w-4 rounded-full border transition ${
+            task.done
+              ? 'border-emerald-600 bg-emerald-500'
+              : 'border-slate-400 bg-white hover:border-brand-400'
+          }`}
+        />
+      ) : (
+        <span className={task.done ? 'text-emerald-600' : 'text-amber-600'}>{task.done ? '✓' : '•'}</span>
+      )}
+      <span>{task.label}</span>
+    </li>
+  )
+
   const loadMessages = useCallback(async () => {
     if (erp.stage !== 'On Process') return
     setIsLoadingMessages(true)
@@ -334,49 +362,20 @@ export default function ERPTaskCard({
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="rounded-lg border border-slate-200 bg-white p-2">
               <p className="font-semibold text-slate-800">Pending Tasks</p>
-              {(phaseTasks.Pending || []).length ? (
+              {openPendingTasks.length ? (
                 <ul className="mt-1 space-y-1">
-                  {(phaseTasks.Pending || []).map((task) => (
-                    <li key={`${erp.id}-pending-${task.label}`} className="flex items-center gap-1">
-                      {task.toggleable && task.key === 'ready_product' ? (
-                        <button
-                          type="button"
-                          onClick={() => onToggleReadyProduct?.(erp.id)}
-                          disabled={!isProvider}
-                          aria-label={task.done ? 'Mark ready product as not filled' : 'Mark ready product as filled'}
-                          title={!isProvider ? 'Only provider can manage Pending actions' : ''}
-                          className={`h-4 w-4 rounded-full border transition ${
-                            task.done
-                              ? 'border-emerald-600 bg-emerald-500'
-                              : 'border-slate-400 bg-white hover:border-brand-400'
-                          }`}
-                        />
-                      ) : (
-                        <span className={task.done ? 'text-emerald-600' : 'text-amber-600'}>
-                          {task.done ? '✓' : '•'}
-                        </span>
-                      )}
-                      <span>{task.label}</span>
-                    </li>
-                  ))}
+                  {openPendingTasks.map((task) => renderTaskRow(task, 'pending'))}
                 </ul>
               ) : (
-                <p className="mt-1 text-slate-500">No pending tasks for receiver.</p>
+                <p className="mt-1 text-slate-500">No pending tasks.</p>
               )}
             </div>
 
             <div className="rounded-lg border border-slate-200 bg-white p-2">
               <p className="font-semibold text-slate-800">Completed Tasks</p>
-              {(phaseTasks.Completed || []).length ? (
+              {completedTasks.length ? (
                 <ul className="mt-1 space-y-1">
-                  {(phaseTasks.Completed || []).map((task) => (
-                    <li key={`${erp.id}-completed-${task.label}`} className="flex items-center gap-1">
-                      <span className={task.done ? 'text-emerald-600' : 'text-amber-600'}>
-                        {task.done ? '✓' : '•'}
-                      </span>
-                      <span>{task.label}</span>
-                    </li>
-                  ))}
+                  {completedTasks.map((task) => renderTaskRow(task, 'completed'))}
                 </ul>
               ) : (
                 <p className="mt-1 text-slate-500">No completed tasks yet.</p>
