@@ -5,7 +5,6 @@ import ExpertiseTable from './ExpertiseTable'
 import ProductTable from './ProductTable'
 import RatingCard from './RatingCard'
 import ServiceTable from './ServiceTable'
-import SkillTable from './SkillTable'
 
 export default function PostCard({
   post,
@@ -102,20 +101,37 @@ export default function PostCard({
       .trim()
 
   const expertiseRows = useMemo(() => {
+    if (expertises.length > 0) return expertises
+
+    // Backward-compatible fallback for legacy expertise rows stored in skills.
     const tagged = skills
       .filter((item) => /^__expertise__::/i.test(String(item.skill_name || '')))
-      .map((item) => ({ ...item, skill_name: stripCategoryPrefix(item.skill_name) }))
+      .map((item) => ({
+        id: item.id,
+        name: stripCategoryPrefix(item.skill_name),
+        experience: item.description || '-',
+        unit: item.unit,
+        cost: item.cost_per_unit,
+        available_person: item.available_workers,
+      }))
 
     if (tagged.length > 0) return tagged
 
     if (hasExpertiseCategory && !hasServicesCategory) {
       return skills
         .filter((item) => !/^__service__::/i.test(String(item.skill_name || '')))
-        .map((item) => ({ ...item, skill_name: stripCategoryPrefix(item.skill_name) }))
+        .map((item) => ({
+          id: item.id,
+          name: stripCategoryPrefix(item.skill_name),
+          experience: item.description || '-',
+          unit: item.unit,
+          cost: item.cost_per_unit,
+          available_person: item.available_workers,
+        }))
     }
 
     return []
-  }, [hasExpertiseCategory, hasServicesCategory, skills])
+  }, [expertises, hasExpertiseCategory, hasServicesCategory, skills])
 
   const serviceRows = useMemo(() => {
     const tagged = skills
@@ -138,8 +154,6 @@ export default function PostCard({
   }, [hasExpertiseCategory, hasServicesCategory, skills])
 
   const productRows = products
-  
-  const newExpertiseRows = useMemo(() => expertises, [expertises])
 
   const profileId = profile?.id ?? post?.owner_id ?? post?.owner
 
@@ -291,17 +305,10 @@ export default function PostCard({
                 <div className="space-y-2">
                   <p className="text-sm font-semibold text-slate-600 dark:text-slate-300">Expertise</p>
                   {expertiseRows.length ? (
-                    <SkillTable skills={expertiseRows} category="Expertise" />
+                    <ExpertiseTable expertises={expertiseRows} />
                   ) : (
                     <p className="text-sm text-slate-400">No expertise detail listed.</p>
                   )}
-                </div>
-              )}
-
-              {newExpertiseRows.length > 0 && (
-                <div className="space-y-2">
-                  <p className="text-sm font-semibold text-slate-600 dark:text-slate-300">Expertise Services</p>
-                  <ExpertiseTable expertises={newExpertiseRows} />
                 </div>
               )}
 
