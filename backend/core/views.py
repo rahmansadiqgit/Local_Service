@@ -23,9 +23,10 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 
-from .models import ERP, ERPMessage, Expertise, Notification, Post, ProblemReport, Product, Rating, Skill
+from .models import Connection, ConnectionStatus, ERP, ERPMessage, Expertise, Notification, Post, ProblemReport, Product, Rating, Skill
 from .serializers import (
     ChangePasswordSerializer,
+    ConnectionSerializer,
     EmailTokenObtainPairSerializer,
     ExpertiseSerializer,
     ERPSerializer,
@@ -841,3 +842,174 @@ class UserViewSet(viewsets.ReadOnlyModelViewSet):
 
     def get_queryset(self):
         return User.objects.all().order_by("id")
+
+
+class ConnectionViewSet(viewsets.GenericViewSet):
+    serializer_class = ConnectionSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        user = self.request.user
+        return Connection.objects.filter(Q(requester=user) | Q(addressee=user)).select_related(
+            "requester", "addressee"
+        )
+
+    def _pair_key(self, left_id, right_id):
+        return tuple(sorted([int(left_id), int(right_id)]))
+
+    def _serialize_users(self, user_ids):
+        if not user_ids:
+            return []
+        users = User.objects.filter(id__in=list(user_ids)).order_by("name", "username", "id")
+        return UserSerializer(users, many=True).data
+
+    @action(detail=False, methods=["get"])
+    def overview(self, request):
+        user = request.user
+        queryset = self.get_queryset()
+
+        accepted = queryset.filter(status=ConnectionStatus.ACCEPTED)
+        pending_incoming = queryset.filter(status=ConnectionStatus.PENDING, addressee=user)
+        pending_outgoing = queryset.filter(status=ConnectionStatus.PENDING, requester=user)
+
+        manual_new_ids = set()
+        for conn in accepted:
+            other_id = conn.addressee_id if conn.requester_id == user.id else conn.requester_id
+            if other_id:
+                manual_new_ids.add(int(other_id))
+
+        erp_items = ERP.objects.filter(Q(provider=user) | Q(receiver=user)).select_related(
+            "provider", "receiver", "post__owner"
+        )
+        active_erp_items = erp_items.exclude(stage="Completed")
+
+        live_ids = set()
+        history_ids = set()
+
+        for item in erp_items:
+            participants = [
+                item.provider_id,
+                item.receiver_id,
+                getattr(item.post, "owner_id", None),
+            ]
+            participants = {int(pid) for pid in participants if pid}
+            if user.id not in participants:
+                continue
+            for pid in participants:
+                if pid != user.id:
+                    history_ids.add(pid)
+
+        for item in active_erp_items:
+            participants = [
+                item.provider_id,
+                item.receiver_id,
+                getattr(item.post, "owner_id", None),
+            ]
+            participants = {int(pid) for pid in participants if pid}
+            if user.id not in participants:
+                continue
+            for pid in participants:
+                if pid != user.id:
+                    live_ids.add(pid)
+
+        recent_ids = history_ids.difference(live_ids)
+        new_ids = manual_new_ids.difference(live_ids).difference(recent_ids)
+
+        incoming_data = ConnectionSerializer(pending_incoming, many=True).data
+        outgoing_data = ConnectionSerializer(pending_outgoing, many=True).data
+
+        return Response(
+            {
+                "live_connections": self._serialize_users(live_ids),
+                "new_connections": self._serialize_users(new_ids),
+                "recent_connections": self._serialize_users(recent_ids),
+                "incoming_requests": incoming_data,
+                "outgoing_requests": outgoing_data,
+            }
+        )
+
+    @action(detail=False, methods=["post"])
+    def request(self, request):
+        addressee_id = request.data.get("addressee_id")
+        message = str(request.data.get("request_message", "")).strip()
+
+        try:
+            addressee_id = int(addressee_id)
+        except (TypeError, ValueError):
+            return Response({"detail": "Valid addressee_id is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if addressee_id == request.user.id:
+            return Response({"detail": "You cannot request yourself."}, status=status.HTTP_400_BAD_REQUEST)
+
+        addressee = User.objects.filter(id=addressee_id).first()
+        if not addressee:
+            return Response({"detail": "Target user not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        existing = Connection.objects.filter(
+            Q(requester=request.user, addressee=addressee)
+            | Q(requester=addressee, addressee=request.user)
+        ).order_by("-updated_at", "-id").first()
+
+        if existing and existing.status == ConnectionStatus.ACCEPTED:
+            return Response({"detail": "You are already connected."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if existing and existing.status == ConnectionStatus.PENDING:
+            return Response({"detail": "A pending request already exists between both users."}, status=status.HTTP_400_BAD_REQUEST)
+
+        connection = Connection.objects.create(
+            requester=request.user,
+            addressee=addressee,
+            status=ConnectionStatus.PENDING,
+            request_message=message,
+        )
+
+        sender_name = request.user.name or request.user.username or request.user.email
+        Notification.objects.create(
+            user=addressee,
+            title="Connection Request",
+            message=f"{sender_name} sent you a connection request.{f' Message: {message}' if message else ''}",
+        )
+
+        return Response(ConnectionSerializer(connection).data, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=["post"])
+    def respond(self, request, pk=None):
+        connection = self.get_queryset().filter(id=pk).first()
+        if not connection:
+            return Response({"detail": "Connection request not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        if connection.addressee_id != request.user.id:
+            raise PermissionDenied("Only request receiver can respond.")
+
+        decision = str(request.data.get("decision", "")).strip().lower()
+        if decision not in {"accept", "reject"}:
+            return Response({"detail": "Decision must be accept or reject."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if decision == "accept":
+            connection.status = ConnectionStatus.ACCEPTED
+            connection.accepted_at = timezone.now()
+            connection.save(update_fields=["status", "accepted_at", "updated_at"])
+
+            sender_name = request.user.name or request.user.username or request.user.email
+            Notification.objects.create(
+                user=connection.requester,
+                title="Connection Request Accepted",
+                message=f"{sender_name} accepted your connection request.",
+            )
+            Notification.objects.create(
+                user=request.user,
+                title="Connection Added",
+                message=f"You are now connected with {connection.requester.name or connection.requester.username or connection.requester.email}.",
+            )
+        else:
+            connection.status = ConnectionStatus.REJECTED
+            connection.save(update_fields=["status", "updated_at"])
+
+            sender_name = request.user.name or request.user.username or request.user.email
+            Notification.objects.create(
+                user=connection.requester,
+                title="Connection Request Rejected",
+                message=f"{sender_name} rejected your connection request.",
+            )
+
+        return Response(ConnectionSerializer(connection).data)

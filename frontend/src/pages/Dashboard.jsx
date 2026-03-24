@@ -19,6 +19,9 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [deleteMessage, setDeleteMessage] = useState('')
+  const [connectionRequestMessage, setConnectionRequestMessage] = useState('')
+  const [connectionNote, setConnectionNote] = useState('')
+  const [isSendingConnectionRequest, setIsSendingConnectionRequest] = useState(false)
 
   useEffect(() => {
     let active = true;
@@ -250,6 +253,11 @@ export default function Dashboard() {
     return String(user.id) === String(profile.id)
   }, [user?.id, profile?.id])
 
+  const canSendConnectionRequest = useMemo(() => {
+    if (!id || !user?.id || !profile?.id) return false
+    return String(user.id) !== String(profile.id)
+  }, [id, user?.id, profile?.id])
+
   const handleDeletePost = async (postId) => {
     const confirmed = window.confirm('Are you sure you want to delete this post?')
     if (!confirmed) return
@@ -268,6 +276,25 @@ export default function Dashboard() {
     } catch (deleteError) {
       console.error(deleteError)
       setDeleteMessage('Failed to delete post.')
+    }
+  }
+
+  const handleSendConnectionRequest = async () => {
+    if (!canSendConnectionRequest || !profile?.id) return
+    setConnectionNote('')
+    setIsSendingConnectionRequest(true)
+    try {
+      await api.post('/connections/request/', {
+        addressee_id: profile.id,
+        request_message: connectionRequestMessage.trim(),
+      })
+      setConnectionRequestMessage('')
+      setConnectionNote('Connection request sent.')
+    } catch (requestError) {
+      console.error(requestError)
+      setConnectionNote(requestError?.response?.data?.detail || 'Failed to send connection request.')
+    } finally {
+      setIsSendingConnectionRequest(false)
     }
   }
 
@@ -438,6 +465,31 @@ export default function Dashboard() {
       {deleteMessage && (
         <div className="card border border-slate-200 bg-slate-50">
           <p className="text-sm text-slate-600">{deleteMessage}</p>
+        </div>
+      )}
+
+      {canSendConnectionRequest && (
+        <div className="card border border-sky-200 bg-sky-50/80">
+          <p className="text-sm font-semibold text-sky-900">Connection Request</p>
+          <p className="mt-1 text-xs text-sky-800">Send a request message to connect with this user.</p>
+          <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center">
+            <input
+              type="text"
+              value={connectionRequestMessage}
+              onChange={(event) => setConnectionRequestMessage(event.target.value)}
+              placeholder="Write a short request message"
+              className="w-full rounded-lg border border-sky-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-sky-400"
+            />
+            <button
+              type="button"
+              onClick={handleSendConnectionRequest}
+              disabled={isSendingConnectionRequest}
+              className="rounded-full border border-sky-300 bg-sky-600 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {isSendingConnectionRequest ? 'Sending...' : 'Connection Request'}
+            </button>
+          </div>
+          {connectionNote ? <p className="mt-2 text-xs text-sky-800">{connectionNote}</p> : null}
         </div>
       )}
 

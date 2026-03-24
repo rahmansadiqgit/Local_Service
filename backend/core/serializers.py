@@ -5,7 +5,7 @@ import re
 from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
-from .models import ERP, ERPMessage, Expertise, Notification, Post, ProblemReport, Product, Rating, Skill
+from .models import Connection, ERP, ERPMessage, Expertise, Notification, Post, ProblemReport, Product, Rating, Skill
 
 User = get_user_model()
 
@@ -272,6 +272,41 @@ class ERPMessageSerializer(serializers.ModelSerializer):
 
     def get_sender_name(self, obj):
         return obj.sender.name or obj.sender.username or obj.sender.email
+
+
+class ConnectionSerializer(serializers.ModelSerializer):
+    requester_name = serializers.SerializerMethodField(read_only=True)
+    addressee_name = serializers.SerializerMethodField(read_only=True)
+
+    class Meta:
+        model = Connection
+        fields = (
+            "id",
+            "requester",
+            "requester_name",
+            "addressee",
+            "addressee_name",
+            "status",
+            "request_message",
+            "accepted_at",
+            "created_at",
+            "updated_at",
+        )
+        read_only_fields = (
+            "id",
+            "requester",
+            "requester_name",
+            "addressee_name",
+            "accepted_at",
+            "created_at",
+            "updated_at",
+        )
+
+    def get_requester_name(self, obj):
+        return obj.requester.name or obj.requester.username or obj.requester.email
+
+    def get_addressee_name(self, obj):
+        return obj.addressee.name or obj.addressee.username or obj.addressee.email
 
 
 class RatingSerializer(serializers.ModelSerializer):

@@ -160,6 +160,43 @@ class ERPMessage(models.Model):
         return f"ERP #{self.erp_id} by {self.sender_id}"
 
 
+class ConnectionStatus(models.TextChoices):
+    PENDING = "Pending", "Pending"
+    ACCEPTED = "Accepted", "Accepted"
+    REJECTED = "Rejected", "Rejected"
+
+
+class Connection(models.Model):
+    requester = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="sent_connections",
+    )
+    addressee = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="received_connections",
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=ConnectionStatus.choices,
+        default=ConnectionStatus.PENDING,
+    )
+    request_message = models.TextField(blank=True)
+    accepted_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["requester", "addressee"], name="unique_connection_direction"),
+        ]
+        ordering = ["-updated_at", "-id"]
+
+    def __str__(self) -> str:
+        return f"{self.requester_id}->{self.addressee_id} ({self.status})"
+
+
 class Rating(models.Model):
     post = models.ForeignKey(Post, on_delete=models.CASCADE, related_name="ratings")
     provider = models.ForeignKey(
