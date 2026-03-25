@@ -169,6 +169,7 @@ export default function CreatePost() {
   }
 
   const hasSelectedCategories = selectedCategories.length > 0
+  const showCategoryDescriptions = selectedCategories.length > 1
   const showExpertiseSection = hasSelectedCategories && selectedCategories.includes('Expertise')
   const showServicesSection = hasSelectedCategories && selectedCategories.includes('Services')
   const showProductsSection = hasSelectedCategories && selectedCategories.includes('Product')
@@ -286,6 +287,7 @@ export default function CreatePost() {
               value={post.description}
               onChange={handleChange}
               onFocus={() => setShowCategoryMenu(false)}
+              placeholder="Enter your Post Description"
               rows={3}
               className={profileLikeInputClass}
             />
@@ -510,7 +512,7 @@ export default function CreatePost() {
             </button>
           </div>
           {services.map((row, index) => (
-            <div key={`service-${index}`} className="grid gap-4 lg:grid-cols-4">
+            <div key={`service-${index}`} className={`grid gap-4 ${showCategoryDescriptions ? 'lg:grid-cols-4' : 'lg:grid-cols-3'}`}>
               <div>
                 <label className="text-xs font-semibold text-black">Service Name</label>
                 <input
@@ -526,22 +528,24 @@ export default function CreatePost() {
                   className={profileLikeInputClass}
                 />
               </div>
-              <div>
-                <label className="text-xs font-semibold text-black">Service Description</label>
-                <textarea
-                  placeholder="Enter service description"
-                  value={row.description}
-                  onChange={(event) =>
-                    setServices((prev) =>
-                      prev.map((item, i) =>
-                        i === index ? { ...item, description: event.target.value } : item,
-                      ),
-                    )
-                  }
-                  rows={3}
-                  className={profileLikeInputClass}
-                />
-              </div>
+              {showCategoryDescriptions && (
+                <div>
+                  <label className="text-xs font-semibold text-black">Service Description</label>
+                  <textarea
+                    placeholder="Enter service description"
+                    value={row.description}
+                    onChange={(event) =>
+                      setServices((prev) =>
+                        prev.map((item, i) =>
+                          i === index ? { ...item, description: event.target.value } : item,
+                        ),
+                      )
+                    }
+                    rows={3}
+                    className={profileLikeInputClass}
+                  />
+                </div>
+              )}
               <div>
                 <label className="text-xs font-semibold text-black">{isDemand ? 'Service Duration Needed' : 'Service Duration'}</label>
                 <select
@@ -608,7 +612,10 @@ export default function CreatePost() {
             </button>
           </div>
           {products.map((row, index) => (
-            <div key={`product-${index}`} className={`grid gap-4 ${isDemand ? 'lg:grid-cols-4' : 'lg:grid-cols-5'}`}>
+            <div
+              key={`product-${index}`}
+              className={`grid gap-4 ${isDemand ? (showCategoryDescriptions ? 'lg:grid-cols-4' : 'lg:grid-cols-3') : (showCategoryDescriptions ? 'lg:grid-cols-5' : 'lg:grid-cols-4')}`}
+            >
               <div>
                 <label className="text-xs font-semibold text-black">Product Name</label>
                 <input
@@ -624,25 +631,27 @@ export default function CreatePost() {
                   className={profileLikeInputClass}
                 />
               </div>
-              <div>
-                <label className="text-xs font-semibold text-black">Product Description</label>
-                <textarea
-                  placeholder="Enter product description"
-                  value={row.description}
-                  onChange={(event) =>
-                    setProducts((prev) =>
-                      prev.map((item, i) =>
-                        i === index ? { ...item, description: event.target.value } : item,
-                      ),
-                    )
-                  }
-                  rows={3}
-                  className={profileLikeInputClass}
-                />
-              </div>
+              {showCategoryDescriptions && (
+                <div>
+                  <label className="text-xs font-semibold text-black">Product Description</label>
+                  <textarea
+                    placeholder="Enter product description"
+                    value={row.description}
+                    onChange={(event) =>
+                      setProducts((prev) =>
+                        prev.map((item, i) =>
+                          i === index ? { ...item, description: event.target.value } : item,
+                        ),
+                      )
+                    }
+                    rows={3}
+                    className={profileLikeInputClass}
+                  />
+                </div>
+              )}
               {!isDemand && (
                 <div>
-                  <label className="text-xs font-semibold text-black">Quantity</label>
+                  <label className="text-xs font-semibold text-black">Unit Type</label>
                   <input
                     placeholder="e.g., Kg, Liters, Pieces"
                     value={row.unit}
@@ -656,11 +665,11 @@ export default function CreatePost() {
                 </div>
               )}
               <div>
-                <label className="text-xs font-semibold text-black">{isDemand ? 'Your Budget (BDT)' : 'Cost per Quantity'}</label>
+                <label className="text-xs font-semibold text-black">{isDemand ? 'Your Budget (BDT)' : 'Cost per Unit'}</label>
                 <input
                   type="text"
                   inputMode="decimal"
-                  placeholder={isDemand ? 'Enter your budget (BDT)' : 'Enter cost per quantity'}
+                  placeholder={isDemand ? 'Enter your budget (BDT)' : 'Enter cost per unit'}
                   value={row.cost_per_unit}
                   onChange={(event) =>
                     setProducts((prev) =>
