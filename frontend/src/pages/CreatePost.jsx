@@ -168,10 +168,10 @@ export default function CreatePost() {
     }
   }
 
-  const showAllSections = selectedCategories.length === 0
-  const showExpertiseSection = showAllSections || selectedCategories.includes('Expertise')
-  const showServicesSection = showAllSections || selectedCategories.includes('Services')
-  const showProductsSection = showAllSections || selectedCategories.includes('Product')
+  const hasSelectedCategories = selectedCategories.length > 0
+  const showExpertiseSection = hasSelectedCategories && selectedCategories.includes('Expertise')
+  const showServicesSection = hasSelectedCategories && selectedCategories.includes('Services')
+  const showProductsSection = hasSelectedCategories && selectedCategories.includes('Product')
   const isDemand = post.post_type === 'Demand'
   const profileLikeInputClass =
     'mt-1.5 w-full rounded-xl border border-violet-200 bg-gradient-to-br from-white/85 to-violet-50/70 px-3 py-2.5 text-sm shadow-sm transition placeholder:text-slate-400 focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-200'
@@ -364,6 +364,12 @@ export default function CreatePost() {
             />
           </div>
         </div>
+
+        {!hasSelectedCategories && (
+          <p className="rounded-xl border border-violet-200/80 bg-white/70 px-3 py-2 text-sm text-violet-800">
+            Select one or more post categories to start adding rows.
+          </p>
+        )}
 
         {showExpertiseSection && (
         <div className="space-y-4">
