@@ -241,17 +241,13 @@ export default function PostCard({
         )}
       </div>
 
-      {postImageSrc ? (
+      {postImageSrc && (
         <div className="mx-auto w-fit max-w-full rounded-2xl border border-slate-200/70 bg-transparent p-2">
           <img
             src={postImageSrc}
             alt={post.post_name}
             className="block max-h-[320px] max-w-full rounded-2xl object-contain"
           />
-        </div>
-      ) : (
-        <div className="flex h-40 w-full items-center justify-center rounded-2xl border border-dashed border-slate-300/80 bg-transparent text-sm text-slate-400">
-          No image provided
         </div>
       )}
 
@@ -305,7 +301,7 @@ export default function PostCard({
                 <div className="space-y-2">
                   <p className="text-sm font-semibold text-slate-600 dark:text-slate-300">Expertise</p>
                   {expertiseRows.length ? (
-                    <ExpertiseTable expertises={expertiseRows} />
+                    <ExpertiseTable expertises={expertiseRows} postType={post.post_type} />
                   ) : (
                     <p className="text-sm text-slate-400">No expertise detail listed.</p>
                   )}
@@ -316,7 +312,7 @@ export default function PostCard({
                 <div className="space-y-2">
                   <p className="text-sm font-semibold text-slate-600 dark:text-slate-300">Services</p>
                   {serviceRows.length ? (
-                    <ServiceTable services={serviceRows} />
+                    <ServiceTable services={serviceRows} postType={post.post_type} />
                   ) : (
                     <p className="text-sm text-slate-400">No services detail listed.</p>
                   )}

@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react'
 
-export default function ExpertiseTable({ expertises = [] }) {
+export default function ExpertiseTable({ expertises = [], postType = 'Supply' }) {
   const [sortKey, setSortKey] = useState('name')
   const [sortDir, setSortDir] = useState('asc')
+  const isDemand = postType === 'Demand'
 
   const sorted = useMemo(() => {
     const copy = [...expertises]
@@ -39,27 +40,27 @@ export default function ExpertiseTable({ expertises = [] }) {
           <tr>
             <th className="px-3 py-2 whitespace-nowrap">
               <button type="button" onClick={() => handleSort('name')}>
-                Expertise Name
+                {isDemand ? 'Expertise Name' : 'Skill / Expertise Name'}
               </button>
             </th>
             <th className="px-3 py-2 whitespace-nowrap">
               <button type="button" onClick={() => handleSort('experience')}>
-                Experience
+                {isDemand ? 'Preferred Experience' : 'Experience'}
               </button>
             </th>
             <th className="px-3 py-2 whitespace-nowrap">
               <button type="button" onClick={() => handleSort('unit')}>
-                Work Duration
+                {isDemand ? 'Work Duration Needed' : 'Work Type'}
               </button>
             </th>
             <th className="px-3 py-2 whitespace-nowrap">
               <button type="button" onClick={() => handleSort('cost')}>
-                Charge ($)
+                {isDemand ? 'Your Budget (BDT)' : 'Charge (BDT)'}
               </button>
             </th>
             <th className="px-3 py-2 whitespace-nowrap">
               <button type="button" onClick={() => handleSort('available_person')}>
-                Available Person
+                {isDemand ? 'Required Person' : 'Available Person'}
               </button>
             </th>
           </tr>
@@ -75,7 +76,7 @@ export default function ExpertiseTable({ expertises = [] }) {
               <td className="px-3 py-2 font-medium whitespace-nowrap">{expertise.name}</td>
               <td className="px-3 py-2 whitespace-nowrap">{expertise.experience}</td>
               <td className="px-3 py-2 whitespace-nowrap">{expertise.unit}</td>
-              <td className="px-3 py-2 whitespace-nowrap">${expertise.cost}</td>
+              <td className="px-3 py-2 whitespace-nowrap">{expertise.cost}</td>
               <td className="px-3 py-2 whitespace-nowrap">{expertise.available_person}</td>
             </tr>
           ))}
