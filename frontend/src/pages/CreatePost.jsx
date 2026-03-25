@@ -3,6 +3,23 @@ import { useNavigate } from 'react-router-dom'
 import api from '../api/client'
 
 const CATEGORY_OPTIONS = ['Expertise', 'Services', 'Product']
+const POST_TYPE_OPTIONS = [
+  { value: 'Supply', label: 'Sell / Offer Something (Available)' },
+  { value: 'Demand', label: 'Ask / Request Something (Demand)' },
+]
+const COMMON_PRODUCT_UNITS = [
+  'piece',
+  'kg',
+  'gram',
+  'liter',
+  'ml',
+  'dozen',
+  'pack',
+  'bag',
+  'box',
+  'meter',
+  'feet',
+]
 
 const initialPost = {
   post_type: 'Supply',
@@ -17,9 +34,11 @@ const initialPost = {
 export default function CreatePost() {
   const navigate = useNavigate()
   const imageInputRef = useRef(null)
+  const postTypeMenuRef = useRef(null)
   const categoryMenuRef = useRef(null)
   const [post, setPost] = useState(initialPost)
   const [selectedCategories, setSelectedCategories] = useState([])
+  const [showPostTypeMenu, setShowPostTypeMenu] = useState(false)
   const [showCategoryMenu, setShowCategoryMenu] = useState(false)
   const [imageFile, setImageFile] = useState(null)
   const [previewUrl, setPreviewUrl] = useState(null)
@@ -41,19 +60,22 @@ export default function CreatePost() {
   // Handle click outside dropdown to close it
   useEffect(() => {
     const handleClickOutside = (event) => {
+      if (postTypeMenuRef.current && !postTypeMenuRef.current.contains(event.target)) {
+        setShowPostTypeMenu(false)
+      }
       if (categoryMenuRef.current && !categoryMenuRef.current.contains(event.target)) {
         setShowCategoryMenu(false)
       }
     }
 
-    if (showCategoryMenu) {
+    if (showPostTypeMenu || showCategoryMenu) {
       document.addEventListener('mousedown', handleClickOutside)
     }
 
     return () => {
       document.removeEventListener('mousedown', handleClickOutside)
     }
-  }, [showCategoryMenu])
+  }, [showPostTypeMenu, showCategoryMenu])
 
   useEffect(() => {
     if (imageFile) {
@@ -71,7 +93,13 @@ export default function CreatePost() {
     const { name, value } = event.target
     setPost((prev) => ({ ...prev, [name]: value }))
     // Close dropdown when interacting with other form fields
+    setShowPostTypeMenu(false)
     setShowCategoryMenu(false)
+  }
+
+  const handlePostTypeSelect = (value) => {
+    setPost((prev) => ({ ...prev, post_type: value }))
+    setShowPostTypeMenu(false)
   }
 
   const toggleCategory = (category) => {
@@ -172,9 +200,13 @@ export default function CreatePost() {
   const showExpertiseSection = hasSelectedCategories && selectedCategories.includes('Expertise')
   const showServicesSection = hasSelectedCategories && selectedCategories.includes('Services')
   const showProductsSection = hasSelectedCategories && selectedCategories.includes('Product')
+  const showServiceDescriptionField = showServicesSection && (showExpertiseSection || showProductsSection)
+  const showProductDescriptionField = showProductsSection && (showExpertiseSection || showServicesSection)
   const isDemand = post.post_type === 'Demand'
   const profileLikeInputClass =
     'mt-1.5 w-full rounded-xl border border-violet-200 bg-gradient-to-br from-white/85 to-violet-50/70 px-3 py-2.5 text-sm shadow-sm transition placeholder:text-slate-400 focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-200'
+  const profileLikeSelectClass =
+    `${profileLikeInputClass} cursor-pointer focus:bg-gradient-to-r focus:from-violet-100 focus:to-fuchsia-100`
   const primaryButtonClass =
     'inline-flex items-center justify-center rounded-xl bg-gradient-to-r from-violet-600 to-fuchsia-600 px-4 py-2 text-sm font-semibold text-white shadow-md transition hover:from-violet-700 hover:to-fuchsia-700 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50'
   const addRowButtonClass =
@@ -216,16 +248,42 @@ export default function CreatePost() {
         <div className="grid gap-4 lg:grid-cols-2">
           <div>
             <label className="text-xs font-semibold text-black">Post Type</label>
-            <select
-              name="post_type"
-              value={post.post_type}
-              onChange={handleChange}
-              onFocus={() => setShowCategoryMenu(false)}
-              className={profileLikeInputClass}
-            >
-              <option value="Supply">Sell / Offer Something (Available)</option>
-              <option value="Demand">Ask / Request Something (Demand)</option>
-            </select>
+            <div className="relative mt-1" ref={postTypeMenuRef}>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowPostTypeMenu((prev) => !prev)
+                  setShowCategoryMenu(false)
+                }}
+                className={`${profileLikeInputClass} flex items-center justify-between text-left`}
+              >
+                <span className="text-slate-900">
+                  {POST_TYPE_OPTIONS.find((option) => option.value === post.post_type)?.label || 'Select post type'}
+                </span>
+                <span className="text-slate-500">▾</span>
+              </button>
+
+              {showPostTypeMenu && (
+                <div className="absolute z-20 mt-1 w-full overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg">
+                  {POST_TYPE_OPTIONS.map((option) => {
+                    const checked = post.post_type === option.value
+                    return (
+                      <button
+                        key={option.value}
+                        type="button"
+                        onClick={() => handlePostTypeSelect(option.value)}
+                        className="flex w-full items-center justify-between px-3 py-2 text-left text-sm transition-colors hover:bg-violet-50/60 first:rounded-t-xl last:rounded-b-xl"
+                      >
+                        <span>{option.label}</span>
+                        <span className={`text-base font-bold ${checked ? 'text-blue-600' : 'text-slate-300'}`}>
+                          {checked ? '✓' : '○'}
+                        </span>
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
           </div>
           <div>
             <label className="text-xs font-semibold text-black">Post Categories</label>
@@ -242,13 +300,13 @@ export default function CreatePost() {
               </button>
 
               {showCategoryMenu && (
-                <div className="absolute z-20 mt-1 w-full rounded-xl border border-slate-200 bg-white shadow-lg">
+                <div className="absolute z-20 mt-1 w-full overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg">
                   {CATEGORY_OPTIONS.map((category) => {
                     const checked = selectedCategories.includes(category)
                     return (
                       <label
                         key={category}
-                        className="flex cursor-pointer items-center justify-between px-3 py-2 text-sm hover:bg-slate-50"
+                        className="flex cursor-pointer items-center justify-between px-3 py-2 text-sm transition-colors hover:bg-violet-50/60 first:rounded-t-xl last:rounded-b-xl"
                       >
                         <span>{category}</span>
                         <span className={`text-base font-bold ${checked ? 'text-blue-600' : 'text-slate-300'}`}>
@@ -434,9 +492,15 @@ export default function CreatePost() {
                       ),
                     )
                   }
-                  className={profileLikeInputClass}
+                  className={profileLikeSelectClass}
                 >
-                  <option value="">Select duration</option>
+                  <option
+                    value=""
+                    className="bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white"
+                    style={{ backgroundColor: '#7c3aed', color: '#ffffff' }}
+                  >
+                    Select duration
+                  </option>
                   <option value="hourly">Hourly</option>
                   <option value="daily">Daily</option>
                   <option value="monthly">Monthly</option>
@@ -510,7 +574,10 @@ export default function CreatePost() {
             </button>
           </div>
           {services.map((row, index) => (
-            <div key={`service-${index}`} className="grid gap-4 lg:grid-cols-4">
+            <div
+              key={`service-${index}`}
+              className={`grid gap-4 ${showServiceDescriptionField ? 'lg:grid-cols-4' : 'lg:grid-cols-3'}`}
+            >
               <div>
                 <label className="text-xs font-semibold text-black">Service Name</label>
                 <input
@@ -526,22 +593,24 @@ export default function CreatePost() {
                   className={profileLikeInputClass}
                 />
               </div>
-              <div>
-                <label className="text-xs font-semibold text-black">Service Description</label>
-                <textarea
-                  placeholder="Enter service description"
-                  value={row.description}
-                  onChange={(event) =>
-                    setServices((prev) =>
-                      prev.map((item, i) =>
-                        i === index ? { ...item, description: event.target.value } : item,
-                      ),
-                    )
-                  }
-                  rows={3}
-                  className={profileLikeInputClass}
-                />
-              </div>
+              {showServiceDescriptionField && (
+                <div>
+                  <label className="text-xs font-semibold text-black">Specific Service Description</label>
+                  <textarea
+                    placeholder="Enter specific service description"
+                    value={row.description}
+                    onChange={(event) =>
+                      setServices((prev) =>
+                        prev.map((item, i) =>
+                          i === index ? { ...item, description: event.target.value } : item,
+                        ),
+                      )
+                    }
+                    rows={3}
+                    className={profileLikeInputClass}
+                  />
+                </div>
+              )}
               <div>
                 <label className="text-xs font-semibold text-black">{isDemand ? 'Service Duration Needed' : 'Service Duration'}</label>
                 <select
@@ -551,9 +620,15 @@ export default function CreatePost() {
                       prev.map((item, i) => (i === index ? { ...item, unit: event.target.value } : item)),
                     )
                   }
-                  className={profileLikeInputClass}
+                  className={profileLikeSelectClass}
                 >
-                  <option value="">Select duration</option>
+                  <option
+                    value=""
+                    className="bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white"
+                    style={{ backgroundColor: '#7c3aed', color: '#ffffff' }}
+                  >
+                    Select duration
+                  </option>
                   <option value="hourly">Hourly</option>
                   <option value="daily">Daily</option>
                   <option value="monthly">Monthly</option>
@@ -608,7 +683,16 @@ export default function CreatePost() {
             </button>
           </div>
           {products.map((row, index) => (
-            <div key={`product-${index}`} className={`grid gap-4 ${isDemand ? 'lg:grid-cols-4' : 'lg:grid-cols-5'}`}>
+            <div
+              key={`product-${index}`}
+              className={`grid gap-4 ${isDemand
+                ? showProductDescriptionField
+                  ? 'lg:grid-cols-4'
+                  : 'lg:grid-cols-3'
+                : showProductDescriptionField
+                  ? 'lg:grid-cols-5'
+                  : 'lg:grid-cols-4'}`}
+            >
               <div>
                 <label className="text-xs font-semibold text-black">Product Name</label>
                 <input
@@ -624,35 +708,49 @@ export default function CreatePost() {
                   className={profileLikeInputClass}
                 />
               </div>
-              <div>
-                <label className="text-xs font-semibold text-black">Product Description</label>
-                <textarea
-                  placeholder="Enter product description"
-                  value={row.description}
-                  onChange={(event) =>
-                    setProducts((prev) =>
-                      prev.map((item, i) =>
-                        i === index ? { ...item, description: event.target.value } : item,
-                      ),
-                    )
-                  }
-                  rows={3}
-                  className={profileLikeInputClass}
-                />
-              </div>
+              {showProductDescriptionField && (
+                <div>
+                  <label className="text-xs font-semibold text-black">Specific Product Description</label>
+                  <textarea
+                    placeholder="Enter specific product description"
+                    value={row.description}
+                    onChange={(event) =>
+                      setProducts((prev) =>
+                        prev.map((item, i) =>
+                          i === index ? { ...item, description: event.target.value } : item,
+                        ),
+                      )
+                    }
+                    rows={3}
+                    className={profileLikeInputClass}
+                  />
+                </div>
+              )}
               {!isDemand && (
                 <div>
-                  <label className="text-xs font-semibold text-black">Quantity</label>
-                  <input
-                    placeholder="e.g., Kg, Liters, Pieces"
+                  <label className="text-xs font-semibold text-black">Unit</label>
+                  <select
                     value={row.unit}
                     onChange={(event) =>
                       setProducts((prev) =>
                         prev.map((item, i) => (i === index ? { ...item, unit: event.target.value } : item)),
                       )
                     }
-                    className={profileLikeInputClass}
-                  />
+                    className={profileLikeSelectClass}
+                  >
+                    <option
+                      value=""
+                      className="bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white"
+                      style={{ backgroundColor: '#7c3aed', color: '#ffffff' }}
+                    >
+                      Select unit
+                    </option>
+                    {COMMON_PRODUCT_UNITS.map((unitOption) => (
+                      <option key={unitOption} value={unitOption}>
+                        {unitOption}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               )}
               <div>
