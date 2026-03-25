@@ -6,7 +6,6 @@ import PostCard from '../components/PostCard'
 import useAuth from '../context/useAuth'
 import useCart from '../context/useCart'
 
-const LOCATION_RADIUS_KM = 15
 const RADIUS_OPTIONS_KM = [5, 10, 15, 25, 50]
 
 const toCoordinateOrNull = (value) => {
@@ -68,7 +67,7 @@ export default function HomeFeed() {
     location: '',
     latitude: '',
     longitude: '',
-    radiusKm: String(LOCATION_RADIUS_KM),
+    radiusKm: '',
     minCost: '',
     maxCost: '',
     rating: '',
@@ -135,18 +134,18 @@ export default function HomeFeed() {
         if (!active) return
         setPosts(postRes.data)
 
-        const [skillRes, expertiseRes, productRes, ratingRes] = await Promise.all([
-          api.get('/skills/'),
-          api.get('/expertises/'),
-          api.get('/products/'),
-          api.get('/ratings/'),
+        const detailResponses = await Promise.allSettled([
+          api.get('/skills/', { skipAuthRedirect: true }),
+          api.get('/expertises/', { skipAuthRedirect: true }),
+          api.get('/products/', { skipAuthRedirect: true }),
+          api.get('/ratings/', { skipAuthRedirect: true }),
         ])
 
         if (!active) return
-        setSkills(skillRes.data)
-        setExpertises(expertiseRes.data)
-        setProducts(productRes.data)
-        setRatings(ratingRes.data)
+        setSkills(detailResponses[0].status === 'fulfilled' ? detailResponses[0].value.data : [])
+        setExpertises(detailResponses[1].status === 'fulfilled' ? detailResponses[1].value.data : [])
+        setProducts(detailResponses[2].status === 'fulfilled' ? detailResponses[2].value.data : [])
+        setRatings(detailResponses[3].status === 'fulfilled' ? detailResponses[3].value.data : [])
 
       } catch (error) {
         console.error(error)
@@ -421,6 +420,11 @@ export default function HomeFeed() {
   }
 
   const handleAddToCart = (post) => {
+    if (!isAuthenticated) {
+      navigate('/login')
+      return
+    }
+
     const added = addToCart(post, {
       minCost: costSummaryByPost[post.id]?.min || 0,
     })
