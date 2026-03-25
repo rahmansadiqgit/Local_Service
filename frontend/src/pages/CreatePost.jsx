@@ -581,7 +581,7 @@ export default function CreatePost() {
               <div>
                 <label className="text-xs font-semibold text-black">Service Name</label>
                 <input
-                  placeholder="Enter service Name(e.g., Plumbing, Tutoring)"
+                  placeholder="e.g., Plumbing, Tutoring"
                   value={row.service_name}
                   onChange={(event) =>
                     setServices((prev) =>
@@ -696,7 +696,7 @@ export default function CreatePost() {
               <div>
                 <label className="text-xs font-semibold text-black">Product Name</label>
                 <input
-                  placeholder="Enter product Name (e.g., Laptop, Book)"
+                  placeholder="e.g., Laptop, Book"
                   value={row.product_name}
                   onChange={(event) =>
                     setProducts((prev) =>
@@ -754,7 +754,7 @@ export default function CreatePost() {
                 </div>
               )}
               <div>
-                <label className="text-xs font-semibold text-black">{isDemand ? 'Your Budget (BDT)' : 'Cost per Quantity'}</label>
+                <label className="text-xs font-semibold text-black">{isDemand ? 'Your Budget (BDT)' : 'Cost per Unit'}</label>
                 <input
                   type="text"
                   inputMode="decimal"
