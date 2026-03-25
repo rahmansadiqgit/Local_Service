@@ -3,6 +3,19 @@ import { useNavigate } from 'react-router-dom'
 import api from '../api/client'
 
 const CATEGORY_OPTIONS = ['Expertise', 'Services', 'Product']
+const COMMON_PRODUCT_UNITS = [
+  'piece',
+  'kg',
+  'gram',
+  'liter',
+  'ml',
+  'dozen',
+  'pack',
+  'bag',
+  'box',
+  'meter',
+  'feet',
+]
 
 const initialPost = {
   post_type: 'Supply',
@@ -533,9 +546,9 @@ export default function CreatePost() {
               </div>
               {showServiceDescriptionField && (
                 <div>
-                  <label className="text-xs font-semibold text-black">Service Description</label>
+                  <label className="text-xs font-semibold text-black">Specific Service Description</label>
                   <textarea
-                    placeholder="Enter service description"
+                    placeholder="Enter specific service description"
                     value={row.description}
                     onChange={(event) =>
                       setServices((prev) =>
@@ -642,9 +655,9 @@ export default function CreatePost() {
               </div>
               {showProductDescriptionField && (
                 <div>
-                  <label className="text-xs font-semibold text-black">Product Description</label>
+                  <label className="text-xs font-semibold text-black">Specific Product Description</label>
                   <textarea
-                    placeholder="Enter product description"
+                    placeholder="Enter specific product description"
                     value={row.description}
                     onChange={(event) =>
                       setProducts((prev) =>
@@ -660,9 +673,8 @@ export default function CreatePost() {
               )}
               {!isDemand && (
                 <div>
-                  <label className="text-xs font-semibold text-black">Quantity</label>
-                  <input
-                    placeholder="e.g., Kg, Liters, Pieces"
+                  <label className="text-xs font-semibold text-black">Unit</label>
+                  <select
                     value={row.unit}
                     onChange={(event) =>
                       setProducts((prev) =>
@@ -670,7 +682,14 @@ export default function CreatePost() {
                       )
                     }
                     className={profileLikeInputClass}
-                  />
+                  >
+                    <option value="">Select unit</option>
+                    {COMMON_PRODUCT_UNITS.map((unitOption) => (
+                      <option key={unitOption} value={unitOption}>
+                        {unitOption}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               )}
               <div>
