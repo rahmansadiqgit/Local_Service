@@ -252,7 +252,7 @@ export default function HomeFeed() {
         const query = filters.search.toLowerCase()
 
         const haystack =
-          `${post.post_name} ${post.brand_company_name || ''} ${post.description || ''}`
+          `${post.post_name || ''} ${post.post_title || ''} ${post.brand_company_name || ''} ${post.description || ''}`
             .toLowerCase()
 
         if (!haystack.includes(query)) return false
