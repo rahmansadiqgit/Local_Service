@@ -175,6 +175,10 @@ export default function CreatePost() {
   const isDemand = post.post_type === 'Demand'
   const profileLikeInputClass =
     'mt-1.5 w-full rounded-xl border border-violet-200 bg-gradient-to-br from-white/85 to-violet-50/70 px-3 py-2.5 text-sm shadow-sm transition placeholder:text-slate-400 focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-200'
+  const primaryButtonClass =
+    'inline-flex items-center justify-center rounded-xl bg-gradient-to-r from-violet-600 to-fuchsia-600 px-4 py-2 text-sm font-semibold text-white shadow-md transition hover:from-violet-700 hover:to-fuchsia-700 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50'
+  const compactButtonClass =
+    'inline-flex items-center justify-center rounded-xl bg-gradient-to-r from-violet-600 to-fuchsia-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:from-violet-700 hover:to-fuchsia-700 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50'
 
   return (
     <div className="space-y-6">
@@ -199,7 +203,14 @@ export default function CreatePost() {
         </div>
       </div>
 
-      <form onSubmit={handleSubmit} className="card space-y-6">
+      <form
+        onSubmit={handleSubmit}
+        className="card space-y-6 rounded-2xl border border-violet-200/80 p-4 shadow-sm backdrop-blur-md"
+        style={{
+          backgroundColor: 'rgba(236, 225, 255, 0.56)',
+          backgroundImage: 'linear-gradient(145deg, rgba(225, 205, 255, 0.58), rgba(244, 230, 255, 0.54))',
+        }}
+      >
         <div className="grid gap-4 lg:grid-cols-2">
           <div>
             <label className="text-xs font-semibold text-black">Post Type</label>
@@ -302,7 +313,7 @@ export default function CreatePost() {
             <label className="text-xs font-semibold text-black">Image</label>
             <div className="mt-1 flex items-start gap-4">
               <div className="flex flex-col items-start gap-2">
-                <label className="inline-block cursor-pointer rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 transition">
+                <label className={primaryButtonClass}>
                   Choose File
                   <input
                     ref={imageInputRef}
@@ -324,7 +335,7 @@ export default function CreatePost() {
                           imageInputRef.current.value = ''
                         }
                       }}
-                      className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-slate-300 text-xs font-bold text-slate-600 hover:bg-slate-100"
+                      className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-gradient-to-r from-violet-600 to-fuchsia-600 text-xs font-bold text-white shadow-sm transition hover:from-violet-700 hover:to-fuchsia-700"
                     >
                       x
                     </button>
@@ -366,7 +377,7 @@ export default function CreatePost() {
                   { name: '', experience: '', unit: '', cost: '', available_person: 0 },
                 ])
               }
-              className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600"
+              className={compactButtonClass}
             >
               Add Row
             </button>
@@ -462,7 +473,7 @@ export default function CreatePost() {
                   <button
                     type="button"
                     onClick={() => setExpertises((prev) => prev.filter((_, i) => i !== index))}
-                    className="px-6 py-2 rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-700 active:scale-95 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className={primaryButtonClass}
                   >
                     Remove
                   </button>
@@ -485,7 +496,7 @@ export default function CreatePost() {
                   { service_name: '', description: '', unit: '', cost_per_unit: '' },
                 ])
               }
-              className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600"
+              className={compactButtonClass}
             >
               Add Row
             </button>
@@ -561,7 +572,7 @@ export default function CreatePost() {
                 <button
                   type="button"
                   onClick={() => setServices((prev) => prev.filter((_, i) => i !== index))}
-                  className="w-full px-6 py-2 rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-700 active:scale-95 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className={`${primaryButtonClass} w-full`}
                 >
                   Remove
                 </button>
@@ -583,7 +594,7 @@ export default function CreatePost() {
                   { product_name: '', description: '', unit: '', cost_per_unit: '', available_units: 0 },
                 ])
               }
-              className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600"
+              className={compactButtonClass}
             >
               Add Row
             </button>
@@ -673,7 +684,7 @@ export default function CreatePost() {
                   <button
                     type="button"
                     onClick={() => setProducts((prev) => prev.filter((_, i) => i !== index))}
-                    className="px-6 py-2 rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-700 active:scale-95 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className={primaryButtonClass}
                   >
                     Remove
                   </button>
@@ -688,7 +699,7 @@ export default function CreatePost() {
           <button
             type="submit"
             disabled={saving}
-            className="px-6 py-2 rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-700 active:scale-95 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="inline-flex items-center rounded-xl bg-gradient-to-r from-violet-600 to-fuchsia-600 px-6 py-2.5 text-sm font-semibold text-white shadow-md transition hover:from-violet-700 hover:to-fuchsia-700 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50"
           >
             {saving ? 'Publishing...' : 'Publish Post'}
           </button>
