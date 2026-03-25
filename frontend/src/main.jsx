@@ -4,6 +4,7 @@ import { BrowserRouter } from 'react-router-dom'
 import App from './App.jsx'
 import { AuthProvider } from './context/AuthContext'
 import { CartProvider } from './context/CartContext'
+import 'leaflet/dist/leaflet.css'
 import './index.css'
 
 createRoot(document.getElementById('root')).render(

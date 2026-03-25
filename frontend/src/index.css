@@ -84,3 +84,9 @@ button:not(.header-auth-btn):not(.settings-gear-btn):not(:disabled):focus-visibl
   box-shadow: 0 14px 30px rgba(91, 33, 182, 0.28);
   filter: saturate(1.05);
 }
+
+/* Leaflet tiles break if global img max-width rules apply. */
+.leaflet-container .leaflet-tile,
+.leaflet-container img {
+  max-width: none !important;
+}

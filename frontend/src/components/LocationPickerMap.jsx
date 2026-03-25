@@ -67,6 +67,31 @@ function MapRecenter({ position }) {
   return null
 }
 
+function MapInvalidateSize() {
+  const map = useMap()
+
+  useEffect(() => {
+    const invalidate = () => map.invalidateSize()
+
+    // Recalculate once immediately and once after layout settles.
+    const timeoutId = window.setTimeout(invalidate, 120)
+    invalidate()
+
+    const container = map.getContainer()
+    const resizeObserver = new ResizeObserver(() => {
+      invalidate()
+    })
+    resizeObserver.observe(container)
+
+    return () => {
+      window.clearTimeout(timeoutId)
+      resizeObserver.disconnect()
+    }
+  }, [map])
+
+  return null
+}
+
 export default function LocationPickerMap({
   latitude,
   longitude,
@@ -140,38 +165,39 @@ export default function LocationPickerMap({
           </div>
         ) : null}
 
-      <MapContainer
-        center={selectedPosition || BANGLADESH_CENTER}
-        zoom={selectedPosition ? 11 : DEFAULT_ZOOM}
-        minZoom={7}
-        maxZoom={18}
-        scrollWheelZoom
-        style={{ height: 230, width: '100%', zIndex: 0 }}
-        maxBounds={BANGLADESH_BOUNDS}
-        maxBoundsViscosity={0.7}
-      >
-        <TileLayer
-          attribution='&copy; OpenStreetMap contributors'
-          url='https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'
-        />
-        <MapClickHandler onPick={onPick} />
-        <MapRecenter position={selectedPosition} />
-
-        {selectedPosition && (
-          <Marker position={selectedPosition} icon={GOOGLE_STYLE_MARKER_ICON}>
-            <Popup>
-              <div className="text-xs font-semibold text-slate-700">{popupText}</div>
-            </Popup>
-          </Marker>
-        )}
-        {selectedPosition && Number.isFinite(radiusKm) && radiusKm > 0 && (
-          <Circle
-            center={selectedPosition}
-            radius={radiusKm * 1000}
-            pathOptions={{ color: '#7c3aed', fillColor: '#a78bfa', fillOpacity: 0.18 }}
+        <MapContainer
+          center={selectedPosition || BANGLADESH_CENTER}
+          zoom={selectedPosition ? 11 : DEFAULT_ZOOM}
+          minZoom={7}
+          maxZoom={18}
+          scrollWheelZoom
+          style={{ height: 230, width: '100%', zIndex: 0 }}
+          maxBounds={BANGLADESH_BOUNDS}
+          maxBoundsViscosity={0.7}
+        >
+          <MapInvalidateSize />
+          <TileLayer
+            attribution='&copy; OpenStreetMap contributors'
+            url='https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'
           />
-        )}
-      </MapContainer>
+          <MapClickHandler onPick={onPick} />
+          <MapRecenter position={selectedPosition} />
+
+          {selectedPosition && (
+            <Marker position={selectedPosition} icon={GOOGLE_STYLE_MARKER_ICON}>
+              <Popup>
+                <div className="text-xs font-semibold text-slate-700">{popupText}</div>
+              </Popup>
+            </Marker>
+          )}
+          {selectedPosition && Number.isFinite(radiusKm) && radiusKm > 0 && (
+            <Circle
+              center={selectedPosition}
+              radius={radiusKm * 1000}
+              pathOptions={{ color: '#7c3aed', fillColor: '#a78bfa', fillOpacity: 0.18 }}
+            />
+          )}
+        </MapContainer>
       </div>
     </div>
   )
