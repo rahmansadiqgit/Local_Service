@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react'
 
-export default function ServiceTable({ services = [] }) {
+export default function ServiceTable({ services = [], postType = 'Supply' }) {
   const [sortKey, setSortKey] = useState('service_name')
   const [sortDir, setSortDir] = useState('asc')
+  const isDemand = postType === 'Demand'
 
   const sorted = useMemo(() => {
     const copy = [...services]
@@ -44,17 +45,17 @@ export default function ServiceTable({ services = [] }) {
             </th>
             <th className="px-3 py-2 whitespace-nowrap">
               <button type="button" onClick={() => handleSort('description')}>
-                Description
+                Service Description
               </button>
             </th>
             <th className="px-3 py-2 whitespace-nowrap">
               <button type="button" onClick={() => handleSort('unit')}>
-                Service Duration
+                {isDemand ? 'Service Duration Needed' : 'Service Duration'}
               </button>
             </th>
             <th className="px-3 py-2 whitespace-nowrap">
               <button type="button" onClick={() => handleSort('cost_per_unit')}>
-                Service Cost
+                {isDemand ? 'Your Budget (BDT)' : 'Service Cost'}
               </button>
             </th>
           </tr>
@@ -66,7 +67,7 @@ export default function ServiceTable({ services = [] }) {
               <td className="px-3 py-2 text-slate-900 dark:text-slate-100 whitespace-pre-line break-words">{row.description || '-'}</td>
               <td className="px-3 py-2 text-slate-900 dark:text-slate-100 whitespace-nowrap">{row.unit || '-'}</td>
               <td className="px-3 py-2 text-slate-900 dark:text-slate-100 whitespace-nowrap">
-                ${!isNaN(parseFloat(row.cost_per_unit)) ? parseFloat(row.cost_per_unit).toFixed(2) : '0.00'}
+                {!isNaN(parseFloat(row.cost_per_unit)) ? parseFloat(row.cost_per_unit).toFixed(2) : '0.00'}
               </td>
             </tr>
           ))}

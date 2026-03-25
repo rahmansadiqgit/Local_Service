@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react'
 export default function ProductTable({ products = [], postType = 'Supply' }) {
   const [sortKey, setSortKey] = useState('product_name')
   const [sortDir, setSortDir] = useState('asc')
+  const isDemand = postType === 'Demand'
 
   const sorted = useMemo(() => {
     const copy = [...products]
@@ -43,19 +44,21 @@ export default function ProductTable({ products = [], postType = 'Supply' }) {
               </button>
             </th>
             <th className="px-3 py-2 whitespace-nowrap">
-              <button type="button" onClick={() => handleSort('description')}>Description</button>
+              <button type="button" onClick={() => handleSort('description')}>Product Description</button>
             </th>
-            <th className="px-3 py-2 whitespace-nowrap">
-              <button type="button" onClick={() => handleSort('unit')}>Unit</button>
-            </th>
+            {!isDemand && (
+              <th className="px-3 py-2 whitespace-nowrap">
+                <button type="button" onClick={() => handleSort('unit')}>Quantity</button>
+              </th>
+            )}
             <th className="px-3 py-2 whitespace-nowrap">
               <button type="button" onClick={() => handleSort('cost_per_unit')}>
-                Cost per Unit
+                {isDemand ? 'Your Budget (BDT)' : 'Cost per Quantity'}
               </button>
             </th>
             <th className="px-3 py-2 whitespace-nowrap">
               <button type="button" onClick={() => handleSort('available_units')}>
-                {postType === 'Demand' ? 'Required Units' : 'Available Units'}
+                {isDemand ? 'Required Quantity' : 'Available Quantity'}
               </button>
             </th>
           </tr>
@@ -70,8 +73,8 @@ export default function ProductTable({ products = [], postType = 'Supply' }) {
             >
               <td className="px-3 py-2 font-medium whitespace-nowrap">{product.product_name}</td>
               <td className="px-3 py-2 whitespace-pre-line break-words">{product.description || '-'}</td>
-              <td className="px-3 py-2 whitespace-nowrap">{product.unit}</td>
-              <td className="px-3 py-2 whitespace-nowrap">${product.cost_per_unit}</td>
+              {!isDemand && <td className="px-3 py-2 whitespace-nowrap">{product.unit}</td>}
+              <td className="px-3 py-2 whitespace-nowrap">{product.cost_per_unit}</td>
               <td className="px-3 py-2 whitespace-nowrap">{product.available_units}</td>
             </tr>
           ))}
