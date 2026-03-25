@@ -352,6 +352,7 @@ export default function CreatePost() {
       setServices([{ service_name: '', description: '', unit: '', cost_per_unit: '' }])
       setProducts([{ product_name: '', description: '', unit: '', cost_per_unit: '', available_units: 0 }])
       window.dispatchEvent(new Event('post-created'))
+      window.dispatchEvent(new Event('localix:notifications-refresh'))
       navigate('/')
     } catch (error) {
       console.error(error)
