@@ -34,6 +34,17 @@ const distanceInKm = (lat1, lng1, lat2, lng2) => {
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
   return earthRadiusKm * c
 }
+
+const locationTextMatches = (postLocation, filterLocation) => {
+  const postText = String(postLocation || '').trim().toLowerCase()
+  const filterText = String(filterLocation || '').trim().toLowerCase()
+
+  if (!filterText) return true
+  if (!postText) return false
+
+  return postText.includes(filterText) || filterText.includes(postText)
+}
+
 export default function HomeFeed() {
 
   const navigate = useNavigate()
@@ -103,7 +114,6 @@ export default function HomeFeed() {
             ...prev,
             latitude: String(first.lat),
             longitude: String(first.lon),
-            location: first.display_name || prev.location,
           }
         })
       } catch (error) {
@@ -232,7 +242,7 @@ export default function HomeFeed() {
         const postLng = toCoordinateOrNull(post.longitude)
 
         if (postLat === null || postLng === null) {
-          return false
+          return locationTextMatches(post.location, filters.location)
         }
 
         if (activeRadiusKm !== null) {
