@@ -217,7 +217,7 @@ export default function HomeFeed() {
   }, [posts, productsByPost, skillsByPost])
 
   const filteredPosts = useMemo(() => {
-    const activeRadiusKm = Number(filters.radiusKm) || LOCATION_RADIUS_KM
+    const activeRadiusKm = toCoordinateOrNull(filters.radiusKm)
 
     return posts.filter((post) => {
 
@@ -235,9 +235,11 @@ export default function HomeFeed() {
           return false
         }
 
-        const distance = distanceInKm(filterLat, filterLng, postLat, postLng)
-        if (distance > activeRadiusKm) {
-          return false
+        if (activeRadiusKm !== null) {
+          const distance = distanceInKm(filterLat, filterLng, postLat, postLng)
+          if (distance > activeRadiusKm) {
+            return false
+          }
         }
       } else if (
         filters.location &&
@@ -519,7 +521,7 @@ export default function HomeFeed() {
           </div>
 
           <div className="relative grid gap-4 lg:grid-cols-6">
-            <div className="lg:col-span-2">
+            <div>
               <label className="text-[11px] font-semibold uppercase tracking-[0.14em] text-orange-900/90">Search</label>
               <input
                 name="search"
@@ -539,9 +541,26 @@ export default function HomeFeed() {
                 placeholder="Type city or pick from map"
                 className="mt-1.5 w-full rounded-xl border border-white/50 bg-white/45 px-3 py-2 text-sm text-slate-800 shadow-sm transition placeholder:text-slate-500 focus:border-orange-300 focus:outline-none focus:ring-2 focus:ring-orange-200/80"
               />
-              <p className="mt-1 text-[11px] text-slate-600">
-                {filterLocationLoading ? 'Resolving location...' : `Pick location from map for ${filters.radiusKm || LOCATION_RADIUS_KM}km search.`}
-              </p>
+              {filterLocationLoading && (
+                <p className="mt-1 text-[11px] text-slate-600">Resolving location...</p>
+              )}
+            </div>
+
+            <div>
+              <label className="text-[11px] font-semibold uppercase tracking-[0.14em] text-orange-900/90">Radius (km)</label>
+              <select
+                name="radiusKm"
+                value={filters.radiusKm}
+                onChange={handleFilterChange}
+                className="mt-1.5 w-full rounded-xl border border-white/50 bg-white/45 px-3 py-2 text-sm text-slate-800 shadow-sm transition focus:border-orange-300 focus:outline-none focus:ring-2 focus:ring-orange-200/80"
+              >
+                <option value="">No radius</option>
+                {RADIUS_OPTIONS_KM.map((km) => (
+                  <option key={km} value={String(km)}>
+                    {km} km
+                  </option>
+                ))}
+              </select>
             </div>
 
             <div>
@@ -583,28 +602,12 @@ export default function HomeFeed() {
               </select>
             </div>
 
-            <div>
-              <label className="text-[11px] font-semibold uppercase tracking-[0.14em] text-orange-900/90">Radius (km)</label>
-              <select
-                name="radiusKm"
-                value={filters.radiusKm}
-                onChange={handleFilterChange}
-                className="mt-1.5 w-full rounded-xl border border-white/50 bg-white/45 px-3 py-2 text-sm text-slate-800 shadow-sm transition focus:border-orange-300 focus:outline-none focus:ring-2 focus:ring-orange-200/80"
-              >
-                {RADIUS_OPTIONS_KM.map((km) => (
-                  <option key={km} value={String(km)}>
-                    {km} km
-                  </option>
-                ))}
-              </select>
-            </div>
-
             <div className="lg:col-span-6">
               <div className="mx-auto max-w-4xl">
                 <LocationPickerMap
                   latitude={filters.latitude}
                   longitude={filters.longitude}
-                  radiusKm={Number(filters.radiusKm) || LOCATION_RADIUS_KM}
+                  radiusKm={toCoordinateOrNull(filters.radiusKm)}
                   onPick={handleFilterLocationPick}
                   popupText="Confirm this search location?"
                 />
