@@ -172,6 +172,8 @@ export default function CreatePost() {
   const showExpertiseSection = hasSelectedCategories && selectedCategories.includes('Expertise')
   const showServicesSection = hasSelectedCategories && selectedCategories.includes('Services')
   const showProductsSection = hasSelectedCategories && selectedCategories.includes('Product')
+  const showServiceDescriptionField = showServicesSection && (showExpertiseSection || showProductsSection)
+  const showProductDescriptionField = showProductsSection && (showExpertiseSection || showServicesSection)
   const isDemand = post.post_type === 'Demand'
   const profileLikeInputClass =
     'mt-1.5 w-full rounded-xl border border-violet-200 bg-gradient-to-br from-white/85 to-violet-50/70 px-3 py-2.5 text-sm shadow-sm transition placeholder:text-slate-400 focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-200'
@@ -510,7 +512,10 @@ export default function CreatePost() {
             </button>
           </div>
           {services.map((row, index) => (
-            <div key={`service-${index}`} className="grid gap-4 lg:grid-cols-4">
+            <div
+              key={`service-${index}`}
+              className={`grid gap-4 ${showServiceDescriptionField ? 'lg:grid-cols-4' : 'lg:grid-cols-3'}`}
+            >
               <div>
                 <label className="text-xs font-semibold text-black">Service Name</label>
                 <input
@@ -526,22 +531,24 @@ export default function CreatePost() {
                   className={profileLikeInputClass}
                 />
               </div>
-              <div>
-                <label className="text-xs font-semibold text-black">Service Description</label>
-                <textarea
-                  placeholder="Enter service description"
-                  value={row.description}
-                  onChange={(event) =>
-                    setServices((prev) =>
-                      prev.map((item, i) =>
-                        i === index ? { ...item, description: event.target.value } : item,
-                      ),
-                    )
-                  }
-                  rows={3}
-                  className={profileLikeInputClass}
-                />
-              </div>
+              {showServiceDescriptionField && (
+                <div>
+                  <label className="text-xs font-semibold text-black">Service Description</label>
+                  <textarea
+                    placeholder="Enter service description"
+                    value={row.description}
+                    onChange={(event) =>
+                      setServices((prev) =>
+                        prev.map((item, i) =>
+                          i === index ? { ...item, description: event.target.value } : item,
+                        ),
+                      )
+                    }
+                    rows={3}
+                    className={profileLikeInputClass}
+                  />
+                </div>
+              )}
               <div>
                 <label className="text-xs font-semibold text-black">{isDemand ? 'Service Duration Needed' : 'Service Duration'}</label>
                 <select
@@ -608,7 +615,16 @@ export default function CreatePost() {
             </button>
           </div>
           {products.map((row, index) => (
-            <div key={`product-${index}`} className={`grid gap-4 ${isDemand ? 'lg:grid-cols-4' : 'lg:grid-cols-5'}`}>
+            <div
+              key={`product-${index}`}
+              className={`grid gap-4 ${isDemand
+                ? showProductDescriptionField
+                  ? 'lg:grid-cols-4'
+                  : 'lg:grid-cols-3'
+                : showProductDescriptionField
+                  ? 'lg:grid-cols-5'
+                  : 'lg:grid-cols-4'}`}
+            >
               <div>
                 <label className="text-xs font-semibold text-black">Product Name</label>
                 <input
@@ -624,22 +640,24 @@ export default function CreatePost() {
                   className={profileLikeInputClass}
                 />
               </div>
-              <div>
-                <label className="text-xs font-semibold text-black">Product Description</label>
-                <textarea
-                  placeholder="Enter product description"
-                  value={row.description}
-                  onChange={(event) =>
-                    setProducts((prev) =>
-                      prev.map((item, i) =>
-                        i === index ? { ...item, description: event.target.value } : item,
-                      ),
-                    )
-                  }
-                  rows={3}
-                  className={profileLikeInputClass}
-                />
-              </div>
+              {showProductDescriptionField && (
+                <div>
+                  <label className="text-xs font-semibold text-black">Product Description</label>
+                  <textarea
+                    placeholder="Enter product description"
+                    value={row.description}
+                    onChange={(event) =>
+                      setProducts((prev) =>
+                        prev.map((item, i) =>
+                          i === index ? { ...item, description: event.target.value } : item,
+                        ),
+                      )
+                    }
+                    rows={3}
+                    className={profileLikeInputClass}
+                  />
+                </div>
+              )}
               {!isDemand && (
                 <div>
                   <label className="text-xs font-semibold text-black">Quantity</label>
