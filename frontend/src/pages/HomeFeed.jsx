@@ -7,6 +7,7 @@ import useAuth from '../context/useAuth'
 import useCart from '../context/useCart'
 
 const LOCATION_RADIUS_KM = 15
+const RADIUS_OPTIONS_KM = [5, 10, 15, 25, 50]
 
 const toCoordinateOrNull = (value) => {
   if (value === null || value === undefined) return null
@@ -56,6 +57,7 @@ export default function HomeFeed() {
     location: '',
     latitude: '',
     longitude: '',
+    radiusKm: String(LOCATION_RADIUS_KM),
     minCost: '',
     maxCost: '',
     rating: '',
@@ -215,6 +217,8 @@ export default function HomeFeed() {
   }, [posts, productsByPost, skillsByPost])
 
   const filteredPosts = useMemo(() => {
+    const activeRadiusKm = Number(filters.radiusKm) || LOCATION_RADIUS_KM
+
     return posts.filter((post) => {
 
       if (filters.postType && post.post_type !== filters.postType) return false
@@ -232,7 +236,7 @@ export default function HomeFeed() {
         }
 
         const distance = distanceInKm(filterLat, filterLng, postLat, postLng)
-        if (distance > LOCATION_RADIUS_KM) {
+        if (distance > activeRadiusKm) {
           return false
         }
       } else if (
@@ -536,7 +540,7 @@ export default function HomeFeed() {
                 className="mt-1.5 w-full rounded-xl border border-white/50 bg-white/45 px-3 py-2 text-sm text-slate-800 shadow-sm transition placeholder:text-slate-500 focus:border-orange-300 focus:outline-none focus:ring-2 focus:ring-orange-200/80"
               />
               <p className="mt-1 text-[11px] text-slate-600">
-                {filterLocationLoading ? 'Resolving location...' : 'Pick location from map for 15km search.'}
+                {filterLocationLoading ? 'Resolving location...' : `Pick location from map for ${filters.radiusKm || LOCATION_RADIUS_KM}km search.`}
               </p>
             </div>
 
@@ -579,12 +583,28 @@ export default function HomeFeed() {
               </select>
             </div>
 
+            <div>
+              <label className="text-[11px] font-semibold uppercase tracking-[0.14em] text-orange-900/90">Radius (km)</label>
+              <select
+                name="radiusKm"
+                value={filters.radiusKm}
+                onChange={handleFilterChange}
+                className="mt-1.5 w-full rounded-xl border border-white/50 bg-white/45 px-3 py-2 text-sm text-slate-800 shadow-sm transition focus:border-orange-300 focus:outline-none focus:ring-2 focus:ring-orange-200/80"
+              >
+                {RADIUS_OPTIONS_KM.map((km) => (
+                  <option key={km} value={String(km)}>
+                    {km} km
+                  </option>
+                ))}
+              </select>
+            </div>
+
             <div className="lg:col-span-6">
               <div className="mx-auto max-w-4xl">
                 <LocationPickerMap
                   latitude={filters.latitude}
                   longitude={filters.longitude}
-                  radiusKm={LOCATION_RADIUS_KM}
+                  radiusKm={Number(filters.radiusKm) || LOCATION_RADIUS_KM}
                   onPick={handleFilterLocationPick}
                   popupText="Confirm this search location?"
                 />
