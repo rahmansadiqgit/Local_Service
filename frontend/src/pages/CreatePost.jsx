@@ -172,6 +172,7 @@ export default function CreatePost() {
   const showExpertiseSection = showAllSections || selectedCategories.includes('Expertise')
   const showServicesSection = showAllSections || selectedCategories.includes('Services')
   const showProductsSection = showAllSections || selectedCategories.includes('Product')
+  const isDemand = post.post_type === 'Demand'
   const profileLikeInputClass =
     'mt-1.5 w-full rounded-xl border border-violet-200 bg-gradient-to-br from-white/85 to-violet-50/70 px-3 py-2.5 text-sm shadow-sm transition placeholder:text-slate-400 focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-200'
 
@@ -373,9 +374,9 @@ export default function CreatePost() {
           {expertises.map((row, index) => (
             <div key={`expertise-${index}`} className="grid gap-4 lg:grid-cols-5">
               <div>
-                <label className="text-xs font-semibold text-black">Expertise Name</label>
+                <label className="text-xs font-semibold text-black">{isDemand ? 'Expertise Name' : 'Skill / Expertise Name'}</label>
                 <input
-                  placeholder="e.g., Electricians, Teachers"
+                  placeholder={isDemand ? 'e.g., Electricians, Teachers' : 'e.g., Electricians, Teachers'}
                   value={row.name}
                   onChange={(event) =>
                     setExpertises((prev) =>
@@ -388,10 +389,10 @@ export default function CreatePost() {
                 />
               </div>
               <div>
-                <label className="text-xs font-semibold text-black">Experience</label>
+                <label className="text-xs font-semibold text-black">{isDemand ? 'Preferred Experience' : 'Experience'}</label>
                 <input
                   type="text"
-                  placeholder="e.g., 6 years"
+                  placeholder={isDemand ? '(Optional) e.g., 6 years' : '(Optional) e.g., 6 years'}
                   value={row.experience}
                   onChange={(event) =>
                     setExpertises((prev) =>
@@ -404,9 +405,8 @@ export default function CreatePost() {
                 />
               </div>
               <div>
-                <label className="text-xs font-semibold text-black">Work Duration</label>
-                <input
-                  placeholder="e.g., hour, day"
+                <label className="text-xs font-semibold text-black">{isDemand ? 'Work Duration Needed' : 'Work Type'}</label>
+                <select
                   value={row.unit}
                   onChange={(event) =>
                     setExpertises((prev) =>
@@ -416,14 +416,19 @@ export default function CreatePost() {
                     )
                   }
                   className={profileLikeInputClass}
-                />
+                >
+                  <option value="">Select duration</option>
+                  <option value="hourly">Hourly</option>
+                  <option value="daily">Daily</option>
+                  <option value="monthly">Monthly</option>
+                </select>
               </div>
               <div>
-                <label className="text-xs font-semibold text-black">Charge ($)</label>
+                <label className="text-xs font-semibold text-black">{isDemand ? 'Your Budget (BDT)' : 'Charge (BDT)'}</label>
                 <input
                   type="text"
                   inputMode="decimal"
-                  placeholder="Enter charge amount ($)"
+                  placeholder={isDemand ? 'Enter your budget (BDT)' : 'Enter charge amount (BDT)'}
                   value={row.cost}
                   onChange={(event) =>
                     setExpertises((prev) =>
@@ -436,12 +441,12 @@ export default function CreatePost() {
                 />
               </div>
               <div>
-                <label className="text-xs font-semibold text-black">{post.post_type === 'Demand' ? 'Required Person' : 'Available Person'}</label>
+                <label className="text-xs font-semibold text-black">{isDemand ? 'Required Person' : 'Available Person'}</label>
                 <div className="flex gap-2">
                   <input
                     type="text"
                     inputMode="numeric"
-                    placeholder={post.post_type === 'Demand' ? 'Enter required persons' : 'Enter available persons'}
+                    placeholder={isDemand ? 'Enter required persons' : 'Enter available persons'}
                     value={row.available_person}
                     onChange={(event) =>
                       setExpertises((prev) =>
@@ -519,9 +524,8 @@ export default function CreatePost() {
                 />
               </div>
               <div>
-                <label className="text-xs font-semibold text-black">Service Duration</label>
-                <input
-                  placeholder="e.g., Hours, Days"
+                <label className="text-xs font-semibold text-black">{isDemand ? 'Service Duration Needed' : 'Service Duration'}</label>
+                <select
                   value={row.unit}
                   onChange={(event) =>
                     setServices((prev) =>
@@ -529,14 +533,19 @@ export default function CreatePost() {
                     )
                   }
                   className={profileLikeInputClass}
-                />
+                >
+                  <option value="">Select duration</option>
+                  <option value="hourly">Hourly</option>
+                  <option value="daily">Daily</option>
+                  <option value="monthly">Monthly</option>
+                </select>
               </div>
               <div>
-                <label className="text-xs font-semibold text-black">Service Cost</label>
+                <label className="text-xs font-semibold text-black">{isDemand ? 'Your Budget (BDT)' : 'Service Cost (BDT)'}</label>
                 <input
                   type="text"
                   inputMode="decimal"
-                  placeholder="Enter service cost ($)"
+                  placeholder={isDemand ? 'Enter your budget (BDT)' : 'Enter service cost (BDT)'}
                   value={row.cost_per_unit}
                   onChange={(event) =>
                     setServices((prev) =>
@@ -580,7 +589,7 @@ export default function CreatePost() {
             </button>
           </div>
           {products.map((row, index) => (
-            <div key={`product-${index}`} className="grid gap-4 lg:grid-cols-5">
+            <div key={`product-${index}`} className={`grid gap-4 ${isDemand ? 'lg:grid-cols-4' : 'lg:grid-cols-5'}`}>
               <div>
                 <label className="text-xs font-semibold text-black">Product Name</label>
                 <input
@@ -612,25 +621,27 @@ export default function CreatePost() {
                   className={profileLikeInputClass}
                 />
               </div>
+              {!isDemand && (
+                <div>
+                  <label className="text-xs font-semibold text-black">Quantity</label>
+                  <input
+                    placeholder="e.g., Kg, Liters, Pieces"
+                    value={row.unit}
+                    onChange={(event) =>
+                      setProducts((prev) =>
+                        prev.map((item, i) => (i === index ? { ...item, unit: event.target.value } : item)),
+                      )
+                    }
+                    className={profileLikeInputClass}
+                  />
+                </div>
+              )}
               <div>
-                <label className="text-xs font-semibold text-black">Unit</label>
-                <input
-                  placeholder="e.g., Kg, Liters"
-                  value={row.unit}
-                  onChange={(event) =>
-                    setProducts((prev) =>
-                      prev.map((item, i) => (i === index ? { ...item, unit: event.target.value } : item)),
-                    )
-                  }
-                  className={profileLikeInputClass}
-                />
-              </div>
-              <div>
-                <label className="text-xs font-semibold text-black">Cost per Unit</label>
+                <label className="text-xs font-semibold text-black">{isDemand ? 'Your Budget (BDT)' : 'Cost per Quantity'}</label>
                 <input
                   type="text"
                   inputMode="decimal"
-                  placeholder="Enter cost per unit ($)"
+                  placeholder={isDemand ? 'Enter your budget (BDT)' : 'Enter cost per quantity'}
                   value={row.cost_per_unit}
                   onChange={(event) =>
                     setProducts((prev) =>
@@ -643,12 +654,12 @@ export default function CreatePost() {
                 />
               </div>
               <div>
-                <label className="text-xs font-semibold text-black">{post.post_type === 'Demand' ? 'Required Units' : 'Available Units'}</label>
+                <label className="text-xs font-semibold text-black">{isDemand ? 'Required Quantity' : 'Available Quantity'}</label>
                 <div className="flex gap-2">
                   <input
                     type="text"
                     inputMode="numeric"
-                    placeholder={post.post_type === 'Demand' ? 'Enter required units' : 'Enter available units'}
+                    placeholder={isDemand ? 'Enter required quantity' : 'Enter available quantity'}
                     value={row.available_units}
                     onChange={(event) =>
                       setProducts((prev) =>
