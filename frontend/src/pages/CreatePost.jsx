@@ -177,8 +177,10 @@ export default function CreatePost() {
     'mt-1.5 w-full rounded-xl border border-violet-200 bg-gradient-to-br from-white/85 to-violet-50/70 px-3 py-2.5 text-sm shadow-sm transition placeholder:text-slate-400 focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-200'
   const primaryButtonClass =
     'inline-flex items-center justify-center rounded-xl bg-gradient-to-r from-violet-600 to-fuchsia-600 px-4 py-2 text-sm font-semibold text-white shadow-md transition hover:from-violet-700 hover:to-fuchsia-700 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50'
-  const compactButtonClass =
-    'inline-flex items-center justify-center rounded-xl bg-gradient-to-r from-violet-600 to-fuchsia-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:from-violet-700 hover:to-fuchsia-700 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50'
+  const addRowButtonClass =
+    'inline-flex items-center justify-center rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:from-orange-600 hover:to-amber-600 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50'
+  const removeButtonClass =
+    'inline-flex h-[42px] w-[110px] items-center justify-center rounded-xl bg-gradient-to-r from-violet-600 to-fuchsia-600 text-sm font-semibold text-white shadow-md transition hover:from-violet-700 hover:to-fuchsia-700 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50'
 
   return (
     <div className="space-y-6">
@@ -383,7 +385,7 @@ export default function CreatePost() {
                   { name: '', experience: '', unit: '', cost: '', available_person: 0 },
                 ])
               }
-              className={compactButtonClass}
+              className={addRowButtonClass}
             >
               Add Row
             </button>
@@ -479,7 +481,7 @@ export default function CreatePost() {
                   <button
                     type="button"
                     onClick={() => setExpertises((prev) => prev.filter((_, i) => i !== index))}
-                    className={primaryButtonClass}
+                    className={`${removeButtonClass} mt-1.5`}
                   >
                     Remove
                   </button>
@@ -502,13 +504,13 @@ export default function CreatePost() {
                   { service_name: '', description: '', unit: '', cost_per_unit: '' },
                 ])
               }
-              className={compactButtonClass}
+              className={addRowButtonClass}
             >
               Add Row
             </button>
           </div>
           {services.map((row, index) => (
-            <div key={`service-${index}`} className="grid gap-4 lg:grid-cols-5">
+            <div key={`service-${index}`} className="grid gap-4 lg:grid-cols-4">
               <div>
                 <label className="text-xs font-semibold text-black">Service Name</label>
                 <input
@@ -559,29 +561,29 @@ export default function CreatePost() {
               </div>
               <div>
                 <label className="text-xs font-semibold text-black">{isDemand ? 'Your Budget (BDT)' : 'Service Cost (BDT)'}</label>
-                <input
-                  type="text"
-                  inputMode="decimal"
-                  placeholder={isDemand ? 'Enter your budget (BDT)' : 'Enter service cost (BDT)'}
-                  value={row.cost_per_unit}
-                  onChange={(event) =>
-                    setServices((prev) =>
-                      prev.map((item, i) =>
-                        i === index ? { ...item, cost_per_unit: event.target.value } : item,
-                      ),
-                    )
-                  }
-                  className={profileLikeInputClass}
-                />
-              </div>
-              <div className="flex items-end">
-                <button
-                  type="button"
-                  onClick={() => setServices((prev) => prev.filter((_, i) => i !== index))}
-                  className={`${primaryButtonClass} w-full`}
-                >
-                  Remove
-                </button>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    placeholder={isDemand ? 'Enter your budget (BDT)' : 'Enter service cost (BDT)'}
+                    value={row.cost_per_unit}
+                    onChange={(event) =>
+                      setServices((prev) =>
+                        prev.map((item, i) =>
+                          i === index ? { ...item, cost_per_unit: event.target.value } : item,
+                        ),
+                      )
+                    }
+                    className={profileLikeInputClass}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setServices((prev) => prev.filter((_, i) => i !== index))}
+                    className={`${removeButtonClass} mt-1.5`}
+                  >
+                    Remove
+                  </button>
+                </div>
               </div>
             </div>
           ))}
@@ -600,7 +602,7 @@ export default function CreatePost() {
                   { product_name: '', description: '', unit: '', cost_per_unit: '', available_units: 0 },
                 ])
               }
-              className={compactButtonClass}
+              className={addRowButtonClass}
             >
               Add Row
             </button>
@@ -690,7 +692,7 @@ export default function CreatePost() {
                   <button
                     type="button"
                     onClick={() => setProducts((prev) => prev.filter((_, i) => i !== index))}
-                    className={primaryButtonClass}
+                    className={`${removeButtonClass} mt-1.5`}
                   >
                     Remove
                   </button>
@@ -701,7 +703,7 @@ export default function CreatePost() {
         </div>
         )}
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-col items-center gap-2">
           <button
             type="submit"
             disabled={saving}
@@ -709,7 +711,7 @@ export default function CreatePost() {
           >
             {saving ? 'Publishing...' : 'Publish Post'}
           </button>
-          {message && <p className="text-sm text-slate-500">{message}</p>}
+          {message && <p className="text-center text-sm text-slate-500">{message}</p>}
         </div>
       </form>
     </div>
