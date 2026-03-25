@@ -203,7 +203,7 @@ export default function EditProfile() {
           <button
             type="button"
             onClick={() => navigate('/profile')}
-            className="rounded-lg border border-violet-300 px-3 py-1 text-xs font-semibold text-violet-700 transition hover:bg-violet-100"
+            className="inline-flex items-center justify-center rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:from-orange-600 hover:to-amber-600 active:scale-[0.99]"
           >
             Back to Profile
           </button>
@@ -351,7 +351,7 @@ export default function EditProfile() {
               placeholder="WhatsApp number or link (e.g. 01610011010 or wa.me/01610011010)"
             />
           </div>
-          <div className="lg:col-span-2">
+          <div className="lg:col-span-2 flex flex-col items-center">
             <button
               type="submit"
               disabled={saving}
@@ -360,7 +360,7 @@ export default function EditProfile() {
               {saving ? 'Saving...' : 'Update Profile'}
             </button>
             {message && (
-              <p className={`mt-2 text-sm font-medium ${message.toLowerCase().includes('success') ? 'text-emerald-600' : 'text-rose-600'}`}>
+              <p className={`mt-2 text-center text-sm font-medium ${message.toLowerCase().includes('success') ? 'text-emerald-600' : 'text-rose-600'}`}>
                 {message}
               </p>
             )}

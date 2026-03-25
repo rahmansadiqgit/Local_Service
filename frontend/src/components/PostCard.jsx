@@ -166,7 +166,7 @@ export default function PostCard({
 
   return (
     <div
-      className="card space-y-3 p-4 sm:p-5 border border-slate-200 text-black shadow-sm transition-shadow hover:shadow-lg"
+      className="card flex h-full flex-col space-y-3 p-4 sm:p-5 border border-slate-200 text-black shadow-sm transition-shadow hover:shadow-lg"
       style={{
         background: 'linear-gradient(135deg, #f8fafc 0%, #e3d5e5 45%, #8763ac 100%)',
       }}
@@ -218,7 +218,11 @@ export default function PostCard({
 
       <div className="rounded-2xl border border-slate-200 bg-white px-4 py-2.5">
         {post.description ? (
-          <p className="text-sm leading-6 text-slate-700 break-words [overflow-wrap:anywhere]">{post.description}</p>
+          <div className="max-h-28 overflow-y-auto pr-1">
+            <p className="text-sm leading-6 text-slate-700 break-words [overflow-wrap:anywhere]">
+              {post.description}
+            </p>
+          </div>
         ) : (
           <p className="text-sm text-slate-400">No description provided.</p>
         )}
@@ -251,7 +255,7 @@ export default function PostCard({
         </div>
       )}
 
-      <div className="flex flex-wrap items-center justify-start gap-2.5">
+      <div className="mt-auto flex flex-wrap items-center justify-start gap-2.5">
         <button
           type="button"
           onClick={() => onAction?.(post, post.post_type === 'Demand' ? 'apply' : 'book')}
