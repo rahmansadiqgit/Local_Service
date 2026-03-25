@@ -172,25 +172,28 @@ export default function PostCard({
       }}
     >
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div 
-          className="flex items-start gap-4 cursor-pointer hover:opacity-80 transition-opacity" 
-          onClick={handleProfileNavigate}
-          role="button"
-          tabIndex={0}
-          onKeyDown={(e) => e.key === 'Enter' && handleProfileNavigate()}
-        >
-          <div className="h-12 w-12 overflow-hidden rounded-full border border-slate-200 bg-white">
+        <div className="flex items-start gap-4">
+          <button
+            type="button"
+            onClick={handleProfileNavigate}
+            className="h-12 w-12 shrink-0 overflow-hidden rounded-full border border-slate-200 bg-white transition-opacity hover:opacity-80 focus:outline-none focus:ring-2 focus:ring-violet-300"
+            aria-label={`Open ${profile?.name || 'Localix Member'} profile`}
+          >
             <img
               src={profilePhotoSrc}
               alt={profile?.name || 'Profile'}
               className="h-full w-full object-cover"
             />
-          </div>
-          <div>
-            <p className="text-base font-semibold text-black sm:text-lg">
+          </button>
+          <div className="min-w-0">
+            <button
+              type="button"
+              onClick={handleProfileNavigate}
+              className="post-owner-name-btn m-0 appearance-none border-0 bg-transparent p-0 text-left text-sm font-semibold leading-tight text-black transition-colors hover:text-violet-800 hover:[text-shadow:0_0_10px_rgba(109,40,217,0.55)] focus:outline-none focus:ring-2 focus:ring-violet-300 sm:text-base"
+            >
               {profile?.name || 'Localix Member'}
-            </p>
-            <p className="text-xs text-slate-500">
+            </button>
+            <p className="text-xs leading-5 text-slate-500 break-words [overflow-wrap:anywhere] [display:-webkit-box] [-webkit-line-clamp:2] [-webkit-box-orient:vertical] overflow-hidden">
               {post.brand_company_name || 'Independent'} • {post.location || 'Remote'}
             </p>
             <p className="text-xs text-slate-400">{formattedTime}</p>
