@@ -30,6 +30,9 @@ api.interceptors.response.use( // This adds a response interceptor.
   (response) => response, // The first function (response) => response handles successful responses (just passes them through).
   async (error) => { //The second function (error) => { ... } handles errors, like 401 Unauthorized.
     const original = error.config
+    if (original?.skipAuthRedirect) {
+      return Promise.reject(error)
+    }
     if (error.response?.status === 401 && !original?._retry) {
       original._retry = true
       const refreshToken = localStorage.getItem('refreshToken')
