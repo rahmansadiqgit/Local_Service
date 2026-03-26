@@ -438,25 +438,21 @@ export default function ManagePost() {
 
   return (
     <>
-      
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-100 dark:from-slate-950 dark:via-slate-900 dark:to-slate-900 py-8 px-4">
-        <div className="max-w-7xl mx-auto space-y-6">
+      <div className="space-y-6">
           {/* Page Header */}
-          <div className="card relative overflow-hidden border-0 bg-gradient-to-r from-[#c9b6ff] via-[#e6d7ff] to-[#f2eaff] p-0 text-slate-800 shadow-lg">
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.45),transparent_58%)]" />
-            <div className="absolute -right-8 -top-8 h-20 w-20 rounded-full bg-white/30 blur-xl" />
-            <div className="relative px-6 py-3.5 pr-40 sm:px-8 sm:py-4 sm:pr-44 lg:pr-48">
+          <div className="card relative overflow-hidden border-0 bg-gradient-to-r from-[#c9b6ff] via-[#dccbff] to-[#e5d7ff] p-0 text-slate-800 shadow-lg">
+            <div className="relative px-6 py-3.5 pr-32 sm:px-8 sm:py-4 sm:pr-36 lg:pr-40">
               <h1
-                className="whitespace-nowrap text-xl font-extrabold tracking-tight text-violet-900 sm:text-2xl"
+                className="text-xl font-extrabold tracking-tight text-violet-900 sm:text-3xl"
                 style={{ fontFamily: "'Sora', 'Trebuchet MS', sans-serif" }}
               >
                 Manage Your Posts
               </h1>
-              <p className="mt-0.5 overflow-hidden text-ellipsis whitespace-nowrap text-[10px] text-violet-800/80 sm:text-xs">Adjust expertise workers, service duration, and product units with real-time cost calculation.</p>
+              <p className="mt-0.5 text-xs text-violet-800/80 sm:text-sm">Adjust expertise workers, service duration, and product units with real-time cost calculation.</p>
               <img
                 src="/images/manage_post.png"
                 alt="Manage post header illustration"
-                className="pointer-events-none absolute right-8 top-1/2 h-36 w-36 -translate-y-1/2 object-contain sm:h-40 sm:w-40 lg:h-44 lg:w-44"
+                className="pointer-events-none absolute right-14 top-1/2 h-28 w-28 -translate-y-1/2 object-contain sm:h-32 sm:w-32 lg:h-36 lg:w-36"
               />
             </div>
           </div>
@@ -474,7 +470,13 @@ export default function ManagePost() {
 
           {/* Loading State */}
           {loading && (
-            <div className="card rounded-3xl p-16 text-center bg-white dark:bg-slate-900 shadow-lg">
+            <div
+              className="card rounded-3xl p-16 text-center shadow-lg"
+              style={{
+                backgroundColor: 'rgba(236, 225, 255, 0.56)',
+                backgroundImage: 'linear-gradient(145deg, rgba(225, 205, 255, 0.58), rgba(244, 230, 255, 0.54))',
+              }}
+            >
               <div className="inline-block">
                 <div className="animate-spin rounded-full h-16 w-16 border-4 border-slate-300 border-t-brand-500"></div>
               </div>
@@ -484,7 +486,13 @@ export default function ManagePost() {
 
           {/* No Posts State */}
           {!loading && visiblePosts.length === 0 && (
-            <div className="card rounded-3xl p-16 text-center bg-white dark:bg-slate-900 shadow-lg">
+            <div
+              className="card rounded-3xl p-16 text-center shadow-lg"
+              style={{
+                backgroundColor: 'rgba(236, 225, 255, 0.56)',
+                backgroundImage: 'linear-gradient(145deg, rgba(225, 205, 255, 0.58), rgba(244, 230, 255, 0.54))',
+              }}
+            >
               <div className="text-6xl mb-6">📭</div>
               <p className="text-2xl font-bold text-slate-700 dark:text-slate-200 mb-2">No posts to manage</p>
               <p className="text-slate-500 dark:text-slate-400 text-lg">Book or apply to a post to start managing it here.</p>
@@ -497,7 +505,14 @@ export default function ManagePost() {
               {visiblePosts.map((post) => {
                 const breakdown = getCostBreakdownForPost(post.id)
                 return (
-                <div key={post.id} className="card rounded-3xl bg-gradient-to-br from-slate-100 to-indigo-100/80 dark:from-slate-900 dark:to-slate-800 shadow-xl overflow-hidden border-2 border-slate-200 dark:border-slate-700">
+                <div
+                  key={post.id}
+                  className="relative rounded-3xl border border-violet-200/80 shadow-xl overflow-hidden backdrop-blur-md"
+                  style={{
+                    backgroundColor: 'rgba(236, 225, 255, 0.56)',
+                    backgroundImage: 'linear-gradient(145deg, rgba(225, 205, 255, 0.58), rgba(244, 230, 255, 0.54))',
+                  }}
+                >
                   {/* Post Header */}
                   <div className="relative overflow-hidden rounded-t-3xl border-b-2 border-slate-300/70 bg-gradient-to-br from-[#08174f] via-[#1e3a8a] to-[#6d28d9] p-8 text-white dark:from-[#050d2f] dark:via-[#102a6b] dark:to-[#4c1d95]">
                     <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.24),transparent_50%)]" />
@@ -748,19 +763,19 @@ export default function ManagePost() {
                     {breakdown.hasSelection && (
                       <div className={`grid grid-cols-1 gap-6 mb-6 ${breakdown.selectedCount > 1 ? 'md:grid-cols-2 lg:grid-cols-4' : 'md:grid-cols-1 lg:grid-cols-1'}`}>
                         {breakdown.expertiseTotal > 0 && (
-                          <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-md">
+                          <div className="rounded-2xl p-6 shadow-md border border-violet-200/80" style={{ backgroundColor: 'rgba(239, 228, 255, 0.58)' }}>
                             <p className="text-sm text-slate-500 dark:text-slate-400 font-semibold mb-2">Expertise Charge</p>
                             <p className="text-2xl font-bold text-violet-600 dark:text-violet-400">${breakdown.expertiseTotal.toFixed(2)}</p>
                           </div>
                         )}
                         {breakdown.serviceTotal > 0 && (
-                          <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-md">
+                          <div className="rounded-2xl p-6 shadow-md border border-violet-200/80" style={{ backgroundColor: 'rgba(239, 228, 255, 0.58)' }}>
                             <p className="text-sm text-slate-500 dark:text-slate-400 font-semibold mb-2">Service Cost</p>
                             <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">${breakdown.serviceTotal.toFixed(2)}</p>
                           </div>
                         )}
                         {breakdown.productTotal > 0 && (
-                          <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-md">
+                          <div className="rounded-2xl p-6 shadow-md border border-violet-200/80" style={{ backgroundColor: 'rgba(239, 228, 255, 0.58)' }}>
                             <p className="text-sm text-slate-500 dark:text-slate-400 font-semibold mb-2">Product Cost</p>
                             <p className="text-2xl font-bold text-orange-600 dark:text-orange-400">${breakdown.productTotal.toFixed(2)}</p>
                           </div>
@@ -777,9 +792,9 @@ export default function ManagePost() {
                     <button
                       onClick={() => handleCreateOrUpdateErp(post)}
                       disabled={!breakdown.hasSelection}
-                      className={`w-full px-8 py-4 text-white font-bold text-lg rounded-2xl transition shadow-lg ${
+                      className={`block mx-auto w-fit px-6 py-2.5 text-white text-sm font-semibold rounded-xl transition shadow-md ${
                         breakdown.hasSelection
-                          ? 'bg-gradient-to-r from-blue-600 to-brand-600 hover:from-blue-700 hover:to-brand-700 dark:from-blue-700 dark:to-brand-700 dark:hover:from-blue-800 dark:hover:to-brand-800 transform hover:scale-105'
+                          ? 'bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-700 hover:to-fuchsia-700 dark:from-violet-700 dark:to-fuchsia-700 dark:hover:from-violet-800 dark:hover:to-fuchsia-800 active:scale-[0.99]'
                           : 'bg-slate-400 dark:bg-slate-600 cursor-not-allowed opacity-70'
                       }`}
                     >
@@ -796,7 +811,6 @@ export default function ManagePost() {
               })}
             </div>
           )}
-        </div>
       </div>
     </>
   )
