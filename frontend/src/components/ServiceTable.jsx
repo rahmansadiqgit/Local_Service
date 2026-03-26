@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 
-export default function ServiceTable({ services = [], postType = 'Supply' }) {
+export default function ServiceTable({ services = [], postType = 'Supply', showDescription = true }) {
   const [sortKey, setSortKey] = useState('service_name')
   const [sortDir, setSortDir] = useState('asc')
   const isDemand = postType === 'Demand'
@@ -43,11 +43,13 @@ export default function ServiceTable({ services = [], postType = 'Supply' }) {
                 Service Name
               </button>
             </th>
-            <th className="px-3 py-2 whitespace-nowrap">
-              <button type="button" onClick={() => handleSort('description')}>
-                Service Description
-              </button>
-            </th>
+            {showDescription && (
+              <th className="px-3 py-2 whitespace-nowrap">
+                <button type="button" onClick={() => handleSort('description')}>
+                  {isDemand ? 'Service Description' : 'Specific Service Description'}
+                </button>
+              </th>
+            )}
             <th className="px-3 py-2 whitespace-nowrap">
               <button type="button" onClick={() => handleSort('unit')}>
                 {isDemand ? 'Service Duration Needed' : 'Service Duration'}
@@ -55,7 +57,7 @@ export default function ServiceTable({ services = [], postType = 'Supply' }) {
             </th>
             <th className="px-3 py-2 whitespace-nowrap">
               <button type="button" onClick={() => handleSort('cost_per_unit')}>
-                {isDemand ? 'Your Budget (BDT)' : 'Service Cost'}
+                {isDemand ? 'Budget (BDT)' : 'Service Cost (BDT)'}
               </button>
             </th>
           </tr>
@@ -64,7 +66,9 @@ export default function ServiceTable({ services = [], postType = 'Supply' }) {
           {sorted.map((row, idx) => (
             <tr key={idx} className={idx % 2 === 0 ? 'bg-white dark:bg-slate-950' : 'bg-slate-50 dark:bg-slate-900'}>
               <td className="px-3 py-2 text-slate-900 dark:text-slate-100 whitespace-nowrap">{row.service_name || '-'}</td>
-              <td className="px-3 py-2 text-slate-900 dark:text-slate-100 whitespace-pre-line break-words">{row.description || '-'}</td>
+              {showDescription && (
+                <td className="px-3 py-2 text-slate-900 dark:text-slate-100 whitespace-pre-line break-words">{row.description || '-'}</td>
+              )}
               <td className="px-3 py-2 text-slate-900 dark:text-slate-100 whitespace-nowrap">{row.unit || '-'}</td>
               <td className="px-3 py-2 text-slate-900 dark:text-slate-100 whitespace-nowrap">
                 {!isNaN(parseFloat(row.cost_per_unit)) ? parseFloat(row.cost_per_unit).toFixed(2) : '0.00'}
