@@ -52,6 +52,17 @@ export default function ManagePost() {
     return normalized.charAt(0).toUpperCase() + normalized.slice(1)
   }
 
+  const resolveMediaUrl = (value) => {
+    if (!value) return ''
+    if (/^https?:\/\//i.test(value) || value.startsWith('data:') || value.startsWith('blob:')) {
+      return value
+    }
+
+    const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api'
+    const backendOrigin = apiBase.replace(/\/api\/?$/, '')
+    return value.startsWith('/') ? `${backendOrigin}${value}` : `${backendOrigin}/${value}`
+  }
+
   const showMessage = useCallback((msg, type = 'info') => {
     setMessage(msg)
     setMessageType(type)
@@ -504,6 +515,7 @@ export default function ManagePost() {
             <div className="space-y-8">
               {visiblePosts.map((post) => {
                 const breakdown = getCostBreakdownForPost(post.id)
+                const postImageSrc = resolveMediaUrl(post.image || post.post_image || '')
                 return (
                 <div
                   key={post.id}
@@ -518,7 +530,7 @@ export default function ManagePost() {
                     <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.24),transparent_50%)]" />
                     <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/25 via-transparent to-transparent" />
                     <div className="flex flex-wrap justify-between items-start gap-4 mb-4">
-                      <div className="flex-1">
+                      <div className="min-w-0 flex-1">
                         <span className="inline-block rounded-full border border-white/30 bg-white/15 px-4 py-2 text-sm font-bold tracking-wide text-cyan-100 shadow-sm backdrop-blur-sm mb-3">
                           {post.post_type === 'Supply' ? '📦 AVAILABLE' : '🔍 DEMAND'}
                         </span>
@@ -543,14 +555,25 @@ export default function ManagePost() {
                           )}
                         </div>
                       </div>
-                      {ownPostIds.has(post.id) && (
-                        <button
-                          onClick={() => handleDeletePost(post.id)}
-                          className="px-6 py-3 bg-red-500 hover:bg-red-600 dark:bg-red-700 dark:hover:bg-red-800 text-white font-bold rounded-2xl transition transform hover:scale-105 shadow-lg"
-                        >
-                          🗑️ Delete Post
-                        </button>
-                      )}
+                      <div className="w-full md:w-52 flex flex-col items-start gap-3 md:items-end">
+                        {ownPostIds.has(post.id) && (
+                          <button
+                            onClick={() => handleDeletePost(post.id)}
+                            className="px-6 py-3 bg-red-500 hover:bg-red-600 dark:bg-red-700 dark:hover:bg-red-800 text-white font-bold rounded-2xl transition transform hover:scale-105 shadow-lg"
+                          >
+                            🗑️ Delete Post
+                          </button>
+                        )}
+                        {postImageSrc && (
+                          <div className="w-full max-w-[240px] overflow-hidden rounded-2xl border border-white/35 bg-white/10 p-1.5 shadow-lg backdrop-blur-sm">
+                            <img
+                              src={postImageSrc}
+                              alt={post.post_title || post.post_name || 'Post image'}
+                              className="h-40 w-full rounded-xl object-cover"
+                            />
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
 
