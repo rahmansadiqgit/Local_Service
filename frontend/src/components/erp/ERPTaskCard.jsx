@@ -111,10 +111,10 @@ export default function ERPTaskCard({
 
   const stageStyle =
     erp.stage === 'Completed'
-      ? 'bg-emerald-100 text-emerald-700'
+      ? 'border border-emerald-200 bg-emerald-50 text-emerald-700'
       : erp.stage === 'On Process'
-        ? 'bg-blue-100 text-blue-700'
-        : 'bg-amber-100 text-amber-700'
+        ? 'border border-sky-200 bg-sky-50 text-sky-700'
+        : 'border border-amber-200 bg-amber-50 text-amber-700'
 
   const pendingChecklist = phaseTasks.Pending || []
   const openPendingTasks = pendingChecklist.filter((task) => !task.done)
@@ -188,51 +188,66 @@ export default function ERPTaskCard({
   }
 
   return (
-    <div className="card space-y-4 transition-shadow hover:shadow-lg">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <p className="text-xs uppercase text-slate-500">{roleLabel}</p>
-          <h3 className="text-lg font-semibold">{post?.post_name || `Task #${erp.id}`}</h3>
-          <p className="text-sm text-slate-500">{post?.location || 'Unknown location'}</p>
-          <p className="mt-1 text-sm text-slate-600">
-            <span className="font-semibold">Post Title:</span> {post?.post_title || snapshotPost?.title || '-'}
-          </p>
-          {counterpartyUserId && (
-            <button
-              type="button"
-              onClick={() => onOpenOwner(counterpartyUserId)}
-              className="mt-2 inline-flex items-center gap-2 rounded-lg border border-slate-200 px-2 py-1 text-xs font-semibold text-slate-600 hover:bg-slate-50"
-            >
-              <span>{counterpartyLabel}:</span>
-              <img
-                src={counterpartyPhoto}
-                alt={counterpartyName}
-                className="h-6 w-6 rounded-full object-cover"
-              />
-              <span>{counterpartyName}</span>
-            </button>
-          )}
+    <div className="card relative overflow-hidden rounded-3xl border border-slate-200/80 bg-gradient-to-br from-white via-slate-50 to-brand-50/30 p-5 shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-xl">
+      <div className="pointer-events-none absolute -right-14 -top-14 h-40 w-40 rounded-full bg-brand-200/20 blur-2xl" />
+
+      <div className="relative grid grid-cols-[auto_1fr_auto] items-center gap-3">
+        <p className="inline-flex rounded-full border border-slate-200 bg-white/80 px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+          {roleLabel}
+        </p>
+        <p
+          className="px-2 text-center text-lg font-normal tracking-normal text-slate-500"
+          title={post?.post_name || `Task #${erp.id}`}
+        >
+          {post?.post_name || `Task #${erp.id}`}
+        </p>
+        <span className={`rounded-full px-4 py-1.5 text-base font-bold ${stageStyle}`}>{erp.stage}</span>
+      </div>
+
+      <h2 className="relative mx-auto mt-2 w-full max-w-3xl rounded-xl bg-white/80 px-3 py-2 text-center text-base font-bold text-slate-800 shadow-sm ring-1 ring-slate-200/80">
+        <span className="font-semibold">Post Title:</span> {post?.post_title || snapshotPost?.title || '-'}
+      </h2>
+
+      <div className="relative space-y-1.5">
+        {counterpartyUserId && (
+          <button
+            type="button"
+            onClick={() => onOpenOwner(counterpartyUserId)}
+            className="mt-1 inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-brand-300 hover:bg-brand-50/60"
+          >
+            <span className="text-slate-500">{counterpartyLabel}:</span>
+            <img
+              src={counterpartyPhoto}
+              alt={counterpartyName}
+              className="h-7 w-7 rounded-full border border-slate-200 object-cover"
+            />
+            <span className="text-slate-800">{counterpartyName}</span>
+            <p className="text-[11px] font-normal text-slate-500">{post?.location || 'Unknown location'}</p>
+          </button>
+        )}
+      </div>
+
+      <div className="relative grid gap-2 text-sm sm:grid-cols-2">
+        <div className="rounded-xl border border-slate-200 bg-white/90 px-3 py-2 text-slate-600 shadow-sm">
+          <span className="font-semibold text-slate-700">Rating:</span> {rating.toFixed(2)}
         </div>
-        <span className={`rounded-full px-3 py-1 text-xs font-semibold ${stageStyle}`}>{erp.stage}</span>
+        <div className="rounded-xl border border-slate-200 bg-white/90 px-3 py-2 text-slate-600 shadow-sm">
+          <span className="font-semibold text-slate-700">Total:</span> ${Number(erp.total_cost || 0).toFixed(2)}
+        </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-3 text-sm text-slate-500">
-        <span>Rating: {rating.toFixed(2)}</span>
-        <span>Total: ${Number(erp.total_cost || 0).toFixed(2)}</span>
-      </div>
-
-      <div className="flex flex-wrap gap-2">
+      <div className="relative flex flex-wrap gap-2.5">
         <button
           type="button"
           onClick={() => onSetPending(erp)}
           disabled={!isProvider}
           title={!isProvider ? 'Only provider can manage Pending actions' : ''}
-          className={`rounded-full px-3 py-1 text-xs font-semibold ${
+          className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
             erp.stage === 'Pending'
-              ? 'bg-brand-500 text-white'
+              ? 'bg-brand-600 text-white shadow-sm hover:bg-brand-700'
               : !isProvider
-                ? 'cursor-not-allowed border border-slate-200 text-slate-400'
-                : 'border border-slate-200 text-slate-600'
+                ? 'cursor-not-allowed border border-slate-200 bg-slate-100 text-slate-400'
+                : 'border border-slate-300 bg-white text-slate-700 hover:border-brand-300 hover:text-brand-700'
           }`}
         >
           Pending
@@ -240,14 +255,14 @@ export default function ERPTaskCard({
         <button
           type="button"
           onClick={() => onToggleTrack(erp.id)}
-          className="rounded-full border border-violet-200 px-3 py-1 text-xs font-semibold text-violet-700"
+          className="rounded-full border border-violet-300 bg-violet-50 px-4 py-2 text-sm font-semibold text-violet-700 transition hover:bg-violet-100"
         >
           Track
         </button>
         <button
           type="button"
           onClick={() => onGeneratePdf(erp)}
-          className="rounded-full border border-brand-200 px-3 py-1 text-xs font-semibold text-brand-600"
+          className="rounded-full border border-slate-700 bg-white px-4 py-2 text-sm font-bold text-slate-800 transition hover:bg-slate-50"
         >
           Generate PDF
         </button>
@@ -255,7 +270,7 @@ export default function ERPTaskCard({
           <button
             type="button"
             onClick={() => setIsMembersMenuOpen((prev) => !prev)}
-            className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600"
+            className="rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-400"
           >
             Members
           </button>
@@ -284,7 +299,7 @@ export default function ERPTaskCard({
         <button
           type="button"
           onClick={() => onToggleDetails(erp.id)}
-          className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600"
+          className="rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-400"
         >
           {expandedId === erp.id ? 'Hide Details' : 'View Details'}
         </button>
