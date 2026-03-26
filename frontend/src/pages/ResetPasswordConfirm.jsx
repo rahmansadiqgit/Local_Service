@@ -31,11 +31,15 @@ export default function ResetPasswordConfirm() {
     setLoading(true)
     setMessage('')
     try {
-      await api.post('/auth/password-reset/confirm/', {
-        uid,
-        token,
-        new_password: password,
-      })
+      await api.post(
+        '/auth/password-reset/confirm/',
+        {
+          uid,
+          token,
+          new_password: password,
+        },
+        { skipAuth: true, skipAuthRedirect: true },
+      )
       setMessage('Password updated. You can now sign in.')
       setPassword('')
       setConfirmPassword('')

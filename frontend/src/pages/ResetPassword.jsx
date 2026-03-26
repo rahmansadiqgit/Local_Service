@@ -12,11 +12,23 @@ export default function ResetPassword() {
     setLoading(true)
     setMessage('')
     try {
-      await api.post('/auth/password-reset/', { email })
-      setMessage('If the email exists, a reset link was sent.')
+      const normalizedEmail = email.trim()
+      const response = await api.post(
+        '/auth/password-reset/',
+        { email: normalizedEmail },
+        { skipAuth: true, skipAuthRedirect: true },
+      )
+      setMessage(response?.data?.detail || 'Link sent to this email.')
     } catch (error) {
       console.error(error)
-      setMessage('Failed to send reset link.')
+      const data = error?.response?.data
+      if (typeof data?.detail === 'string' && data.detail.trim()) {
+        setMessage(data.detail)
+      } else if (Array.isArray(data?.email) && data.email.length) {
+        setMessage(String(data.email[0]))
+      } else {
+        setMessage('Failed to send reset link.')
+      }
     } finally {
       setLoading(false)
     }
