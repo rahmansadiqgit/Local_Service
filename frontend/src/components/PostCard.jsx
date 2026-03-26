@@ -93,6 +93,8 @@ export default function PostCard({
   const hasExpertiseCategory = selectedCategories.includes('expertise')
   const hasServicesCategory = selectedCategories.includes('services')
   const hasProductCategory = selectedCategories.includes('product')
+  const showServiceDescription = !(selectedCategories.length === 1 && hasServicesCategory)
+  const showProductDescription = !(selectedCategories.length === 1 && hasProductCategory)
 
   const stripCategoryPrefix = (value) =>
     String(value || '')
@@ -319,7 +321,7 @@ export default function PostCard({
                 <div className="space-y-2">
                   <p className="text-sm font-semibold text-slate-600 dark:text-slate-300">Services</p>
                   {serviceRows.length ? (
-                    <ServiceTable services={serviceRows} postType={post.post_type} />
+                    <ServiceTable services={serviceRows} postType={post.post_type} showDescription={showServiceDescription} />
                   ) : (
                     <p className="text-sm text-slate-400">No services detail listed.</p>
                   )}
@@ -330,7 +332,7 @@ export default function PostCard({
                 <div className="space-y-2">
                   <p className="text-sm font-semibold text-slate-600 dark:text-slate-300">Products</p>
                   {productRows.length ? (
-                    <ProductTable products={productRows} postType={post.post_type} />
+                    <ProductTable products={productRows} postType={post.post_type} showDescription={showProductDescription} />
                   ) : (
                     <p className="text-sm text-slate-400">No product detail listed.</p>
                   )}
