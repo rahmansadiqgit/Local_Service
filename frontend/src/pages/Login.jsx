@@ -54,7 +54,14 @@ export default function Login() {
         </div>
       </div>
 
-      <form onSubmit={handleSubmit} className="card space-y-4">
+      <form
+        onSubmit={handleSubmit}
+        className="card space-y-4 rounded-2xl border border-violet-200/80 p-4 shadow-sm backdrop-blur-md"
+        style={{
+          backgroundColor: 'rgba(236, 225, 255, 0.56)',
+          backgroundImage: 'linear-gradient(145deg, rgba(225, 205, 255, 0.58), rgba(244, 230, 255, 0.54))',
+        }}
+      >
         <div>
           <label className="text-xs font-semibold text-slate-500">Email</label>
           <input
