@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import api from '../api/client';
+import ExpertiseTable from '../components/ExpertiseTable';
 import ProductTable from '../components/ProductTable';
 import ServiceTable from '../components/ServiceTable';
-import SkillTable from '../components/SkillTable';
 import useAuth from '../context/useAuth';
 
 export default function Dashboard() {
@@ -13,6 +13,7 @@ export default function Dashboard() {
   const [posts, setPosts] = useState([])
   const [ratings, setRatings] = useState([])
   const [skills, setSkills] = useState([])
+  const [expertises, setExpertises] = useState([])
   const [products, setProducts] = useState([])
   const [expandedPostId, setExpandedPostId] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -42,10 +43,11 @@ export default function Dashboard() {
           profileData = profileRes.data;
         }
         
-        const [postRes, ratingRes, skillRes, productRes] = await Promise.all([
+        const [postRes, ratingRes, skillRes, expertiseRes, productRes] = await Promise.all([
           api.get('/posts/'),
           api.get('/ratings/'),
           api.get('/skills/'),
+          api.get('/expertises/'),
           api.get('/products/'),
         ]);
         
@@ -53,6 +55,7 @@ export default function Dashboard() {
         setPosts(postRes.data);
         setRatings(ratingRes.data);
         setSkills(skillRes.data);
+        setExpertises(expertiseRes.data);
         setProducts(productRes.data);
         setProfile(profileData);
       } catch (error) {
@@ -114,6 +117,14 @@ export default function Dashboard() {
       return acc
     }, {})
   }, [products])
+
+  const expertisesByPost = useMemo(() => {
+    return expertises.reduce((acc, expertise) => {
+      acc[expertise.post] = acc[expertise.post] || []
+      acc[expertise.post].push(expertise)
+      return acc
+    }, {})
+  }, [expertises])
 
   // Filter posts for the selected profile; support owner_id/owner and string/number IDs.
   const userPosts = useMemo(() => {
@@ -197,6 +208,7 @@ export default function Dashboard() {
     const hasServices = categories.includes('Services')
     const hasProduct = categories.includes('Product')
     const rawSkills = skillsByPost[post.id] || []
+    const rawExpertises = expertisesByPost[post.id] || []
     const rawProducts = productsByPost[post.id] || []
 
     const expertiseTagged = rawSkills
@@ -211,7 +223,9 @@ export default function Dashboard() {
       }))
 
     const expertiseRows =
-      expertiseTagged.length > 0
+      rawExpertises.length > 0
+        ? rawExpertises
+        : expertiseTagged.length > 0
         ? expertiseTagged
         : hasExpertise && !hasServices
           ? rawSkills
@@ -228,7 +242,7 @@ export default function Dashboard() {
 
     const productRows = hasProduct ? rawProducts : []
 
-    return { categories, hasExpertise, hasServices, hasProduct, expertiseRows, serviceRows, productRows }
+    return { hasExpertise, hasServices, hasProduct, expertiseRows, serviceRows, productRows }
   }
 
   const canDeletePosts = useMemo(() => {
@@ -245,6 +259,7 @@ export default function Dashboard() {
       await api.delete(`/posts/${postId}/`)
       setPosts((prev) => prev.filter((post) => post.id !== postId))
       setSkills((prev) => prev.filter((item) => item.post !== postId))
+      setExpertises((prev) => prev.filter((item) => item.post !== postId))
       setProducts((prev) => prev.filter((item) => item.post !== postId))
       setRatings((prev) => prev.filter((item) => item.post !== postId))
       setExpandedPostId((prev) => (prev === postId ? null : prev))
@@ -260,7 +275,7 @@ export default function Dashboard() {
     const postImageSrc = toMediaUrl(post.image)
     const isDemand = sectionType === 'Demand'
     const rating = Number(averageRatingByPost[post.id] || 0).toFixed(2)
-    const { categories, hasExpertise, hasServices, hasProduct, expertiseRows, serviceRows, productRows } =
+    const { hasExpertise, hasServices, hasProduct, expertiseRows, serviceRows, productRows } =
       buildCategoryRows(post)
     const isExpanded = expandedPostId === post.id
 
@@ -294,7 +309,9 @@ export default function Dashboard() {
 
           <div className="min-w-0 flex-1">
             <div className="flex items-start justify-between gap-2">
-              <p className="truncate font-semibold text-slate-900">{post.post_name}</p>
+              <p className="font-semibold text-slate-900 break-words [overflow-wrap:anywhere]">
+                {post.post_title || post.post_name || 'Untitled Post'}
+              </p>
               <span
                 className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${
                   isDemand
@@ -311,21 +328,6 @@ export default function Dashboard() {
             <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-500">
               <span>{post.location || 'Remote'}</span>
               <span>Rating: {rating}</span>
-            </div>
-
-            <div className="mt-1 flex flex-wrap gap-1.5">
-              {categories.length > 0 ? (
-                categories.map((item) => (
-                  <span
-                    key={`${post.id}-${item}`}
-                    className="rounded-full border border-violet-200 bg-violet-50 px-2 py-0.5 text-[10px] font-semibold text-violet-700"
-                  >
-                    {item}
-                  </span>
-                ))
-              ) : (
-                <span className="text-[11px] text-slate-400">No category</span>
-              )}
             </div>
 
             <p className="mt-1 text-xs text-slate-600 break-words [overflow-wrap:anywhere]">{toSnippet(post.description)}</p>
@@ -358,7 +360,7 @@ export default function Dashboard() {
               <div className="space-y-2">
                 <p className="text-sm font-semibold text-slate-700">Expertise</p>
                 {expertiseRows.length ? (
-                  <SkillTable skills={expertiseRows} category="Expertise" />
+                  <ExpertiseTable expertises={expertiseRows} postType={post.post_type} />
                 ) : (
                   <p className="text-sm text-slate-400">No expertise detail listed.</p>
                 )}
@@ -369,7 +371,7 @@ export default function Dashboard() {
               <div className="space-y-2">
                 <p className="text-sm font-semibold text-slate-700">Services</p>
                 {serviceRows.length ? (
-                  <ServiceTable services={serviceRows} />
+                  <ServiceTable services={serviceRows} postType={post.post_type} />
                 ) : (
                   <p className="text-sm text-slate-400">No services detail listed.</p>
                 )}

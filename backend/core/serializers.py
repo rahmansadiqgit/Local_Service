@@ -199,6 +199,17 @@ class ExpertiseSerializer(serializers.ModelSerializer):
 
 
 class ProductSerializer(serializers.ModelSerializer):
+    def validate(self, attrs):
+        unit = attrs.get("unit")
+
+        if unit in (None, ""):
+            if self.instance and self.instance.unit:
+                attrs["unit"] = self.instance.unit
+            else:
+                attrs["unit"] = "quantity"
+
+        return attrs
+
     class Meta:
         model = Product
         fields = (

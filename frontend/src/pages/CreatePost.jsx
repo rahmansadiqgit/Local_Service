@@ -295,6 +295,28 @@ export default function CreatePost() {
       return
     }
 
+    const expertiseDurationMissing = expertises.some((item) => {
+      const hasAnyValue = item.name || item.experience || item.cost || String(item.available_person || '').trim()
+      return hasAnyValue && !item.unit
+    })
+
+    if (showExpertiseSection && expertiseDurationMissing) {
+      setMessage(isDemand ? 'Please select Work Duration Needed for all expertise rows.' : 'Please select Work Type for all expertise rows.')
+      setSaving(false)
+      return
+    }
+
+    const serviceDurationMissing = services.some((item) => {
+      const hasAnyValue = item.service_name || item.description || item.cost_per_unit
+      return hasAnyValue && !item.unit
+    })
+
+    if (showServicesSection && serviceDurationMissing) {
+      setMessage(isDemand ? 'Please select Service Duration Needed for all service rows.' : 'Please select Service Duration for all service rows.')
+      setSaving(false)
+      return
+    }
+
     try {
       const payload = new FormData()
       Object.entries(post).forEach(([key, value]) => {
@@ -309,9 +331,11 @@ export default function CreatePost() {
       })
 
       const validSkills = skills.filter((item) => item.skill_name && item.cost_per_unit)
-      const validExpertises = expertises.filter((item) => item.name && item.experience && item.cost)
-      const validServices = services.filter((item) => item.service_name && item.cost_per_unit)
-      const validProducts = products.filter((item) => item.product_name && item.cost_per_unit)
+      const validExpertises = expertises.filter((item) => item.name && item.experience && item.unit && item.cost)
+      const validServices = services.filter((item) => item.service_name && item.unit && item.cost_per_unit)
+      const validProducts = products.filter(
+        (item) => item.product_name && item.cost_per_unit && (post.post_type === 'Demand' || item.unit),
+      )
 
       await Promise.all([
         ...validSkills.map((item) =>
@@ -340,7 +364,13 @@ export default function CreatePost() {
             post: createdPost.id,
           }),
         ),
-        ...validProducts.map((item) => api.post('/products/', { ...item, post: createdPost.id })),
+        ...validProducts.map((item) =>
+          api.post('/products/', {
+            ...item,
+            unit: item.unit || (post.post_type === 'Demand' ? 'quantity' : item.unit),
+            post: createdPost.id,
+          }),
+        ),
       ])
       setMessage('Post created successfully.')
       setPost(initialPost)
@@ -356,7 +386,25 @@ export default function CreatePost() {
       navigate('/')
     } catch (error) {
       console.error(error)
-      const errorMessage = error.response?.data?.detail || error.response?.data?.message || error.message || 'Unknown error'
+      const responseData = error.response?.data
+      let errorMessage = responseData?.detail || responseData?.message
+
+      if (!errorMessage && responseData && typeof responseData === 'object') {
+        const fieldErrors = Object.entries(responseData)
+          .map(([field, value]) => {
+            if (Array.isArray(value)) {
+              return `${field}: ${value.join(', ')}`
+            }
+            return `${field}: ${String(value)}`
+          })
+          .join(' | ')
+        errorMessage = fieldErrors
+      }
+
+      if (!errorMessage) {
+        errorMessage = error.message || 'Unknown error'
+      }
+
       setMessage(`Failed to create post: ${errorMessage}`)
     } finally {
       setSaving(false)
