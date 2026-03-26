@@ -207,6 +207,8 @@ export default function Dashboard() {
     const hasExpertise = categories.includes('Expertise')
     const hasServices = categories.includes('Services')
     const hasProduct = categories.includes('Product')
+    const showServiceDescription = !(categories.length === 1 && hasServices)
+    const showProductDescription = !(categories.length === 1 && hasProduct)
     const rawSkills = skillsByPost[post.id] || []
     const rawExpertises = expertisesByPost[post.id] || []
     const rawProducts = productsByPost[post.id] || []
@@ -242,7 +244,16 @@ export default function Dashboard() {
 
     const productRows = hasProduct ? rawProducts : []
 
-    return { hasExpertise, hasServices, hasProduct, expertiseRows, serviceRows, productRows }
+    return {
+      hasExpertise,
+      hasServices,
+      hasProduct,
+      expertiseRows,
+      serviceRows,
+      productRows,
+      showServiceDescription,
+      showProductDescription,
+    }
   }
 
   const canDeletePosts = useMemo(() => {
@@ -275,7 +286,7 @@ export default function Dashboard() {
     const postImageSrc = toMediaUrl(post.image)
     const isDemand = sectionType === 'Demand'
     const rating = Number(averageRatingByPost[post.id] || 0).toFixed(2)
-    const { hasExpertise, hasServices, hasProduct, expertiseRows, serviceRows, productRows } =
+    const { hasExpertise, hasServices, hasProduct, expertiseRows, serviceRows, productRows, showServiceDescription, showProductDescription } =
       buildCategoryRows(post)
     const isExpanded = expandedPostId === post.id
 
@@ -371,7 +382,7 @@ export default function Dashboard() {
               <div className="space-y-2">
                 <p className="text-sm font-semibold text-slate-700">Services</p>
                 {serviceRows.length ? (
-                  <ServiceTable services={serviceRows} postType={post.post_type} />
+                  <ServiceTable services={serviceRows} postType={post.post_type} showDescription={showServiceDescription} />
                 ) : (
                   <p className="text-sm text-slate-400">No services detail listed.</p>
                 )}
@@ -382,7 +393,7 @@ export default function Dashboard() {
               <div className="space-y-2">
                 <p className="text-sm font-semibold text-slate-700">Product</p>
                 {productRows.length ? (
-                  <ProductTable products={productRows} postType={post.post_type} />
+                  <ProductTable products={productRows} postType={post.post_type} showDescription={showProductDescription} />
                 ) : (
                   <p className="text-sm text-slate-400">No product detail listed.</p>
                 )}
