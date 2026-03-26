@@ -88,6 +88,24 @@ export default function ERPTaskCard({
         : 'Viewer'
   const isProvider = viewerRole === 'Provider'
 
+  const counterpartyUserId =
+    viewerRole === 'Provider'
+      ? Number(erp.receiver)
+      : viewerRole === 'Receiver'
+        ? Number(erp.provider)
+        : Number(post?.owner_id)
+
+  const counterpartyUser = users.find((user) => Number(user.id) === Number(counterpartyUserId))
+  const counterpartyName =
+    counterpartyUser?.name ||
+    counterpartyUser?.username ||
+    post?.owner_name ||
+    (counterpartyUserId ? `User #${counterpartyUserId}` : 'Post owner')
+  const counterpartyPhoto =
+    toMediaUrl(counterpartyUser?.profile_photo) || toMediaUrl(post?.owner_profile_photo) || defaultAvatar
+  const counterpartyLabel =
+    viewerRole === 'Provider' ? 'Receiver' : viewerRole === 'Receiver' ? 'Provider' : 'Owner'
+
   const roleLabel =
     viewerRole === 'Provider' ? 'Providing' : viewerRole === 'Receiver' ? 'Receiving' : erp.category
 
@@ -179,18 +197,19 @@ export default function ERPTaskCard({
           <p className="mt-1 text-sm text-slate-600">
             <span className="font-semibold">Post Title:</span> {post?.post_title || snapshotPost?.title || '-'}
           </p>
-          {post?.owner_id && (
+          {counterpartyUserId && (
             <button
               type="button"
-              onClick={() => onOpenOwner(post.owner_id)}
+              onClick={() => onOpenOwner(counterpartyUserId)}
               className="mt-2 inline-flex items-center gap-2 rounded-lg border border-slate-200 px-2 py-1 text-xs font-semibold text-slate-600 hover:bg-slate-50"
             >
+              <span>{counterpartyLabel}:</span>
               <img
-                src={toMediaUrl(post?.owner_profile_photo) || defaultAvatar}
-                alt={post?.owner_name || 'Post owner'}
+                src={counterpartyPhoto}
+                alt={counterpartyName}
                 className="h-6 w-6 rounded-full object-cover"
               />
-              <span>{post?.owner_name || `Owner #${post.owner_id}`}</span>
+              <span>{counterpartyName}</span>
             </button>
           )}
         </div>
