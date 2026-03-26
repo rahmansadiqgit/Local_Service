@@ -55,7 +55,7 @@ export default function ExpertiseTable({ expertises = [], postType = 'Supply' })
             </th>
             <th className="px-3 py-2 whitespace-nowrap">
               <button type="button" onClick={() => handleSort('cost')}>
-                {isDemand ? 'Your Budget (BDT)' : 'Charge (BDT)'}
+                {isDemand ? 'Budget (BDT)' : 'Charge (BDT)'}
               </button>
             </th>
             <th className="px-3 py-2 whitespace-nowrap">
