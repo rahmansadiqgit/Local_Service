@@ -1,9 +1,48 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import api from '../api/client'
+import LocationPickerMap from '../components/LocationPickerMap'
 import PostCard from '../components/PostCard'
 import useAuth from '../context/useAuth'
 import useCart from '../context/useCart'
+
+const RADIUS_OPTIONS_KM = [5, 10, 15, 25, 50]
+
+const toCoordinateOrNull = (value) => {
+  if (value === null || value === undefined) return null
+  const normalized = String(value).trim()
+  if (!normalized) return null
+  const parsed = Number(normalized)
+  return Number.isFinite(parsed) ? parsed : null
+}
+
+const distanceInKm = (lat1, lng1, lat2, lng2) => {
+  const toRadians = (value) => (value * Math.PI) / 180
+  const earthRadiusKm = 6371
+
+  const dLat = toRadians(lat2 - lat1)
+  const dLng = toRadians(lng2 - lng1)
+
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(toRadians(lat1)) *
+      Math.cos(toRadians(lat2)) *
+      Math.sin(dLng / 2) *
+      Math.sin(dLng / 2)
+
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+  return earthRadiusKm * c
+}
+
+const locationTextMatches = (postLocation, filterLocation) => {
+  const postText = String(postLocation || '').trim().toLowerCase()
+  const filterText = String(filterLocation || '').trim().toLowerCase()
+
+  if (!filterText) return true
+  if (!postText) return false
+
+  return postText.includes(filterText) || filterText.includes(postText)
+}
 
 export default function HomeFeed() {
 
@@ -26,13 +65,65 @@ export default function HomeFeed() {
     search: '',
     postType: '',
     location: '',
+    latitude: '',
+    longitude: '',
+    radiusKm: '',
     minCost: '',
     maxCost: '',
     rating: '',
   })
+  const [filterLocationLoading, setFilterLocationLoading] = useState(false)
 
   const [actionMessage, setActionMessage] = useState('')
   const currentUserId = user?.id
+
+  useEffect(() => {
+    const query = filters.location?.trim()
+    const hasCoordinates =
+      toCoordinateOrNull(filters.latitude) !== null &&
+      toCoordinateOrNull(filters.longitude) !== null
+
+    if (!query || hasCoordinates) {
+      return
+    }
+
+    const timeoutId = setTimeout(async () => {
+      setFilterLocationLoading(true)
+      try {
+        const response = await fetch(
+          `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(
+            `${query}, Bangladesh`,
+          )}&format=jsonv2&limit=1&countrycodes=bd`,
+          {
+            headers: {
+              Accept: 'application/json',
+            },
+          },
+        )
+
+        if (!response.ok) return
+
+        const data = await response.json()
+        const first = Array.isArray(data) ? data[0] : null
+        if (!first?.lat || !first?.lon) return
+
+        setFilters((prev) => {
+          if (prev.location?.trim() !== query) return prev
+          return {
+            ...prev,
+            latitude: String(first.lat),
+            longitude: String(first.lon),
+          }
+        })
+      } catch (error) {
+        console.warn('Filter forward geocoding failed:', error)
+      } finally {
+        setFilterLocationLoading(false)
+      }
+    }, 700)
+
+    return () => clearTimeout(timeoutId)
+  }, [filters.location, filters.latitude, filters.longitude])
 
   useEffect(() => {
     let active = true
@@ -43,18 +134,18 @@ export default function HomeFeed() {
         if (!active) return
         setPosts(postRes.data)
 
-        const [skillRes, expertiseRes, productRes, ratingRes] = await Promise.all([
-          api.get('/skills/'),
-          api.get('/expertises/'),
-          api.get('/products/'),
-          api.get('/ratings/'),
+        const detailResponses = await Promise.allSettled([
+          api.get('/skills/', { skipAuthRedirect: true }),
+          api.get('/expertises/', { skipAuthRedirect: true }),
+          api.get('/products/', { skipAuthRedirect: true }),
+          api.get('/ratings/', { skipAuthRedirect: true }),
         ])
 
         if (!active) return
-        setSkills(skillRes.data)
-        setExpertises(expertiseRes.data)
-        setProducts(productRes.data)
-        setRatings(ratingRes.data)
+        setSkills(detailResponses[0].status === 'fulfilled' ? detailResponses[0].value.data : [])
+        setExpertises(detailResponses[1].status === 'fulfilled' ? detailResponses[1].value.data : [])
+        setProducts(detailResponses[2].status === 'fulfilled' ? detailResponses[2].value.data : [])
+        setRatings(detailResponses[3].status === 'fulfilled' ? detailResponses[3].value.data : [])
 
       } catch (error) {
         console.error(error)
@@ -135,12 +226,34 @@ export default function HomeFeed() {
   }, [posts, productsByPost, skillsByPost])
 
   const filteredPosts = useMemo(() => {
+    const activeRadiusKm = toCoordinateOrNull(filters.radiusKm)
+
     return posts.filter((post) => {
 
       if (filters.postType && post.post_type !== filters.postType) return false
 
-      if (filters.location &&
-          !post.location?.toLowerCase().includes(filters.location.toLowerCase())) {
+      const filterLat = toCoordinateOrNull(filters.latitude)
+      const filterLng = toCoordinateOrNull(filters.longitude)
+      const hasMapFilter = filterLat !== null && filterLng !== null
+
+      if (hasMapFilter) {
+        const postLat = toCoordinateOrNull(post.latitude)
+        const postLng = toCoordinateOrNull(post.longitude)
+
+        if (postLat === null || postLng === null) {
+          return locationTextMatches(post.location, filters.location)
+        }
+
+        if (activeRadiusKm !== null) {
+          const distance = distanceInKm(filterLat, filterLng, postLat, postLng)
+          if (distance > activeRadiusKm) {
+            return false
+          }
+        }
+      } else if (
+        filters.location &&
+        !post.location?.toLowerCase().includes(filters.location.toLowerCase())
+      ) {
         return false
       }
 
@@ -148,7 +261,7 @@ export default function HomeFeed() {
         const query = filters.search.toLowerCase()
 
         const haystack =
-          `${post.post_name} ${post.brand_company_name || ''} ${post.description || ''}`
+          `${post.post_name || ''} ${post.post_title || ''} ${post.brand_company_name || ''} ${post.description || ''}`
             .toLowerCase()
 
         if (!haystack.includes(query)) return false
@@ -174,6 +287,62 @@ export default function HomeFeed() {
       ...prev,
       [name]: value
     }))
+  }
+
+  const handleLocationFilterInputChange = (event) => {
+    const value = event.target.value
+    setFilters((prev) => ({
+      ...prev,
+      location: value,
+      latitude: '',
+      longitude: '',
+    }))
+  }
+
+  const handleFilterLocationPick = async (lat, lng) => {
+    setFilters((prev) => ({
+      ...prev,
+      latitude: String(lat),
+      longitude: String(lng),
+      location: `Lat ${lat.toFixed(5)}, Lng ${lng.toFixed(5)}`,
+    }))
+
+    setFilterLocationLoading(true)
+    try {
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}`,
+        {
+          headers: {
+            Accept: 'application/json',
+          },
+        },
+      )
+
+      if (!response.ok) return
+
+      const data = await response.json()
+      const resolvedLocation =
+        data?.display_name ||
+        [
+          data?.address?.suburb,
+          data?.address?.city || data?.address?.town || data?.address?.village,
+          data?.address?.state,
+          data?.address?.country,
+        ]
+          .filter(Boolean)
+          .join(', ')
+
+      if (resolvedLocation) {
+        setFilters((prev) => ({
+          ...prev,
+          location: resolvedLocation,
+        }))
+      }
+    } catch (error) {
+      console.warn('Filter reverse geocoding failed:', error)
+    } finally {
+      setFilterLocationLoading(false)
+    }
   }
 
   const handleAction = async (post, actionType) => {
@@ -251,6 +420,11 @@ export default function HomeFeed() {
   }
 
   const handleAddToCart = (post) => {
+    if (!isAuthenticated) {
+      navigate('/login')
+      return
+    }
+
     const added = addToCart(post, {
       minCost: costSummaryByPost[post.id]?.min || 0,
     })
@@ -361,7 +535,7 @@ export default function HomeFeed() {
           </div>
 
           <div className="relative grid gap-4 lg:grid-cols-6">
-            <div className="lg:col-span-2">
+            <div>
               <label className="text-[11px] font-semibold uppercase tracking-[0.14em] text-orange-900/90">Search</label>
               <input
                 name="search"
@@ -377,10 +551,30 @@ export default function HomeFeed() {
               <input
                 name="location"
                 value={filters.location}
-                onChange={handleFilterChange}
-                placeholder="City"
+                onChange={handleLocationFilterInputChange}
+                placeholder="Type city or pick from map"
                 className="mt-1.5 w-full rounded-xl border border-white/50 bg-white/45 px-3 py-2 text-sm text-slate-800 shadow-sm transition placeholder:text-slate-500 focus:border-orange-300 focus:outline-none focus:ring-2 focus:ring-orange-200/80"
               />
+              {filterLocationLoading && (
+                <p className="mt-1 text-[11px] text-slate-600">Resolving location...</p>
+              )}
+            </div>
+
+            <div>
+              <label className="text-[11px] font-semibold uppercase tracking-[0.14em] text-orange-900/90">Radius (km)</label>
+              <select
+                name="radiusKm"
+                value={filters.radiusKm}
+                onChange={handleFilterChange}
+                className="mt-1.5 w-full rounded-xl border border-white/50 bg-white/45 px-3 py-2 text-sm text-slate-800 shadow-sm transition focus:border-orange-300 focus:outline-none focus:ring-2 focus:ring-orange-200/80"
+              >
+                <option value="">No radius</option>
+                {RADIUS_OPTIONS_KM.map((km) => (
+                  <option key={km} value={String(km)}>
+                    {km} km
+                  </option>
+                ))}
+              </select>
             </div>
 
             <div>
@@ -420,6 +614,18 @@ export default function HomeFeed() {
                 <option value="2">2⭐</option>
                 <option value="1">1⭐</option>
               </select>
+            </div>
+
+            <div className="lg:col-span-6">
+              <div className="mx-auto max-w-4xl">
+                <LocationPickerMap
+                  latitude={filters.latitude}
+                  longitude={filters.longitude}
+                  radiusKm={toCoordinateOrNull(filters.radiusKm)}
+                  onPick={handleFilterLocationPick}
+                  popupText="Confirm this search location?"
+                />
+              </div>
             </div>
           </div>
         </div>

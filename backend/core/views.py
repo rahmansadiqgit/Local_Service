@@ -270,7 +270,13 @@ class PostViewSet(viewsets.ModelViewSet):
         return queryset
 
     def perform_create(self, serializer):
-        serializer.save(owner=self.request.user)
+        post = serializer.save(owner=self.request.user)
+        post_title = (post.post_title or "").strip() or "Untitled Post"
+        Notification.objects.create(
+            user=self.request.user,
+            title="Post Created",
+            message=f"You have successfully created your post: {post_title}.",
+        )
 
 
 class SkillViewSet(viewsets.ModelViewSet):

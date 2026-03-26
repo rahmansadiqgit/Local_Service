@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import api from '../api/client'
+import LocationPickerMap from '../components/LocationPickerMap'
 
 const CATEGORY_OPTIONS = ['Expertise', 'Services', 'Product']
 const POST_TYPE_OPTIONS = [
@@ -28,12 +29,23 @@ const initialPost = {
   description: '',
   brand_company_name: '',
   location: '',
+  latitude: '',
+  longitude: '',
   website_link: '',
+}
+
+const toCoordinateOrNull = (value) => {
+  if (value === null || value === undefined) return null
+  const normalized = String(value).trim()
+  if (!normalized) return null
+  const parsed = Number(normalized)
+  return Number.isFinite(parsed) ? parsed : null
 }
 
 export default function CreatePost() {
   const navigate = useNavigate()
   const imageInputRef = useRef(null)
+  const geocodeRequestRef = useRef(0)
   const postTypeMenuRef = useRef(null)
   const categoryMenuRef = useRef(null)
   const [post, setPost] = useState(initialPost)
@@ -54,6 +66,7 @@ export default function CreatePost() {
   const [products, setProducts] = useState([
     { product_name: '', description: '', unit: '', cost_per_unit: '', available_units: 0 },
   ])
+  const [locationLoading, setLocationLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState('')
 
@@ -89,6 +102,83 @@ export default function CreatePost() {
     }
   }, [imageFile])
 
+  const geocodeLocationQuery = async (rawQuery, { replaceInputText = false } = {}) => {
+    const query = String(rawQuery || '').trim()
+    if (query.length < 2) return false
+
+    const requestId = ++geocodeRequestRef.current
+    setLocationLoading(true)
+
+    try {
+      const urls = [
+        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(
+          `${query}, Bangladesh`,
+        )}&format=jsonv2&limit=1&countrycodes=bd`,
+        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(
+          query,
+        )}&format=jsonv2&limit=1&countrycodes=bd`,
+        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(
+          query,
+        )}&format=jsonv2&limit=1`,
+      ]
+
+      let first = null
+
+      for (const url of urls) {
+        const response = await fetch(url, {
+          headers: {
+            Accept: 'application/json',
+          },
+        })
+
+        if (!response.ok) continue
+
+        const data = await response.json()
+        first = Array.isArray(data) ? data[0] : null
+        if (first?.lat && first?.lon) break
+      }
+
+      if (!first?.lat || !first?.lon) return false
+      if (requestId !== geocodeRequestRef.current) return false
+
+      setPost((prev) => {
+        if (prev.location?.trim() !== query) return prev
+
+        return {
+          ...prev,
+          latitude: String(first.lat),
+          longitude: String(first.lon),
+          location: replaceInputText ? (first.display_name || prev.location) : prev.location,
+        }
+      })
+
+      return true
+    } catch (error) {
+      console.warn('Forward geocoding failed:', error)
+      return false
+    } finally {
+      if (requestId === geocodeRequestRef.current) {
+        setLocationLoading(false)
+      }
+    }
+  }
+
+  useEffect(() => {
+    const query = post.location?.trim()
+    const hasCoordinates =
+      toCoordinateOrNull(post.latitude) !== null &&
+      toCoordinateOrNull(post.longitude) !== null
+
+    if (!query || hasCoordinates) {
+      return
+    }
+
+    const timeoutId = setTimeout(async () => {
+      await geocodeLocationQuery(query, { replaceInputText: false })
+    }, 700)
+
+    return () => clearTimeout(timeoutId)
+  }, [post.location, post.latitude, post.longitude])
   const handleChange = (event) => {
     const { name, value } = event.target
     setPost((prev) => ({ ...prev, [name]: value }))
@@ -102,6 +192,82 @@ export default function CreatePost() {
     setShowPostTypeMenu(false)
   }
 
+  const handleLocationInputChange = (event) => {
+    const value = event.target.value
+    setPost((prev) => ({
+      ...prev,
+      location: value,
+      latitude: '',
+      longitude: '',
+    }))
+    setShowPostTypeMenu(false)
+    setShowCategoryMenu(false)
+  }
+
+  const handleLocationInputBlur = async () => {
+    const query = post.location?.trim()
+    const hasCoordinates =
+      toCoordinateOrNull(post.latitude) !== null &&
+      toCoordinateOrNull(post.longitude) !== null
+
+    if (!query || hasCoordinates) return
+    await geocodeLocationQuery(query, { replaceInputText: true })
+  }
+
+  const handleLocationInputKeyDown = async (event) => {
+    if (event.key !== 'Enter') return
+    event.preventDefault()
+
+    const query = post.location?.trim()
+    if (!query) return
+    await geocodeLocationQuery(query, { replaceInputText: true })
+  }
+
+  const handleMapLocationPick = async (lat, lng) => {
+    setPost((prev) => ({
+      ...prev,
+      latitude: String(lat),
+      longitude: String(lng),
+      location: `Lat ${lat.toFixed(5)}, Lng ${lng.toFixed(5)}`,
+    }))
+
+    setLocationLoading(true)
+    try {
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}`,
+        {
+          headers: {
+            Accept: 'application/json',
+          },
+        },
+      )
+
+      if (!response.ok) return
+
+      const data = await response.json()
+      const resolvedLocation =
+        data?.display_name ||
+        [
+          data?.address?.suburb,
+          data?.address?.city || data?.address?.town || data?.address?.village,
+          data?.address?.state,
+          data?.address?.country,
+        ]
+          .filter(Boolean)
+          .join(', ')
+
+      if (resolvedLocation) {
+        setPost((prev) => ({
+          ...prev,
+          location: resolvedLocation,
+        }))
+      }
+    } catch (error) {
+      console.warn('Reverse geocoding failed:', error)
+    } finally {
+      setLocationLoading(false)
+    }
+  }
   const toggleCategory = (category) => {
     setSelectedCategories((prev) => {
       const next = prev.includes(category)
@@ -186,6 +352,7 @@ export default function CreatePost() {
       setServices([{ service_name: '', description: '', unit: '', cost_per_unit: '' }])
       setProducts([{ product_name: '', description: '', unit: '', cost_per_unit: '', available_units: 0 }])
       window.dispatchEvent(new Event('post-created'))
+      window.dispatchEvent(new Event('localix:notifications-refresh'))
       navigate('/')
     } catch (error) {
       console.error(error)
@@ -348,80 +515,96 @@ export default function CreatePost() {
               className={profileLikeInputClass}
             />
           </div>
-          <div>
-            <label className="text-xs font-semibold text-black">Brand / Company</label>
-            <input
-              name="brand_company_name"
-              value={post.brand_company_name}
-              onChange={handleChange}
-              onFocus={() => setShowCategoryMenu(false)}
-              className={profileLikeInputClass}
-            />
+          <div className="space-y-4">
+            <div>
+              <label className="text-xs font-semibold text-black">Brand / Company</label>
+              <input
+                name="brand_company_name"
+                value={post.brand_company_name}
+                onChange={handleChange}
+                onFocus={() => setShowCategoryMenu(false)}
+                className={profileLikeInputClass}
+              />
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold text-black">Image</label>
+              <div className="mt-1 flex items-start gap-4">
+                <div className="flex flex-col items-start gap-2">
+                  <label className={primaryButtonClass}>
+                    Choose File
+                    <input
+                      ref={imageInputRef}
+                      type="file"
+                      accept="image/*"
+                      onChange={(event) => setImageFile(event.target.files?.[0] || null)}
+                      className="hidden"
+                    />
+                  </label>
+                  {imageFile && (
+                    <span className="flex items-center gap-2 text-sm text-slate-600">
+                      {imageFile.name}
+                      <button
+                        type="button"
+                        aria-label="Remove selected image"
+                        onClick={() => {
+                          setImageFile(null)
+                          if (imageInputRef.current) {
+                            imageInputRef.current.value = ''
+                          }
+                        }}
+                        className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-gradient-to-r from-violet-600 to-fuchsia-600 text-xs font-bold text-white shadow-sm transition hover:from-violet-700 hover:to-fuchsia-700"
+                      >
+                        x
+                      </button>
+                    </span>
+                  )}
+                </div>
+                {previewUrl && (
+                  <div className="rounded-lg border border-slate-200 bg-slate-50 p-2 shadow-sm">
+                    <img
+                      src={previewUrl}
+                      alt="Preview"
+                      className="h-20 w-20 rounded-lg object-cover"
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold text-black">Website</label>
+              <input
+                name="website_link"
+                value={post.website_link}
+                onChange={handleChange}
+                onFocus={() => setShowCategoryMenu(false)}
+                className={profileLikeInputClass}
+              />
+            </div>
           </div>
+
           <div>
             <label className="text-xs font-semibold text-black">Location</label>
             <input
               name="location"
               value={post.location}
-              onChange={handleChange}
+              onChange={handleLocationInputChange}
+              onBlur={handleLocationInputBlur}
+              onKeyDown={handleLocationInputKeyDown}
               onFocus={() => setShowCategoryMenu(false)}
               required
+              placeholder="Type location or pick from map"
               className={profileLikeInputClass}
             />
-          </div>
-          <div>
-            <label className="text-xs font-semibold text-black">Image</label>
-            <div className="mt-1 flex items-start gap-4">
-              <div className="flex flex-col items-start gap-2">
-                <label className={primaryButtonClass}>
-                  Choose File
-                  <input
-                    ref={imageInputRef}
-                    type="file"
-                    accept="image/*"
-                    onChange={(event) => setImageFile(event.target.files?.[0] || null)}
-                    className="hidden"
-                  />
-                </label>
-                {imageFile && (
-                  <span className="flex items-center gap-2 text-sm text-slate-600">
-                    {imageFile.name}
-                    <button
-                      type="button"
-                      aria-label="Remove selected image"
-                      onClick={() => {
-                        setImageFile(null)
-                        if (imageInputRef.current) {
-                          imageInputRef.current.value = ''
-                        }
-                      }}
-                      className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-gradient-to-r from-violet-600 to-fuchsia-600 text-xs font-bold text-white shadow-sm transition hover:from-violet-700 hover:to-fuchsia-700"
-                    >
-                      x
-                    </button>
-                  </span>
-                )}
-              </div>
-              {previewUrl && (
-                <div className="rounded-lg border border-slate-200 bg-slate-50 p-2 shadow-sm">
-                  <img
-                    src={previewUrl}
-                    alt="Preview"
-                    className="h-20 w-20 rounded-lg object-cover"
-                  />
-                </div>
-              )}
+            <div className="mt-2">
+              <LocationPickerMap
+                latitude={post.latitude}
+                longitude={post.longitude}
+                onPick={handleMapLocationPick}
+                popupText="Confirm this location?"
+              />
             </div>
-          </div>
-          <div>
-            <label className="text-xs font-semibold text-black">Website</label>
-            <input
-              name="website_link"
-              value={post.website_link}
-              onChange={handleChange}
-              onFocus={() => setShowCategoryMenu(false)}
-              className={profileLikeInputClass}
-            />
           </div>
         </div>
 

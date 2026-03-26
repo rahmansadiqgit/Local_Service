@@ -130,15 +130,7 @@ export default function Header() {
     const parsed = new Date(value)
     if (Number.isNaN(parsed.getTime())) return "Unknown time"
 
-    return new Intl.DateTimeFormat(undefined, {
-      year: "numeric",
-      month: "short",
-      day: "2-digit",
-      hour: "numeric",
-      minute: "2-digit",
-      second: "2-digit",
-      hour12: true,
-    }).format(parsed)
+    return parsed.toLocaleString()
   }
 
   const handleMarkAllAsRead = async () => {
