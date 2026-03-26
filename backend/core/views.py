@@ -7,7 +7,7 @@ from django.contrib.auth.tokens import default_token_generator
 from django.conf import settings
 from django.core.files.base import ContentFile
 from django.core.mail import BadHeaderError
-from django.core.mail import send_mail
+from django.core.mail import EmailMultiAlternatives
 from django.db.models import Avg, DecimalField, Max, Min
 from django.db.models import Q
 from django.db.models.functions import Coalesce
@@ -139,14 +139,27 @@ class PasswordResetRequestView(APIView):
         reset_url = (
             f"{settings.FRONTEND_URL}/reset-password/confirm?uid={uid}&token={token}"
         )
+        subject = "Reset your Localix password"
+        text_body = (
+            "You requested a password reset for your Localix account.\n\n"
+            f"Click this link to set a new password:\n{reset_url}\n\n"
+            "If you did not request this, you can ignore this email."
+        )
+        html_body = (
+            "<p>You requested a password reset for your Localix account.</p>"
+            f"<p><a href=\"{reset_url}\">Click here to reset your password</a></p>"
+            "<p>If you did not request this, you can ignore this email.</p>"
+        )
+
         try:
-            sent_count = send_mail(
-                subject="Reset your Localix password",
-                message=f"Reset your password using this link: {reset_url}",
+            email_message = EmailMultiAlternatives(
+                subject=subject,
+                body=text_body,
                 from_email=settings.DEFAULT_FROM_EMAIL,
-                recipient_list=[user.email],
-                fail_silently=False,
+                to=[user.email],
             )
+            email_message.attach_alternative(html_body, "text/html")
+            sent_count = email_message.send(fail_silently=False)
             if sent_count != 1:
                 return Response(
                     {"detail": "Could not send reset email right now. Please try again."},
