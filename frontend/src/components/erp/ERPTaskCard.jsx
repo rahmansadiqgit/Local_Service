@@ -236,6 +236,43 @@ export default function ERPTaskCard({
         </div>
       </div>
 
+      <div className="rounded-lg border border-violet-200/70 bg-white/70 px-3 py-3 text-xs text-slate-700">
+        <div className="relative">
+          <div className="pointer-events-none absolute left-8 right-8 top-3 h-0.5 bg-slate-200" />
+          <div className="relative grid grid-cols-3 gap-2">
+            {phases.map((phase, index) => {
+              const isDone = index < activePhaseIndex
+              const isActive = phase === erp.stage
+
+              return (
+                <div key={`phase-flow-${erp.id}-${phase}`} className="flex flex-col items-center gap-1 text-center">
+                  <span
+                    className={`h-6 w-6 rounded-full border-2 transition ${
+                      isActive
+                        ? 'border-violet-600 bg-violet-600 shadow-sm'
+                        : isDone
+                          ? 'border-emerald-500 bg-emerald-500'
+                          : 'border-slate-300 bg-white'
+                    }`}
+                  />
+                  <span
+                    className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                      isActive
+                        ? 'bg-violet-600 text-white'
+                        : isDone
+                          ? 'bg-emerald-100 text-emerald-700'
+                          : 'text-slate-600'
+                    }`}
+                  >
+                    {phase}
+                  </span>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      </div>
+
       <div className="relative flex flex-wrap gap-2.5">
         <button
           type="button"
@@ -257,7 +294,7 @@ export default function ERPTaskCard({
           onClick={() => onToggleTrack(erp.id)}
           className="rounded-full border border-violet-300 bg-violet-50 px-4 py-2 text-sm font-semibold text-violet-700 transition hover:bg-violet-100"
         >
-          Track
+          Tasks
         </button>
         <button
           type="button"
@@ -275,7 +312,7 @@ export default function ERPTaskCard({
             Members
           </button>
           {isMembersMenuOpen && (
-            <div className="absolute left-0 top-full z-10 mt-2 min-w-[150px] rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
+            <div className="absolute bottom-full left-0 z-30 mb-2 min-w-[150px] rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
               {memberMenuOptions.length ? (
                 memberMenuOptions.map((option) => (
                   <button
@@ -372,27 +409,6 @@ export default function ERPTaskCard({
 
       {trackOpenId === erp.id && (
         <div className="space-y-3 rounded-xl border border-violet-200 bg-violet-50/50 p-3 text-xs text-slate-700">
-          <div className="flex flex-wrap items-center gap-2">
-            {phases.map((phase, index) => {
-              const isDone = index < activePhaseIndex
-              const isActive = phase === erp.stage
-              return (
-                <span
-                  key={`phase-chip-${erp.id}-${phase}`}
-                  className={`rounded-full px-3 py-1 font-semibold ${
-                    isActive
-                      ? 'bg-violet-600 text-white'
-                      : isDone
-                        ? 'bg-emerald-100 text-emerald-700'
-                        : 'border border-slate-200 bg-white text-slate-600'
-                  }`}
-                >
-                  {phase}
-                </span>
-              )
-            })}
-          </div>
-
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="rounded-lg border border-slate-200 bg-white p-2">
               <p className="font-semibold text-slate-800">Pending Tasks</p>
@@ -425,7 +441,7 @@ export default function ERPTaskCard({
             >
               {erp.stage === 'Completed' ? 'Completed' : 'Next State'}
             </button>
-            <p className="text-[11px] text-slate-500">Flow: Pending → On Process → Completed</p>
+            <p className="text-[11px] text-slate-500">Use Next State to move along the flow.</p>
           </div>
 
           {erp.stage === 'On Process' ? (
