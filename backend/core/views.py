@@ -321,6 +321,33 @@ class ERPViewSet(viewsets.ModelViewSet):
         category = "Provided" if actor == provider else "Received"
         return provider, receiver, category
 
+    def _to_bool(self, value):
+        if isinstance(value, bool):
+            return value
+        return str(value).strip().lower() in {"1", "true", "yes", "on"}
+
+    def _notify_booking_confirmation(self, erp, actor):
+        if not erp:
+            return
+
+        post_title = (
+            (erp.configuration_snapshot or {}).get("post", {}).get("title")
+            or getattr(erp.post, "post_title", "")
+            or getattr(erp.post, "post_name", "")
+            or "a post"
+        )
+        actor_name = getattr(actor, "name", "") or getattr(actor, "username", "") or "A user"
+
+        supplier = getattr(erp.post, "owner", None)
+        if not supplier:
+            return
+
+        Notification.objects.create(
+            user=supplier,
+            title="Booking Confirmed",
+            message=f"{actor_name} confirmed booking for '{post_title}'. Check ERP for task details.",
+        )
+
     def get_queryset(self):
         user = self.request.user
         return ERP.objects.filter(
@@ -350,9 +377,23 @@ class ERPViewSet(viewsets.ModelViewSet):
             return Response(data, status=status.HTTP_200_OK)
 
         instance = serializer.save(provider=provider, receiver=receiver, category=category)
+        if self._to_bool(serializer.validated_data.get("is_configured", False)):
+            self._notify_booking_confirmation(instance, actor)
         data = self.get_serializer(instance).data
         headers = self.get_success_headers(data)
         return Response(data, status=status.HTTP_201_CREATED, headers=headers)
+
+    def partial_update(self, request, *args, **kwargs):
+        response = super().partial_update(request, *args, **kwargs)
+        if self._to_bool(request.data.get("is_configured", False)):
+            self._notify_booking_confirmation(self.get_object(), request.user)
+        return response
+
+    def update(self, request, *args, **kwargs):
+        response = super().update(request, *args, **kwargs)
+        if self._to_bool(request.data.get("is_configured", False)):
+            self._notify_booking_confirmation(self.get_object(), request.user)
+        return response
 
     def perform_create(self, serializer):
         actor = self.request.user
