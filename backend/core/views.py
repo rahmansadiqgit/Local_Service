@@ -1,10 +1,12 @@
 from io import BytesIO
 import textwrap
+import logging
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.tokens import default_token_generator
 from django.conf import settings
 from django.core.files.base import ContentFile
+from django.core.mail import BadHeaderError
 from django.core.mail import send_mail
 from django.db.models import Avg, DecimalField, Max, Min
 from django.db.models import Q
@@ -44,6 +46,7 @@ from .serializers import (
 )
 
 User = get_user_model()
+logger = logging.getLogger(__name__)
 
 
 class RegisterView(APIView):
@@ -121,22 +124,41 @@ class PasswordResetRequestView(APIView):
     def post(self, request):
         serializer = PasswordResetRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        email = serializer.validated_data["email"]
-        user = User.objects.filter(email=email).first()
-        if user:
-            uid = urlsafe_base64_encode(force_bytes(user.pk))
-            token = default_token_generator.make_token(user)
-            reset_url = (
-                f"{settings.FRONTEND_URL}/reset-password/confirm?uid={uid}&token={token}"
+        input_email = serializer.validated_data["email"].strip()
+        user = User.objects.filter(email__iexact=input_email, is_active=True).first()
+        if not user:
+            return Response(
+                {
+                    "detail": "This mail is not registered in the system yet. Enter a valid email."
+                },
+                status=status.HTTP_400_BAD_REQUEST,
             )
-            send_mail(
+
+        uid = urlsafe_base64_encode(force_bytes(user.pk))
+        token = default_token_generator.make_token(user)
+        reset_url = (
+            f"{settings.FRONTEND_URL}/reset-password/confirm?uid={uid}&token={token}"
+        )
+        try:
+            sent_count = send_mail(
                 subject="Reset your Localix password",
                 message=f"Reset your password using this link: {reset_url}",
-                from_email=None,
-                recipient_list=[email],
-                fail_silently=True,
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                recipient_list=[user.email],
+                fail_silently=False,
             )
-        return Response({"detail": "If the email exists, a reset link was sent."})
+            if sent_count != 1:
+                return Response(
+                    {"detail": "Could not send reset email right now. Please try again."},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                )
+        except (BadHeaderError, Exception):
+            return Response(
+                {"detail": "Could not send reset email right now. Please try again."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+        logger.info("Password reset link sent to registered email %s", user.email)
+        return Response({"detail": f"Reset link sent to {user.email}."})
 
 
 class PasswordResetConfirmView(APIView):

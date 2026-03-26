@@ -12,11 +12,23 @@ export default function ResetPassword() {
     setLoading(true)
     setMessage('')
     try {
-      await api.post('/auth/password-reset/', { email })
-      setMessage('If the email exists, a reset link was sent.')
+      const normalizedEmail = email.trim()
+      const response = await api.post(
+        '/auth/password-reset/',
+        { email: normalizedEmail },
+        { skipAuth: true, skipAuthRedirect: true },
+      )
+      setMessage(response?.data?.detail || 'Link sent to this email.')
     } catch (error) {
       console.error(error)
-      setMessage('Failed to send reset link.')
+      const data = error?.response?.data
+      if (typeof data?.detail === 'string' && data.detail.trim()) {
+        setMessage(data.detail)
+      } else if (Array.isArray(data?.email) && data.email.length) {
+        setMessage(String(data.email[0]))
+      } else {
+        setMessage('Failed to send reset link.')
+      }
     } finally {
       setLoading(false)
     }
@@ -43,7 +55,14 @@ export default function ResetPassword() {
         </div>
       </div>
 
-      <form onSubmit={handleSubmit} className="card space-y-4">
+      <form
+        onSubmit={handleSubmit}
+        className="card space-y-4 rounded-2xl border border-violet-200/80 p-4 shadow-sm backdrop-blur-md"
+        style={{
+          backgroundColor: 'rgba(236, 225, 255, 0.56)',
+          backgroundImage: 'linear-gradient(145deg, rgba(225, 205, 255, 0.58), rgba(244, 230, 255, 0.54))',
+        }}
+      >
         <div>
           <label className="text-xs font-semibold text-slate-500">Email</label>
           <input

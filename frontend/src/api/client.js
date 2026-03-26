@@ -19,6 +19,10 @@ config = config comes from Axios itself and represents all the details of your A
 */
 
 api.interceptors.request.use((config) => { //lets you intercept every request before it is sent to the server.
+  if (config?.skipAuth) {
+    return config
+  }
+
   const token = localStorage.getItem('accessToken')
   if (token) {
     config.headers.Authorization = `Bearer ${token}`

@@ -31,11 +31,15 @@ export default function ResetPasswordConfirm() {
     setLoading(true)
     setMessage('')
     try {
-      await api.post('/auth/password-reset/confirm/', {
-        uid,
-        token,
-        new_password: password,
-      })
+      await api.post(
+        '/auth/password-reset/confirm/',
+        {
+          uid,
+          token,
+          new_password: password,
+        },
+        { skipAuth: true, skipAuthRedirect: true },
+      )
       setMessage('Password updated. You can now sign in.')
       setPassword('')
       setConfirmPassword('')
@@ -52,20 +56,34 @@ export default function ResetPasswordConfirm() {
       <div className="card relative overflow-hidden border-0 bg-gradient-to-r from-[#c9b6ff] via-[#e6d7ff] to-[#f2eaff] p-0 text-slate-800 shadow-lg">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.45),transparent_58%)]" />
         <div className="absolute -right-8 -top-8 h-20 w-20 rounded-full bg-white/30 blur-xl" />
-        <div className="relative px-6 py-3.5 sm:px-8 sm:py-4">
-          <h2
-            className="text-xl font-extrabold tracking-tight text-violet-900 sm:text-3xl"
-            style={{ fontFamily: "'Sora', 'Trebuchet MS', sans-serif" }}
-          >
-            Set New Password
-          </h2>
-          <p className="mt-0.5 text-xs text-violet-800/80 sm:text-sm">
-            Choose a new password for your account.
-          </p>
+        <div className="relative px-6 py-3.5 pr-40 sm:px-8 sm:py-4 sm:pr-44 lg:pr-48">
+          <div className="text-left">
+            <h2
+              className="whitespace-nowrap text-base font-extrabold tracking-tight text-violet-900 sm:text-lg"
+              style={{ fontFamily: "'Sora', 'Trebuchet MS', sans-serif" }}
+            >
+              Set New Password
+            </h2>
+            <p className="mt-0.5 whitespace-nowrap text-[11px] text-violet-800/80 sm:text-xs">
+              Choose a new password for your account.
+            </p>
+          </div>
+          <img
+            src="/images/forgot_pass.png"
+            alt="Set new password"
+            className="pointer-events-none absolute right-6 top-1/2 h-24 w-24 -translate-y-1/2 object-contain sm:h-28 sm:w-28 lg:h-32 lg:w-32"
+          />
         </div>
       </div>
 
-      <form onSubmit={handleSubmit} className="card space-y-4">
+      <form
+        onSubmit={handleSubmit}
+        className="card space-y-4 rounded-2xl border border-violet-200/80 p-4 shadow-sm backdrop-blur-md"
+        style={{
+          backgroundColor: 'rgba(236, 225, 255, 0.56)',
+          backgroundImage: 'linear-gradient(145deg, rgba(225, 205, 255, 0.58), rgba(244, 230, 255, 0.54))',
+        }}
+      >
         <div>
           <label className="text-xs font-semibold text-slate-500">New Password</label>
           <input
@@ -88,13 +106,15 @@ export default function ResetPasswordConfirm() {
             className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm border-slate-200 bg-slate-100"
           />
         </div>
-        <button
-          type="submit"
-          disabled={loading || missingToken}
-          className="w-full rounded-full bg-brand-500 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-brand-600 disabled:opacity-70"
-        >
-          {loading ? 'Updating...' : 'Update Password'}
-        </button>
+        <div className="flex justify-center">
+          <button
+            type="submit"
+            disabled={loading || missingToken}
+            className="inline-flex items-center rounded-xl bg-gradient-to-r from-violet-600 to-fuchsia-600 px-6 py-2.5 text-sm font-semibold text-white shadow-md transition hover:from-violet-700 hover:to-fuchsia-700 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {loading ? 'Updating...' : 'Update Password'}
+          </button>
+        </div>
         {message && <p className="text-sm text-slate-500">{message}</p>}
         <p className="text-sm text-slate-500">
           Back to{' '}
