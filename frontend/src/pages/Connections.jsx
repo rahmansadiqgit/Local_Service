@@ -2,39 +2,51 @@ import { useEffect, useMemo, useState } from 'react'
 import api from '../api/client'
 import defaultAvatar from '../assets/default-avatar.svg'
 
-const statusStyles = {
-  Active: 'bg-emerald-100 text-emerald-700',
-  Available: 'bg-blue-100 text-blue-700',
-  Viewer: 'bg-transparent text-slate-400',
-  Busy: 'bg-rose-100 text-rose-700',
-  Inactive: 'bg-transparent text-slate-400',
-}
-
 export default function Connections() {
   const [selected, setSelected] = useState(null)
   const [posts, setPosts] = useState([])
-  const [users, setUsers] = useState([])
   const [erpItems, setErpItems] = useState([])
   const [currentUserId, setCurrentUserId] = useState(null)
+  const [overview, setOverview] = useState({
+    live_connections: [],
+    new_connections: [],
+    recent_connections: [],
+    incoming_requests: [],
+    outgoing_requests: [],
+  })
   const [selfAssignLoading, setSelfAssignLoading] = useState('')
+  const [requestActionLoading, setRequestActionLoading] = useState('')
   const [message, setMessage] = useState('')
+
+  const normalizeOverview = (data) => ({
+    live_connections: Array.isArray(data?.live_connections) ? data.live_connections : [],
+    new_connections: Array.isArray(data?.new_connections) ? data.new_connections : [],
+    recent_connections: Array.isArray(data?.recent_connections) ? data.recent_connections : [],
+    incoming_requests: Array.isArray(data?.incoming_requests) ? data.incoming_requests : [],
+    outgoing_requests: Array.isArray(data?.outgoing_requests) ? data.outgoing_requests : [],
+  })
+
+  const loadOverview = async () => {
+    const { data } = await api.get('/connections/overview/')
+    setOverview(normalizeOverview(data))
+  }
 
   useEffect(() => {
     let active = true
 
     const load = async () => {
       try {
-        const [postRes, userRes, erpRes, meRes] = await Promise.all([
+        const [postRes, erpRes, meRes, overviewRes] = await Promise.all([
           api.get('/posts/'),
-          api.get('/users/'),
           api.get('/erp/'),
           api.get('/auth/me/'),
+          api.get('/connections/overview/'),
         ])
         if (!active) return
         setPosts(postRes.data)
-        setUsers(userRes.data)
         setErpItems(erpRes.data)
         setCurrentUserId(meRes.data?.id ?? null)
+        setOverview(normalizeOverview(overviewRes.data))
       } catch (error) {
         console.error(error)
       }
@@ -76,21 +88,6 @@ export default function Connections() {
     })
   }, [erpItems])
 
-  // If you want to filter users, use another property or remove these filters
-  const customers = users;
-  const providers = users;
-
-  const sendNotification = async (title, messageText) => {
-    setMessage('')
-    try {
-      await api.post('/notifications/', { title, message: messageText })
-      setMessage('Notification sent.')
-    } catch (error) {
-      console.error(error)
-      setMessage('Failed to send notification.')
-    }
-  }
-
   const handleSelfAssign = async (erpId, role, assign) => {
     const loadingKey = `${erpId}-${role}`
     setSelfAssignLoading(loadingKey)
@@ -98,11 +95,27 @@ export default function Connections() {
       const { data } = await api.post(`/erp/${erpId}/self_assign/`, { role, assign })
       setErpItems((prev) => prev.map((item) => (item.id === data.id ? data : item)))
       setMessage(assign ? 'You assigned yourself successfully.' : 'You removed yourself successfully.')
+      await loadOverview()
     } catch (error) {
       console.error(error)
       setMessage('Failed to update self assignment.')
     } finally {
       setSelfAssignLoading('')
+    }
+  }
+
+  const handleRespondRequest = async (requestId, decision) => {
+    const loadingKey = `${requestId}-${decision}`
+    setRequestActionLoading(loadingKey)
+    try {
+      await api.post(`/connections/${requestId}/respond/`, { decision })
+      await loadOverview()
+      setMessage(decision === 'accept' ? 'Connection request accepted.' : 'Connection request rejected.')
+    } catch (error) {
+      console.error(error)
+      setMessage('Failed to update connection request.')
+    } finally {
+      setRequestActionLoading('')
     }
   }
 
@@ -194,12 +207,8 @@ export default function Connections() {
             ) : null}
           </div>
         </div>
-        <span
-          className={`ml-auto rounded-full px-2 py-1 text-xs font-semibold ${
-            statusStyles[person.status] || 'text-slate-400'
-          }`}
-        >
-          {person.status || 'Inactive'}
+        <span className="ml-auto rounded-full bg-violet-100 px-2 py-1 text-xs font-semibold text-violet-700">
+          {type}
         </span>
       </div>
       <p className="mt-3 text-sm text-slate-500">{person.location}</p>
@@ -229,23 +238,85 @@ export default function Connections() {
         </div>
       </div>
 
+      {message ? (
+        <div className="card border border-slate-200 bg-white/80 text-sm text-slate-600">
+          {message}
+        </div>
+      ) : null}
+
       <div className="space-y-4">
         <div className="flex items-center justify-between">
-          <h3 className="text-lg font-semibold">Customers</h3>
-          <p className="text-xs text-slate-400">Active = green • Available = blue • Viewer = none</p>
+          <h3 className="text-lg font-semibold">Live Connections</h3>
+          <p className="text-xs text-slate-400">Connections currently active in ERP.</p>
         </div>
         <div className="grid gap-4 lg:grid-cols-3">
-          {customers.map((person) => renderCard(person, 'customer'))}
+          {overview.live_connections.length ? (
+            overview.live_connections.map((person) => renderCard(person, 'Live'))
+          ) : (
+            <p className="text-sm text-slate-500">No live connections yet.</p>
+          )}
         </div>
       </div>
 
       <div className="space-y-4">
         <div className="flex items-center justify-between">
-          <h3 className="text-lg font-semibold">Service Providers</h3>
-          <p className="text-xs text-slate-400">Busy = red • Active = yellow • Inactive = none</p>
+          <h3 className="text-lg font-semibold">New Connections</h3>
+          <p className="text-xs text-slate-400">Accepted connection requests.</p>
+        </div>
+        <div className="card border border-slate-200 bg-white/80">
+          <p className="text-sm font-semibold">Incoming Requests</p>
+          <div className="mt-2 space-y-2 text-sm">
+            {overview.incoming_requests.length ? (
+              overview.incoming_requests.map((item) => (
+                <div key={`incoming-${item.id}`} className="rounded-lg border border-slate-200 bg-white p-2">
+                  <p className="font-semibold text-slate-800">{item.requester_name || `User #${item.requester}`}</p>
+                  <p className="text-xs text-slate-500">{item.request_message || 'No request message.'}</p>
+                  <div className="mt-2 flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleRespondRequest(item.id, 'accept')}
+                      disabled={requestActionLoading === `${item.id}-accept`}
+                      className="rounded-full border border-emerald-200 px-3 py-1 text-xs font-semibold text-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      Accept
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleRespondRequest(item.id, 'reject')}
+                      disabled={requestActionLoading === `${item.id}-reject`}
+                      className="rounded-full border border-rose-200 px-3 py-1 text-xs font-semibold text-rose-700 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      Reject
+                    </button>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <p className="text-slate-500">No incoming requests.</p>
+            )}
+          </div>
+        </div>
+
+        <div className="grid gap-4 lg:grid-cols-3">
+          {overview.new_connections.length ? (
+            overview.new_connections.map((person) => renderCard(person, 'New'))
+          ) : (
+            <p className="text-sm text-slate-500">No new connections yet.</p>
+          )}
+        </div>
+      </div>
+
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h3 className="text-lg font-semibold">Recent Connections</h3>
+          <p className="text-xs text-slate-400">Previously live ERP connections.</p>
         </div>
         <div className="grid gap-4 lg:grid-cols-3">
-          {providers.map((person) => renderCard(person, 'provider'))}
+          {overview.recent_connections.length ? (
+            overview.recent_connections.map((person) => renderCard(person, 'Recent'))
+          ) : (
+            <p className="text-sm text-slate-500">No recent connections yet.</p>
+          )}
         </div>
       </div>
 
@@ -297,14 +368,9 @@ export default function Connections() {
                 <p className="text-xs text-slate-500">{selected.location}</p>
               </div>
               <span
-                className={`rounded-full px-2 py-1 text-xs font-semibold ${
-                  statusStyles[selected.status] || 'text-slate-400'
-                }`}
+                className="rounded-full bg-violet-100 px-2 py-1 text-xs font-semibold text-violet-700"
               >
-                {selected.status}
-              </span>
-              <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-600">
-                {selected.type === 'customer' ? 'Customer' : 'Provider'}
+                {selected.type}
               </span>
             </div>
 
@@ -322,34 +388,6 @@ export default function Connections() {
                   ))
                 )}
               </div>
-            </div>
-
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() =>
-                  sendNotification(
-                    'Booking Request',
-                    `Booking initiated with ${selected.name}.`,
-                  )
-                }
-                className="rounded-full bg-brand-500 px-4 py-2 text-sm font-semibold text-white"
-              >
-                Book Service
-              </button>
-              <button
-                type="button"
-                onClick={() =>
-                  sendNotification(
-                    'Worker Assignment',
-                    `Worker assignment initiated for ${selected.name}.`,
-                  )
-                }
-                className="rounded-full border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600"
-              >
-                Assign Worker
-              </button>
-              {message && <span className="text-sm text-slate-500">{message}</span>}
             </div>
           </div>
         )}

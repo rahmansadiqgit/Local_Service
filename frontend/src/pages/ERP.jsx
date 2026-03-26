@@ -222,7 +222,11 @@ export default function ERP() {
       readyProductStatusByErp[erp.id] === undefined
         ? requiredProductQty > 0
         : Boolean(readyProductStatusByErp[erp.id])
-    const assignedExpertiseQty = Number(memberAssignments.expertise?.assigned_qty || 0)
+    const assignedExpertiseQtyFromField = Number(memberAssignments.expertise?.assigned_qty || 0)
+    const assignedExpertiseCount = Array.isArray(memberAssignments.expertise?.assignee_ids)
+      ? memberAssignments.expertise.assignee_ids.length
+      : 0
+    const assignedExpertiseQty = Math.max(assignedExpertiseQtyFromField, assignedExpertiseCount)
     const hasAssignedSkillProvider =
       Array.isArray(memberAssignments.skill_provider?.assignee_ids)
         ? memberAssignments.skill_provider.assignee_ids.length > 0

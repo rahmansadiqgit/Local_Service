@@ -4,6 +4,7 @@ from rest_framework_simplejwt.views import TokenRefreshView
 
 from .views import (
     ChangePasswordView,
+    ConnectionViewSet,
     CustomTokenObtainPairView,
     LogoutView,
     MeView,
@@ -53,6 +54,7 @@ router.register(r"erp", ERPViewSet, basename="erp")
 router.register(r"ratings", RatingViewSet, basename="rating")
 router.register(r"notifications", NotificationViewSet, basename="notification")
 router.register(r"users", UserViewSet, basename="user")
+router.register(r"connections", ConnectionViewSet, basename="connection")
 
 
 

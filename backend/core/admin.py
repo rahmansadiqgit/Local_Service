@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
 
-from .models import ERP, ERPMessage, Notification, Post, ProblemReport, Product, Rating, Skill, User
+from .models import Connection, ERP, ERPMessage, Notification, Post, ProblemReport, Product, Rating, Skill, User
 
 @admin.register(User)
 class CustomUserAdmin(UserAdmin):
@@ -120,3 +120,10 @@ class ProblemReportAdmin(admin.ModelAdmin):
         "user__username",
         "user__email",
     )
+
+
+@admin.register(Connection)
+class ConnectionAdmin(admin.ModelAdmin):
+    list_display = ("id", "requester", "addressee", "status", "accepted_at", "created_at")
+    list_filter = ("status", "created_at", "accepted_at")
+    search_fields = ("requester__username", "requester__email", "addressee__username", "addressee__email")
