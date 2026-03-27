@@ -37,10 +37,10 @@ export default function ServiceTable({ services = [], postType = 'Supply', showD
 
   return (
     <div className={`overflow-x-auto rounded-xl border ${isProfileTone ? 'border-violet-200/80 bg-white/55' : 'border-slate-200 dark:border-slate-800'}`}>
-      <table className="min-w-[560px] w-full text-left text-xs sm:text-sm">
+      <table className="w-full text-left text-xs sm:text-sm">
         <thead className={isProfileTone ? 'bg-gradient-to-r from-violet-100/90 to-fuchsia-100/80 text-violet-900' : 'bg-slate-50 text-slate-600 dark:bg-slate-900 dark:text-slate-300'}>
           <tr>
-            <th className="px-3 py-2 whitespace-nowrap">
+            <th className="px-3 py-2 whitespace-nowrap w-32">
               <button type="button" onClick={() => handleSort('service_name')}>
                 Service Name
               </button>
@@ -52,11 +52,6 @@ export default function ServiceTable({ services = [], postType = 'Supply', showD
                 </button>
               </th>
             )}
-            <th className="px-3 py-2 whitespace-nowrap">
-              <button type="button" onClick={() => handleSort('unit')}>
-                {isDemand ? 'Service Duration Needed' : 'Service Duration'}
-              </button>
-            </th>
             <th className="px-3 py-2 whitespace-nowrap">
               <button type="button" onClick={() => handleSort('cost_per_unit')}>
                 {isDemand ? 'Budget (BDT)' : 'Service Cost (BDT)'}
@@ -78,11 +73,10 @@ export default function ServiceTable({ services = [], postType = 'Supply', showD
                     : 'bg-slate-50 dark:bg-slate-900'
               }
             >
-              <td className={isProfileTone ? 'px-3 py-2 whitespace-nowrap text-slate-800' : 'px-3 py-2 text-slate-900 dark:text-slate-100 whitespace-nowrap'}>{row.service_name || '-'}</td>
+              <td className={isProfileTone ? 'px-3 py-2 whitespace-normal break-words text-slate-800 w-32' : 'px-3 py-2 text-slate-900 dark:text-slate-100 whitespace-normal break-words w-32'}>{row.service_name || '-'}</td>
               {showDescription && (
                 <td className={isProfileTone ? 'px-3 py-2 whitespace-pre-line break-words text-slate-800' : 'px-3 py-2 text-slate-900 dark:text-slate-100 whitespace-pre-line break-words'}>{row.description || '-'}</td>
               )}
-              <td className={isProfileTone ? 'px-3 py-2 whitespace-nowrap text-slate-800' : 'px-3 py-2 text-slate-900 dark:text-slate-100 whitespace-nowrap'}>{row.unit || '-'}</td>
               <td className={isProfileTone ? 'px-3 py-2 whitespace-nowrap text-slate-800' : 'px-3 py-2 text-slate-900 dark:text-slate-100 whitespace-nowrap'}>
                 {!isNaN(parseFloat(row.cost_per_unit)) ? parseFloat(row.cost_per_unit).toFixed(2) : '0.00'}
               </td>

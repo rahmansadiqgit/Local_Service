@@ -14,7 +14,7 @@ export default function ManagePost() {
   const [skillWorkers, setSkillWorkers] = useState({})
   const [expertisePersons, setExpertisePersons] = useState({})
   const [expertiseDurations, setExpertiseDurations] = useState({})
-  const [serviceDurations, setServiceDurations] = useState({})
+  const [serviceQuantities, setServiceQuantities] = useState({})
   const [productUnits, setProductUnits] = useState({})
   const [loading, setLoading] = useState(true)
   const [message, setMessage] = useState('')
@@ -206,8 +206,8 @@ export default function ManagePost() {
     }, 0)
     
     const serviceTotal = serviceRows.reduce((sum, row) => {
-      const duration = Number(serviceDurations[`service-${row.id}-duration`] || 0)
-      return sum + duration * Number(row.cost_per_unit || 0)
+      const quantity = Number(serviceQuantities[`service-${row.id}-qty`] || 0)
+      return sum + quantity * Number(row.cost_per_unit || 0)
     }, 0)
     
     const productTotal = productRows.reduce((sum, row) => {
@@ -236,8 +236,8 @@ export default function ManagePost() {
       }, 0)
 
     const serviceTotal = serviceRows.reduce((sum, row) => {
-      const duration = Number(serviceDurations[`service-${row.id}-duration`] || 0)
-      return sum + duration * Number(row.cost_per_unit || 0)
+      const quantity = Number(serviceQuantities[`service-${row.id}-qty`] || 0)
+      return sum + quantity * Number(row.cost_per_unit || 0)
     }, 0)
 
     const productTotal = productRows.reduce((sum, row) => {
@@ -307,19 +307,17 @@ export default function ManagePost() {
 
     const services = serviceRows
       .map((row) => {
-        const duration = Number(serviceDurations[`service-${row.id}-duration`] || 0)
+        const quantity = Number(serviceQuantities[`service-${row.id}-qty`] || 0)
         const unitCost = Number(row.cost_per_unit || 0)
         return {
           id: row.id,
           name: row.service_name,
-          unit: row.unit,
-          quantity: duration > 0 ? 1 : 0,
-          duration,
+          quantity,
           unit_cost: unitCost,
-          line_total: duration * unitCost,
+          line_total: quantity * unitCost,
         }
       })
-      .filter((row) => row.duration > 0)
+      .filter((row) => row.quantity > 0)
 
     const products = productRows
       .map((row) => {
@@ -459,7 +457,7 @@ export default function ManagePost() {
               >
                 Manage Your Posts
               </h1>
-              <p className="mt-0.5 text-xs text-violet-800/80 sm:text-sm">Adjust expertise workers, service duration, and product units with real-time cost calculation.</p>
+              <p className="mt-0.5 text-xs text-violet-800/80 sm:text-sm">Adjust expertise workers, service quantity, and product units with real-time cost calculation.</p>
               <img
                 src="/images/manage_post.png"
                 alt="Manage post header illustration"
@@ -694,28 +692,24 @@ export default function ManagePost() {
                       </div>
                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                         {(skillBreakdownByPost[post.id]?.services || []).map((service) => {
-                          const duration = Number(serviceDurations[`service-${service.id}-duration`] || 0)
-                          const totalCost = duration * Number(service.cost_per_unit || 0)
-                          const durationUnit = formatRateUnit(service.unit)
+                          const quantity = Number(serviceQuantities[`service-${service.id}-qty`] || 0)
+                          const totalCost = quantity * Number(service.cost_per_unit || 0)
 
                           return (
                             <div key={service.id} className="bg-gradient-to-br from-cyan-50 to-sky-50 dark:from-slate-800 dark:to-slate-700/50 rounded-2xl p-6 border-2 border-slate-200 dark:border-slate-600 hover:border-cyan-400 dark:hover:border-cyan-500 transition">
                               <p className="text-sm font-bold text-slate-700 dark:text-slate-300 uppercase tracking-widest mb-2">Service</p>
                               <h4 className="text-xl font-bold text-slate-900 dark:text-white mb-1">{service.service_name}</h4>
-                              <p className="text-sm text-slate-700 dark:text-slate-200 mb-2">
-                                Service Duration: <span className="font-semibold">{durationUnit}</span>
-                              </p>
                               <p className="text-sm text-slate-700 dark:text-slate-200 mb-4">
-                                Service Cost: <span className="font-semibold">{Number(service.cost_per_unit || 0).toFixed(2)} BDT</span> per <span className="font-semibold">{durationUnit}</span>
+                                Service Cost: <span className="font-semibold">{Number(service.cost_per_unit || 0).toFixed(2)} BDT</span> each
                               </p>
 
                               <div className="grid grid-cols-1 gap-4 mb-4">
                                 <CounterControl
-                                  value={duration}
-                                  onChange={(val) => setServiceDurations((prev) => ({ ...prev, [`service-${service.id}-duration`]: val }))}
+                                  value={quantity}
+                                  onChange={(val) => setServiceQuantities((prev) => ({ ...prev, [`service-${service.id}-qty`]: val }))}
                                   max={365}
-                                  label="Duration Needed"
-                                  unit={durationUnit}
+                                  label="Required Quantity"
+                                  unit={quantity === 1 ? 'item' : 'items'}
                                 />
                               </div>
 
