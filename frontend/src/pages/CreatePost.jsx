@@ -312,7 +312,7 @@ export default function CreatePost() {
     }
 
     if (showExpertiseSection && expertiseBudgetUnitAmountMissing) {
-      setMessage('Please enter Needed Hire Unit value for all expertise rows.')
+      setMessage('Needed Hire Unit must be greater than 0 for all expertise rows.')
       setSaving(false)
       return
     }
