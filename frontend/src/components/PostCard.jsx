@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import defaultAvatar from '../assets/default-avatar.svg'
 import ExpertiseTable from './ExpertiseTable'
@@ -17,9 +17,10 @@ export default function PostCard({
   onAction,
   onAddToCart,
   inCart = false,
+  isDetailsOpen = false,
+  onToggleDetails,
 }) {
   const navigate = useNavigate()
-  const [expanded, setExpanded] = useState(false)
 
   const backendOrigin = useMemo(() => {
     const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api'
@@ -283,13 +284,13 @@ export default function PostCard({
         )}
         <button
           type="button"
-          onClick={() => setExpanded((prev) => !prev)}
-          aria-expanded={expanded}
+          onClick={() => onToggleDetails?.(!isDetailsOpen)}
+          aria-expanded={isDetailsOpen}
 
           className="rounded-full border border-slate-700 bg-transparent px-5 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-800 hover:bg-slate-100/40 focus:outline-none focus:ring-2 focus:ring-slate-200"
 
         >
-          {expanded ? 'Hide Details' : 'View Details'}
+          {isDetailsOpen ? 'Hide Details' : 'View Details'}
         </button>
         {post.website_link && (
           <a
@@ -303,7 +304,7 @@ export default function PostCard({
         )}
       </div>
 
-      {expanded && (
+      {isDetailsOpen && (
         <div className="absolute inset-x-3 bottom-3 z-20 sm:inset-x-4 sm:bottom-4">
           <div
             className="flex flex-col overflow-hidden rounded-2xl border border-violet-200/80 shadow-xl backdrop-blur-md"
@@ -319,7 +320,7 @@ export default function PostCard({
               <p className="text-sm font-semibold text-violet-900">Post details</p>
               <button
                 type="button"
-                onClick={() => setExpanded(false)}
+                onClick={() => onToggleDetails?.(false)}
                 className="rounded-full border border-violet-300 bg-white/65 px-3 py-1 text-xs font-semibold text-violet-800 transition hover:bg-violet-50 focus:outline-none focus:ring-2 focus:ring-violet-200"
               >
                 Close

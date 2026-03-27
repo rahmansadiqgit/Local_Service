@@ -75,6 +75,7 @@ export default function HomeFeed() {
   const [filterLocationLoading, setFilterLocationLoading] = useState(false)
 
   const [actionMessage, setActionMessage] = useState('')
+  const [openDetailsPostId, setOpenDetailsPostId] = useState(null)
   const currentUserId = user?.id
 
   useEffect(() => {
@@ -438,6 +439,15 @@ export default function HomeFeed() {
     )
   }
 
+  const handleToggleDetails = (postId, shouldOpen) => {
+    setOpenDetailsPostId((prev) => {
+      if (!shouldOpen) {
+        return prev === postId ? null : prev
+      }
+      return postId
+    })
+  }
+
   return (
     <div className="space-y-6">
 
@@ -670,6 +680,8 @@ export default function HomeFeed() {
                 onAction={handleAction}
                 onAddToCart={handleAddToCart}
                 inCart={isInCart(post.id)}
+                isDetailsOpen={openDetailsPostId === post.id}
+                onToggleDetails={(shouldOpen) => handleToggleDetails(post.id, shouldOpen)}
               />
             ))}
           </div>
