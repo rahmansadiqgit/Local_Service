@@ -60,19 +60,19 @@ export default function ERPTaskCard({
   const memberMenuOptions = [
     hasExpertiseCategory ? 'Expertise' : null,
     hasServicesCategory ? 'Skill provider' : null,
-    hasProductCategory ? 'Supplier' : null,
+    hasProductCategory ? 'Delivary Man' : null,
   ].filter(Boolean)
 
   const roleLabelToKey = {
     Expertise: 'expertise',
     'Skill provider': 'skill_provider',
-    Supplier: 'supplier',
+    'Delivary Man': 'supplier',
   }
 
   const roleKeyToLabel = {
     expertise: 'Expertise',
     skill_provider: 'Skill provider',
-    supplier: 'Supplier',
+    supplier: 'Delivary Man',
   }
 
   const membersState = snapshot.members || {}
@@ -357,14 +357,15 @@ export default function ERPTaskCard({
               Assign {roleKeyToLabel[selectedMemberRole] || 'Members'}
             </p>
             <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => onPublishMemberPost?.(erp, selectedMemberRole)}
-                disabled={!isProvider}
-                className="rounded-full border border-brand-200 px-2 py-1 text-[11px] font-semibold text-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                Generate Self-Assign Post
-              </button>
+              {isProvider ? (
+                <button
+                  type="button"
+                  onClick={() => onPublishMemberPost?.(erp, selectedMemberRole)}
+                  className="rounded-full border border-brand-200 px-2 py-1 text-[11px] font-semibold text-brand-700"
+                >
+                  Generate Self-Assign Post
+                </button>
+              ) : null}
               <button
                 type="button"
                 onClick={() => setSelectedMemberRole(null)}
@@ -591,7 +592,7 @@ export default function ERPTaskCard({
               <span className="font-semibold text-slate-700">Assigned Workers:</span> {(erp.assigned_workers || []).length}
             </p>
             <p className="mt-2">
-              <span className="font-semibold text-slate-700">Note for Supplier:</span>{' '}
+              <span className="font-semibold text-slate-700">Note for Delivary Man:</span>{' '}
               {supplierNote || '-'}
             </p>
           </div>
