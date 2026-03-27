@@ -771,13 +771,11 @@ class ERPViewSet(viewsets.ModelViewSet):
                     as_money(row.get("line_total", 0)),
                 ]
             elif "Services" in title:
-                headers = ["Name", "Duration", "Unit", "Unit Cost", "Packages", "Line Total"]
+                headers = ["Name", "Packages", "Unit Cost", "Line Total"]
                 values_builder = lambda row: [
                     as_text(row.get("name") or "-"),
-                    as_text(row.get("duration", 0)),
-                    as_text(row.get("unit") or "-"),
-                    as_money(row.get("unit_cost", 0)),
                     as_text(row.get("quantity", 0)),
+                    as_money(row.get("unit_cost", 0)),
                     as_money(row.get("line_total", 0)),
                 ]
             else:

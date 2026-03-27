@@ -53,11 +53,6 @@ export default function ServiceTable({ services = [], postType = 'Supply', showD
               </th>
             )}
             <th className="px-3 py-2 whitespace-nowrap">
-              <button type="button" onClick={() => handleSort('unit')}>
-                {isDemand ? 'Service Duration Needed' : 'Service Duration'}
-              </button>
-            </th>
-            <th className="px-3 py-2 whitespace-nowrap">
               <button type="button" onClick={() => handleSort('cost_per_unit')}>
                 {isDemand ? 'Budget (BDT)' : 'Service Cost (BDT)'}
               </button>
@@ -82,7 +77,6 @@ export default function ServiceTable({ services = [], postType = 'Supply', showD
               {showDescription && (
                 <td className={isProfileTone ? 'px-3 py-2 whitespace-pre-line break-words text-slate-800' : 'px-3 py-2 text-slate-900 dark:text-slate-100 whitespace-pre-line break-words'}>{row.description || '-'}</td>
               )}
-              <td className={isProfileTone ? 'px-3 py-2 whitespace-nowrap text-slate-800' : 'px-3 py-2 text-slate-900 dark:text-slate-100 whitespace-nowrap'}>{row.unit || '-'}</td>
               <td className={isProfileTone ? 'px-3 py-2 whitespace-nowrap text-slate-800' : 'px-3 py-2 text-slate-900 dark:text-slate-100 whitespace-nowrap'}>
                 {!isNaN(parseFloat(row.cost_per_unit)) ? parseFloat(row.cost_per_unit).toFixed(2) : '0.00'}
               </td>

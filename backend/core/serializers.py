@@ -179,7 +179,6 @@ class SkillSerializer(serializers.ModelSerializer):
             "post",
             "skill_name",
             "description",
-            "unit",
             "cost_per_unit",
         )
 

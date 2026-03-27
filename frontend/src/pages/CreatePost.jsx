@@ -55,13 +55,13 @@ export default function CreatePost() {
   const [imageFile, setImageFile] = useState(null)
   const [previewUrl, setPreviewUrl] = useState(null)
   const [skills, setSkills] = useState([
-    { skill_name: '', unit: '', cost_per_unit: '' },
+    { skill_name: '', cost_per_unit: '' },
   ])
   const [expertises, setExpertises] = useState([
     { name: '', experience: '', unit: '', cost: '', available_person: 0 },
   ])
   const [services, setServices] = useState([
-    { service_name: '', description: '', unit: '', cost_per_unit: '' },
+    { service_name: '', description: '', cost_per_unit: '' },
   ])
   const [products, setProducts] = useState([
     { product_name: '', description: '', unit: '', cost_per_unit: '', available_units: 0 },
@@ -306,17 +306,6 @@ export default function CreatePost() {
       return
     }
 
-    const serviceDurationMissing = services.some((item) => {
-      const hasAnyValue = item.service_name || item.description || item.cost_per_unit
-      return hasAnyValue && !item.unit
-    })
-
-    if (showServicesSection && serviceDurationMissing) {
-      setMessage(isDemand ? 'Please select Service Duration Needed for all service rows.' : 'Please select Service Duration for all service rows.')
-      setSaving(false)
-      return
-    }
-
     try {
       const payload = new FormData()
       Object.entries(post).forEach(([key, value]) => {
@@ -332,7 +321,7 @@ export default function CreatePost() {
 
       const validSkills = skills.filter((item) => item.skill_name && item.cost_per_unit)
       const validExpertises = expertises.filter((item) => item.name && item.experience && item.unit && item.cost)
-      const validServices = services.filter((item) => item.service_name && item.unit && item.cost_per_unit)
+      const validServices = services.filter((item) => item.service_name && item.cost_per_unit)
       const validProducts = products.filter(
         (item) => item.product_name && item.cost_per_unit && (post.post_type === 'Demand' || item.unit),
       )
@@ -359,7 +348,6 @@ export default function CreatePost() {
           api.post('/skills/', {
             skill_name: `__service__::${item.service_name}`,
             description: item.description,
-            unit: item.unit,
             cost_per_unit: item.cost_per_unit,
             post: createdPost.id,
           }),
@@ -377,9 +365,9 @@ export default function CreatePost() {
       setSelectedCategories([])
       setShowCategoryMenu(false)
       setImageFile(null)
-      setSkills([{ skill_name: '', unit: '', cost_per_unit: '' }])
+      setSkills([{ skill_name: '', cost_per_unit: '' }])
       setExpertises([{ name: '', experience: '', unit: '', cost: '', available_person: 0 }])
-      setServices([{ service_name: '', description: '', unit: '', cost_per_unit: '' }])
+      setServices([{ service_name: '', description: '', cost_per_unit: '' }])
       setProducts([{ product_name: '', description: '', unit: '', cost_per_unit: '', available_units: 0 }])
       window.dispatchEvent(new Event('post-created'))
       window.dispatchEvent(new Event('localix:notifications-refresh'))
@@ -796,7 +784,7 @@ export default function CreatePost() {
               onClick={() =>
                 setServices((prev) => [
                   ...prev,
-                  { service_name: '', description: '', unit: '', cost_per_unit: '' },
+                  { service_name: '', description: '', cost_per_unit: '' },
                 ])
               }
               className={addRowButtonClass}
@@ -807,7 +795,7 @@ export default function CreatePost() {
           {services.map((row, index) => (
             <div
               key={`service-${index}`}
-              className={`grid gap-4 ${showServiceDescriptionField ? 'lg:grid-cols-4' : 'lg:grid-cols-3'}`}
+              className={`grid gap-4 ${showServiceDescriptionField ? 'lg:grid-cols-3' : 'lg:grid-cols-2'}`}
             >
               <div>
                 <label className="text-xs font-semibold text-black">Service Name</label>
@@ -842,29 +830,6 @@ export default function CreatePost() {
                   />
                 </div>
               )}
-              <div>
-                <label className="text-xs font-semibold text-black">{isDemand ? 'Service Duration Needed' : 'Service Duration'}</label>
-                <select
-                  value={row.unit}
-                  onChange={(event) =>
-                    setServices((prev) =>
-                      prev.map((item, i) => (i === index ? { ...item, unit: event.target.value } : item)),
-                    )
-                  }
-                  className={profileLikeSelectClass}
-                >
-                  <option
-                    value=""
-                    className="bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white"
-                    style={{ backgroundColor: '#7c3aed', color: '#ffffff' }}
-                  >
-                    Select duration
-                  </option>
-                  <option value="hourly">Hourly</option>
-                  <option value="daily">Daily</option>
-                  <option value="monthly">Monthly</option>
-                </select>
-              </div>
               <div>
                 <label className="text-xs font-semibold text-black">{isDemand ? 'Your Budget (BDT)' : 'Service Cost (BDT)'}</label>
                 <div className="flex gap-2">
