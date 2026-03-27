@@ -16,6 +16,7 @@ export default function ManagePost() {
   const [expertiseDurations, setExpertiseDurations] = useState({})
   const [serviceDurations, setServiceDurations] = useState({})
   const [productUnits, setProductUnits] = useState({})
+  const [includedCategories, setIncludedCategories] = useState({})
   const [loading, setLoading] = useState(true)
   const [message, setMessage] = useState('')
   const [messageType, setMessageType] = useState('info')
@@ -189,33 +190,29 @@ export default function ManagePost() {
   }, [erpItems])
 
   const getTotalForPost = (postId) => {
-    const skillExpertiseRows = skillBreakdownByPost[postId]?.expertise || []
-    const serviceRows = skillBreakdownByPost[postId]?.services || []
-    const newExpertiseRows = expertisesByPost[postId] || []
-    const productRows = productsByPost[postId] || []
-    
-    const skillExpertiseTotal = skillExpertiseRows.reduce((sum, row) => {
-      const workers = Number(skillWorkers[`skill-${row.id}`] || 0)
-      return sum + workers * Number(row.cost_per_unit || 0)
-    }, 0)
-    
-    const newExpertiseTotal = newExpertiseRows.reduce((sum, expertise) => {
-      const persons = Number(expertisePersons[`expertise-${expertise.id}`] || 0)
-      const duration = Number(expertiseDurations[`expertise-${expertise.id}-duration`] || 0)
-      return sum + persons * duration * Number(expertise.cost || 0)
-    }, 0)
-    
-    const serviceTotal = serviceRows.reduce((sum, row) => {
-      const duration = Number(serviceDurations[`service-${row.id}-duration`] || 0)
-      return sum + duration * Number(row.cost_per_unit || 0)
-    }, 0)
-    
-    const productTotal = productRows.reduce((sum, row) => {
-      const units = Number(productUnits[`product-${row.id}`] || 0)
-      return sum + units * Number(row.cost_per_unit || 0)
-    }, 0)
-    
-    return skillExpertiseTotal + newExpertiseTotal + serviceTotal + productTotal
+    return getCostBreakdownForPost(postId).total
+  }
+
+  const getCategorySelection = (postId) => {
+    const current = includedCategories[postId] || {}
+    return {
+      expertise: Boolean(current.expertise),
+      services: Boolean(current.services),
+      products: Boolean(current.products),
+    }
+  }
+
+  const toggleCategorySelection = (postId, categoryKey) => {
+    setIncludedCategories((prev) => {
+      const current = prev[postId] || {}
+      return {
+        ...prev,
+        [postId]: {
+          ...current,
+          [categoryKey]: !Boolean(current[categoryKey]),
+        },
+      }
+    })
   }
 
   const getCostBreakdownForPost = (postId) => {
@@ -245,20 +242,27 @@ export default function ManagePost() {
       return sum + units * Number(row.cost_per_unit || 0)
     }, 0)
 
+    const selection = getCategorySelection(postId)
+
+    const selectedExpertiseTotal = selection.expertise ? expertiseTotal : 0
+    const selectedServiceTotal = selection.services ? serviceTotal : 0
+    const selectedProductTotal = selection.products ? productTotal : 0
+
     const selectedCategories = [
-      expertiseTotal > 0 ? 'expertise' : null,
-      serviceTotal > 0 ? 'service' : null,
-      productTotal > 0 ? 'product' : null,
+      selection.expertise && expertiseTotal > 0 ? 'expertise' : null,
+      selection.services && serviceTotal > 0 ? 'service' : null,
+      selection.products && productTotal > 0 ? 'product' : null,
     ].filter(Boolean)
 
     return {
-      expertiseTotal,
-      serviceTotal,
-      productTotal,
-      total: expertiseTotal + serviceTotal + productTotal,
+      expertiseTotal: selectedExpertiseTotal,
+      serviceTotal: selectedServiceTotal,
+      productTotal: selectedProductTotal,
+      total: selectedExpertiseTotal + selectedServiceTotal + selectedProductTotal,
       selectedCategories,
       selectedCount: selectedCategories.length,
       hasSelection: selectedCategories.length > 0,
+      selection,
     }
   }
 
@@ -268,8 +272,9 @@ export default function ManagePost() {
     const serviceRows = skillBreakdownByPost[postId]?.services || []
     const newExpertiseRows = expertisesByPost[postId] || []
     const productRows = productsByPost[postId] || []
+    const selection = getCategorySelection(postId)
 
-    const skillExpertise = skillExpertiseRows
+    const skillExpertise = (selection.expertise ? skillExpertiseRows : [])
       .map((row) => {
         const quantity = Number(skillWorkers[`skill-${row.id}`] || 0)
         const unitCost = Number(row.cost_per_unit || 0)
@@ -285,7 +290,7 @@ export default function ManagePost() {
       })
       .filter((row) => row.quantity > 0)
 
-    const newExpertise = newExpertiseRows
+    const newExpertise = (selection.expertise ? newExpertiseRows : [])
       .map((row) => {
         const quantity = Number(expertisePersons[`expertise-${row.id}`] || 0)
         const duration = Number(expertiseDurations[`expertise-${row.id}-duration`] || 0)
@@ -305,7 +310,7 @@ export default function ManagePost() {
 
     const expertise = [...skillExpertise, ...newExpertise]
 
-    const services = serviceRows
+    const services = (selection.services ? serviceRows : [])
       .map((row) => {
         const duration = Number(serviceDurations[`service-${row.id}-duration`] || 0)
         const unitCost = Number(row.cost_per_unit || 0)
@@ -321,7 +326,7 @@ export default function ManagePost() {
       })
       .filter((row) => row.duration > 0)
 
-    const products = productRows
+    const products = (selection.products ? productRows : [])
       .map((row) => {
         const quantity = Number(productUnits[`product-${row.id}`] || 0)
         const unitCost = Number(row.cost_per_unit || 0)
@@ -442,134 +447,121 @@ export default function ManagePost() {
     )
   }
 
+  const InclusionPill = ({ checked }) => (
+    <span
+      className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold ${
+        checked
+          ? 'border-emerald-300 bg-emerald-100 text-emerald-700'
+          : 'border-slate-300 bg-slate-100 text-slate-600'
+      }`}
+    >
+      {checked ? 'Included in booking' : 'Not included'}
+    </span>
+  )
+
+  const CategoryToggle = ({ postId, categoryKey, checked }) => (
+    <label className="inline-flex items-center gap-2">
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={() => toggleCategorySelection(postId, categoryKey)}
+        className="h-4 w-4 rounded border-slate-300 text-violet-600 focus:ring-violet-500"
+      />
+      <InclusionPill checked={checked} />
+    </label>
+  )
+
   const visiblePosts = useMemo(() => {
     if (!id) return posts
     return posts.filter((post) => String(post.id) === String(id))
   }, [posts, id])
 
   return (
-    <>
+    <div
+      className="min-h-screen"
+      style={{
+        backgroundColor: 'rgba(236, 225, 255, 0.56)',
+        backgroundImage: 'linear-gradient(145deg, rgba(225, 205, 255, 0.58), rgba(244, 230, 255, 0.54))',
+      }}
+    >
       <div className="space-y-6">
-          {/* Page Header */}
-          <div className="card relative overflow-hidden border-0 bg-gradient-to-r from-[#c9b6ff] via-[#dccbff] to-[#e5d7ff] p-0 text-slate-800 shadow-lg">
-            <div className="relative px-6 py-3.5 pr-32 sm:px-8 sm:py-4 sm:pr-36 lg:pr-40">
-              <h1
-                className="text-xl font-extrabold tracking-tight text-violet-900 sm:text-3xl"
-                style={{ fontFamily: "'Sora', 'Trebuchet MS', sans-serif" }}
-              >
-                Manage Your Posts
-              </h1>
-              <p className="mt-0.5 text-xs text-violet-800/80 sm:text-sm">Adjust expertise workers, service duration, and product units with real-time cost calculation.</p>
-              <img
-                src="/images/manage_post.png"
-                alt="Manage post header illustration"
-                className="pointer-events-none absolute right-14 top-1/2 h-28 w-28 -translate-y-1/2 object-contain sm:h-32 sm:w-32 lg:h-36 lg:w-36"
-              />
-            </div>
+        {/* Status Message */}
+        {message && (
+          <div className={`card rounded-2xl p-4 animate-slide-in mx-4 mt-4 ${
+            messageType === 'success' ? 'bg-emerald-50 border-2 border-emerald-300 text-emerald-800 dark:bg-emerald-900/30 dark:border-emerald-600 dark:text-emerald-300' : 
+            messageType === 'error' ? 'bg-red-50 border-2 border-red-300 text-red-800 dark:bg-red-900/30 dark:border-red-600 dark:text-red-300' : 
+            'bg-blue-50 border-2 border-blue-300 text-blue-800 dark:bg-blue-900/30 dark:border-blue-600 dark:text-blue-300'
+          }`}>
+            <p className="font-semibold text-center">{message}</p>
           </div>
+        )}
 
-          {/* Status Message */}
-          {message && (
-            <div className={`card rounded-2xl p-4 animate-slide-in ${
-              messageType === 'success' ? 'bg-emerald-50 border-2 border-emerald-300 text-emerald-800 dark:bg-emerald-900/30 dark:border-emerald-600 dark:text-emerald-300' : 
-              messageType === 'error' ? 'bg-red-50 border-2 border-red-300 text-red-800 dark:bg-red-900/30 dark:border-red-600 dark:text-red-300' : 
-              'bg-blue-50 border-2 border-blue-300 text-blue-800 dark:bg-blue-900/30 dark:border-blue-600 dark:text-blue-300'
-            }`}>
-              <p className="font-semibold text-center">{message}</p>
-            </div>
-          )}
-
-          {/* Loading State */}
-          {loading && (
-            <div
-              className="card rounded-3xl p-16 text-center shadow-lg"
-              style={{
-                backgroundColor: 'rgba(236, 225, 255, 0.56)',
-                backgroundImage: 'linear-gradient(145deg, rgba(225, 205, 255, 0.58), rgba(244, 230, 255, 0.54))',
-              }}
-            >
+        {/* Loading State */}
+        {loading && (
+          <div className="flex items-center justify-center min-h-screen">
+            <div className="card rounded-3xl p-16 text-center shadow-lg bg-white/80 backdrop-blur">
               <div className="inline-block">
                 <div className="animate-spin rounded-full h-16 w-16 border-4 border-slate-300 border-t-brand-500"></div>
               </div>
               <p className="mt-6 text-slate-600 dark:text-slate-400 text-lg font-semibold">Loading your posts...</p>
             </div>
-          )}
+          </div>
+        )}
 
-          {/* No Posts State */}
-          {!loading && visiblePosts.length === 0 && (
-            <div
-              className="card rounded-3xl p-16 text-center shadow-lg"
-              style={{
-                backgroundColor: 'rgba(236, 225, 255, 0.56)',
-                backgroundImage: 'linear-gradient(145deg, rgba(225, 205, 255, 0.58), rgba(244, 230, 255, 0.54))',
-              }}
-            >
+        {/* No Posts State */}
+        {!loading && visiblePosts.length === 0 && (
+          <div className="flex items-center justify-center min-h-screen">
+            <div className="card rounded-3xl p-16 text-center shadow-lg bg-white/80 backdrop-blur">
               <div className="text-6xl mb-6">📭</div>
               <p className="text-2xl font-bold text-slate-700 dark:text-slate-200 mb-2">No posts to manage</p>
               <p className="text-slate-500 dark:text-slate-400 text-lg">Book or apply to a post to start managing it here.</p>
             </div>
-          )}
+          </div>
+        )}
 
-          {/* Posts List */}
-          {!loading && visiblePosts.length > 0 && (
-            <div className="space-y-8">
-              {visiblePosts.map((post) => {
-                const breakdown = getCostBreakdownForPost(post.id)
-                const postImageSrc = resolveMediaUrl(post.image || post.post_image || '')
-                return (
+        {/* Posts List */}
+        {!loading && visiblePosts.length > 0 && (
+          <div className="space-y-8 p-4">
+            {visiblePosts.map((post) => {
+              const breakdown = getCostBreakdownForPost(post.id)
+              const postImageSrc = resolveMediaUrl(post.image || post.post_image || '')
+              const hasExpertiseRows = (skillBreakdownByPost[post.id]?.expertise || []).length > 0 || (expertisesByPost[post.id] || []).length > 0
+              const hasServiceRows = (skillBreakdownByPost[post.id]?.services || []).length > 0
+              const hasProductRows = (productsByPost[post.id] || []).length > 0
+
+              return (
                 <div
                   key={post.id}
-                  className="relative rounded-3xl border border-violet-200/80 shadow-xl overflow-hidden backdrop-blur-md"
-                  style={{
-                    backgroundColor: 'rgba(236, 225, 255, 0.56)',
-                    backgroundImage: 'linear-gradient(145deg, rgba(225, 205, 255, 0.58), rgba(244, 230, 255, 0.54))',
-                  }}
+                  className="relative rounded-3xl border border-slate-200/60 shadow-xl overflow-hidden backdrop-blur-md bg-white"
                 >
-                  {/* Post Header */}
-                  <div className="relative overflow-hidden rounded-t-3xl border-b-2 border-slate-300/70 bg-gradient-to-br from-[#08174f] via-[#1e3a8a] to-[#6d28d9] p-8 text-white dark:from-[#050d2f] dark:via-[#102a6b] dark:to-[#4c1d95]">
-                    <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.24),transparent_50%)]" />
-                    <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/25 via-transparent to-transparent" />
-                    <div className="flex flex-wrap justify-between items-start gap-4 mb-4">
+                  {/* STICKY TOPBAR */}
+                  <div className="sticky top-0 z-40 border-b border-slate-200 bg-white/95 backdrop-blur-md">
+                    <div className="flex items-center justify-between gap-3 px-5 py-3 sm:px-6">
+                      <button
+                        onClick={() => navigate(-1)}
+                        className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-300 bg-white text-slate-600 hover:bg-slate-50 transition"
+                        aria-label="Go back"
+                      >
+                        &lt;
+                      </button>
+
                       <div className="min-w-0 flex-1">
-                        <span className="inline-block rounded-full border border-white/30 bg-white/15 px-4 py-2 text-sm font-bold tracking-wide text-cyan-100 shadow-sm backdrop-blur-sm mb-3">
-                          {post.post_type === 'Supply' ? '📦 AVAILABLE' : '🔍 DEMAND'}
-                        </span>
-                        <h2 className="text-3xl font-bold text-white drop-shadow-sm">{post.post_title || 'Post Details'}</h2>
-                        <p className="mt-2 flex items-center gap-2 text-blue-100/95">
-                          <span>📍</span> {post.location || 'Location not specified'}
+                        <h2 className="truncate text-base font-bold text-slate-900">{post.post_title || 'Post Details'}</h2>
+                        <p className="truncate text-xs text-slate-600">
+                          {post.location || 'Location'} • {parsePostCategories(post.post_name).join(', ') || 'Uncategorized'}
                         </p>
-                        <div className="mt-3 flex flex-wrap items-center gap-2">
-                          {parsePostCategories(post.post_name).length > 0 ? (
-                            parsePostCategories(post.post_name).map((category) => (
-                              <span
-                                key={`${post.id}-${category}`}
-                                className="inline-flex items-center rounded-full border border-white/35 bg-white/15 px-4 py-1.5 text-sm font-semibold tracking-wide text-cyan-100 shadow-sm backdrop-blur-sm"
-                              >
-                                {category}
-                              </span>
-                            ))
-                          ) : (
-                            <span className="inline-flex items-center rounded-full border border-white/25 bg-white/10 px-4 py-1.5 text-sm font-semibold text-blue-100/90 backdrop-blur-sm">
-                              Uncategorized
-                            </span>
-                          )}
-                        </div>
                       </div>
-                      <div className="w-full md:w-52 flex flex-col items-start gap-3 md:items-end">
-                        {ownPostIds.has(post.id) && (
-                          <button
-                            onClick={() => handleDeletePost(post.id)}
-                            className="px-6 py-3 bg-red-500 hover:bg-red-600 dark:bg-red-700 dark:hover:bg-red-800 text-white font-bold rounded-2xl transition transform hover:scale-105 shadow-lg"
-                          >
-                            🗑️ Delete Post
-                          </button>
-                        )}
+
+                      <div className="flex shrink-0 items-center gap-3">
+                        <div className="text-right">
+                          <p className="text-xs font-semibold text-amber-600">★ {post.rating_average || '4.8'}</p>
+                        </div>
                         {postImageSrc && (
-                          <div className="w-full max-w-[240px] overflow-hidden rounded-2xl border border-white/35 bg-white/10 p-1.5 shadow-lg backdrop-blur-sm">
+                          <div className="h-12 w-12 flex-shrink-0 overflow-hidden rounded-lg border border-slate-300 bg-slate-100">
                             <img
                               src={postImageSrc}
-                              alt={post.post_title || post.post_name || 'Post image'}
-                              className="h-40 w-full rounded-xl object-cover"
+                              alt={post.post_title || 'Post'}
+                              className="h-full w-full object-cover"
                             />
                           </div>
                         )}
@@ -577,264 +569,327 @@ export default function ManagePost() {
                     </div>
                   </div>
 
-                  {/* Skills Management Section */}
-                  {(skillBreakdownByPost[post.id]?.expertise || []).length > 0 && (
-                    <div className="p-8 border-b-2 border-slate-200 dark:border-slate-700">
-                      <div className="flex items-center gap-3 mb-8">
-                        <span className="text-3xl">🛠️</span>
-                        <h3 className="text-2xl font-bold text-slate-900 dark:text-white">Expertise Management</h3>
-                        <span className="ml-auto px-3 py-1 bg-brand-100 dark:bg-brand-900/40 text-brand-700 dark:text-brand-300 rounded-full font-semibold">
-                          {(skillBreakdownByPost[post.id]?.expertise || []).length} expertise
-                        </span>
+                  {/* SUPPLIER STRIP */}
+                  <div className="flex items-center justify-between gap-3 border-b border-slate-200 bg-slate-50/50 px-5 py-3 sm:px-6">
+                    <div className="flex min-w-0 items-center gap-3">
+                      <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-violet-200 text-xs font-bold text-violet-800">
+                        {String(post.owner_name || 'S').trim().charAt(0).toUpperCase() || 'S'}
                       </div>
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        {(skillBreakdownByPost[post.id]?.expertise || []).map((skill) => {
-                          const workers = Number(skillWorkers[`skill-${skill.id}`] || 0)
-                          const totalCost = workers * Number(skill.cost_per_unit || 0)
-                          const workType = formatRateUnit(skill.unit)
-                          return (
-                            <div key={skill.id} className="bg-gradient-to-br from-slate-50 to-blue-50 dark:from-slate-800 dark:to-slate-700/50 rounded-2xl p-6 border-2 border-slate-200 dark:border-slate-600 hover:border-brand-400 dark:hover:border-brand-500 transition">
-                              <p className="text-sm font-bold text-slate-700 dark:text-slate-300 uppercase tracking-widest mb-2">Expertise</p>
-                              <h4 className="text-xl font-bold text-slate-900 dark:text-white mb-1">{skill.skill_name}</h4>
-                              <p className="text-sm text-slate-700 dark:text-slate-200 mb-2">
-                                Work Type: <span className="font-semibold">{workType}</span>
-                              </p>
-                              <p className="text-sm text-slate-700 dark:text-slate-200 mb-4">
-                                Charge: <span className="font-semibold">{Number(skill.cost_per_unit || 0).toFixed(2)} BDT</span> per <span className="font-semibold">{workType}</span>
-                              </p>
-                              <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">Available Person: {Number(skill.available_workers || 0)}</p>
-                              
-                              <div className="mb-4">
-                                <CounterControl
-                                  value={workers}
-                                  onChange={(val) => setSkillWorkers((prev) => ({ ...prev, [`skill-${skill.id}`]: val }))}
-                                  max={Math.max(Number(skill.available_workers || 0), 1)}
-                                  label="Required Person"
-                                  unit={workers === 1 ? 'person' : 'persons'}
-                                />
-                              </div>
-                              
-                              <div className="pt-4 border-t-2 border-slate-300 dark:border-slate-600">
-                                <p className="text-xs text-slate-600 dark:text-slate-300 mb-1">TOTAL COST</p>
-                                <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">${totalCost.toFixed(2)}</p>
-                              </div>
-                            </div>
-                          )
-                        })}
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-bold text-slate-900">{post.owner_name || 'Supplier'}</p>
+                        <p className="truncate text-xs text-slate-600">{post.location || 'Dhaka'}</p>
                       </div>
                     </div>
-                  )}
-
-                  {/* New Expertise Management Section */}
-                  {(expertisesByPost[post.id] || []).length > 0 && (
-                    <div className="p-8 border-b-2 border-slate-200 dark:border-slate-700">
-                      <div className="flex items-center gap-3 mb-8">
-                        <span className="text-3xl">💼</span>
-                        <h3 className="text-2xl font-bold text-slate-900 dark:text-white">Expertise</h3>
-                        <span className="ml-auto px-3 py-1 bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 rounded-full font-semibold">
-                          {(expertisesByPost[post.id] || []).length} expertise
-                        </span>
-                      </div>
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        {(expertisesByPost[post.id] || []).map((expertise) => {
-                          const persons = Number(expertisePersons[`expertise-${expertise.id}`] || 0)
-                          const duration = Number(expertiseDurations[`expertise-${expertise.id}-duration`] || 0)
-                          const durationUnit = expertise.unit || 'duration unit'
-                          const workType = formatRateUnit(expertise.unit)
-                          const totalCost = persons * duration * Number(expertise.cost || 0)
-                          return (
-                            <div key={expertise.id} className="bg-gradient-to-br from-purple-50 to-pink-50 dark:from-slate-800 dark:to-slate-700/50 rounded-2xl p-6 border-2 border-slate-200 dark:border-slate-600 hover:border-purple-400 dark:hover:border-purple-500 transition">
-                              <p className="text-sm font-bold text-slate-700 dark:text-slate-300 uppercase tracking-widest mb-2">Expertise</p>
-                              <h4 className="text-xl font-bold text-slate-900 dark:text-white mb-1">{expertise.name}</h4>
-                              <p className="text-sm text-slate-700 dark:text-slate-200 mb-2">
-                                Work Type: <span className="font-semibold">{workType}</span>
-                              </p>
-                              <p className="text-sm text-slate-700 dark:text-slate-200 mb-4">
-                                Charge: <span className="font-semibold">{Number(expertise.cost || 0).toFixed(2)} BDT</span> per <span className="font-semibold">{workType}</span>
-                              </p>
-                              <p className="text-xs text-slate-600 dark:text-slate-300 mb-4">Available Person: {expertise.available_person}</p>
-                              
-                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
-                                <CounterControl
-                                  value={persons}
-                                  onChange={(val) => setExpertisePersons((prev) => ({ ...prev, [`expertise-${expertise.id}`]: val }))}
-                                  max={Math.max(expertise.available_person || 1, 1)}
-                                  label="People Required"
-                                  unit={persons === 1 ? 'person' : 'persons'}
-                                />
-                                <CounterControl
-                                  value={duration}
-                                  onChange={(val) => setExpertiseDurations((prev) => ({ ...prev, [`expertise-${expertise.id}-duration`]: val }))}
-                                  max={365}
-                                  label="Duration Needed"
-                                  unit={durationUnit}
-                                />
-                              </div>
-                              
-                              <div className="pt-4 border-t-2 border-slate-300 dark:border-slate-600">
-                                <p className="text-xs text-slate-600 dark:text-slate-300 mb-1">TOTAL COST</p>
-                                <p className="text-2xl font-bold text-purple-600 dark:text-purple-400">${totalCost.toFixed(2)}</p>
-                              </div>
-                            </div>
-                          )
-                        })}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Services Management Section */}
-                  {(skillBreakdownByPost[post.id]?.services || []).length > 0 && (
-                    <div className="p-8 border-b-2 border-slate-200 dark:border-slate-700">
-                      <div className="flex items-center gap-3 mb-8">
-                        <span className="text-3xl">🧹</span>
-                        <h3 className="text-2xl font-bold text-slate-900 dark:text-white">Service</h3>
-                        <span className="ml-auto px-3 py-1 bg-cyan-100 dark:bg-cyan-900/40 text-cyan-700 dark:text-cyan-300 rounded-full font-semibold">
-                          {(skillBreakdownByPost[post.id]?.services || []).length} services
-                        </span>
-                      </div>
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        {(skillBreakdownByPost[post.id]?.services || []).map((service) => {
-                          const duration = Number(serviceDurations[`service-${service.id}-duration`] || 0)
-                          const totalCost = duration * Number(service.cost_per_unit || 0)
-                          const durationUnit = formatRateUnit(service.unit)
-
-                          return (
-                            <div key={service.id} className="bg-gradient-to-br from-cyan-50 to-sky-50 dark:from-slate-800 dark:to-slate-700/50 rounded-2xl p-6 border-2 border-slate-200 dark:border-slate-600 hover:border-cyan-400 dark:hover:border-cyan-500 transition">
-                              <p className="text-sm font-bold text-slate-700 dark:text-slate-300 uppercase tracking-widest mb-2">Service</p>
-                              <h4 className="text-xl font-bold text-slate-900 dark:text-white mb-1">{service.service_name}</h4>
-                              <p className="text-sm text-slate-700 dark:text-slate-200 mb-2">
-                                Service Duration: <span className="font-semibold">{durationUnit}</span>
-                              </p>
-                              <p className="text-sm text-slate-700 dark:text-slate-200 mb-4">
-                                Service Cost: <span className="font-semibold">{Number(service.cost_per_unit || 0).toFixed(2)} BDT</span> per <span className="font-semibold">{durationUnit}</span>
-                              </p>
-
-                              <div className="grid grid-cols-1 gap-4 mb-4">
-                                <CounterControl
-                                  value={duration}
-                                  onChange={(val) => setServiceDurations((prev) => ({ ...prev, [`service-${service.id}-duration`]: val }))}
-                                  max={365}
-                                  label="Duration Needed"
-                                  unit={durationUnit}
-                                />
-                              </div>
-
-                              <div className="pt-4 border-t-2 border-slate-300 dark:border-slate-600">
-                                <p className="text-xs text-slate-600 dark:text-slate-300 mb-1">TOTAL COST</p>
-                                <p className="text-2xl font-bold text-cyan-600 dark:text-cyan-400">${totalCost.toFixed(2)}</p>
-                              </div>
-                            </div>
-                          )
-                        })}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Products Management Section */}
-                  {(productsByPost[post.id] || []).length > 0 && (
-                    <div className="p-8 border-b-2 border-slate-200 dark:border-slate-700">
-                      <div className="flex items-center gap-3 mb-8">
-                        <span className="text-3xl">📦</span>
-                        <h3 className="text-2xl font-bold text-slate-900 dark:text-white">Product</h3>
-                        <span className="ml-auto px-3 py-1 bg-orange-100 dark:bg-orange-900/40 text-orange-700 dark:text-orange-300 rounded-full font-semibold">
-                          {(productsByPost[post.id] || []).length} products
-                        </span>
-                      </div>
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        {(productsByPost[post.id] || []).map((product) => {
-                          const units = Number(productUnits[`product-${product.id}`] || 0)
-                          const availableUnits = Math.max(Number(product.available_units || 0), 0)
-                          const productUnit = product.unit || 'unit'
-                          const totalCost = units * Number(product.cost_per_unit || 0)
-                          return (
-                            <div key={product.id} className="bg-gradient-to-br from-amber-50 to-orange-50 dark:from-slate-800 dark:to-slate-700/50 rounded-2xl p-6 border-2 border-slate-200 dark:border-slate-600 hover:border-orange-400 dark:hover:border-orange-500 transition">
-                              <p className="text-sm font-bold text-slate-700 dark:text-slate-300 uppercase tracking-widest mb-2">Product</p>
-                              <h4 className="text-xl font-bold text-slate-900 dark:text-white mb-1">{product.product_name}</h4>
-                              <p className="text-sm text-slate-700 dark:text-slate-200 mb-2">
-                                Unit: <span className="font-semibold">{productUnit}</span>
-                              </p>
-                              <p className="text-sm text-slate-700 dark:text-slate-200 mb-4">
-                                Cost: <span className="font-semibold">{Number(product.cost_per_unit || 0).toFixed(2)} BDT</span> per <span className="font-semibold">{productUnit}</span>
-                              </p>
-                              <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
-                                Available Quantity: {availableUnits}
-                              </p>
-                              
-                              <div className="mb-4">
-                                <CounterControl
-                                  value={units}
-                                  onChange={(val) => setProductUnits((prev) => ({ ...prev, [`product-${product.id}`]: val }))}
-                                  max={availableUnits}
-                                  label="Units Required"
-                                  unit={units === 1 ? 'unit' : 'units'}
-                                />
-                              </div>
-                              
-                              <div className="pt-4 border-t-2 border-slate-300 dark:border-slate-600">
-                                <p className="text-xs text-slate-600 dark:text-slate-300 mb-1">TOTAL COST</p>
-                                <p className="text-2xl font-bold text-orange-600 dark:text-orange-400">${totalCost.toFixed(2)}</p>
-                              </div>
-                            </div>
-                          )
-                        })}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Summary Section */}
-                  <div className="rounded-b-3xl border-t-2 border-slate-200 bg-gradient-to-r from-emerald-50 to-blue-50 p-8 dark:from-emerald-900/10 dark:to-blue-900/10 dark:border-slate-700">
-                    {breakdown.hasSelection && (
-                      <div className={`grid grid-cols-1 gap-6 mb-6 ${breakdown.selectedCount > 1 ? 'md:grid-cols-2 lg:grid-cols-4' : 'md:grid-cols-1 lg:grid-cols-1'}`}>
-                        {breakdown.expertiseTotal > 0 && (
-                          <div className="rounded-2xl p-6 shadow-md border border-violet-200/80" style={{ backgroundColor: 'rgba(239, 228, 255, 0.58)' }}>
-                            <p className="text-sm text-slate-500 dark:text-slate-400 font-semibold mb-2">Expertise Charge</p>
-                            <p className="text-2xl font-bold text-violet-600 dark:text-violet-400">${breakdown.expertiseTotal.toFixed(2)}</p>
-                          </div>
-                        )}
-                        {breakdown.serviceTotal > 0 && (
-                          <div className="rounded-2xl p-6 shadow-md border border-violet-200/80" style={{ backgroundColor: 'rgba(239, 228, 255, 0.58)' }}>
-                            <p className="text-sm text-slate-500 dark:text-slate-400 font-semibold mb-2">Service Cost</p>
-                            <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">${breakdown.serviceTotal.toFixed(2)}</p>
-                          </div>
-                        )}
-                        {breakdown.productTotal > 0 && (
-                          <div className="rounded-2xl p-6 shadow-md border border-violet-200/80" style={{ backgroundColor: 'rgba(239, 228, 255, 0.58)' }}>
-                            <p className="text-sm text-slate-500 dark:text-slate-400 font-semibold mb-2">Product Cost</p>
-                            <p className="text-2xl font-bold text-orange-600 dark:text-orange-400">${breakdown.productTotal.toFixed(2)}</p>
-                          </div>
-                        )}
-                        {breakdown.selectedCount > 1 && (
-                          <div className="bg-gradient-to-br from-emerald-500 to-teal-500 dark:from-emerald-600 dark:to-teal-600 rounded-2xl p-6 shadow-lg text-white">
-                            <p className="text-sm font-semibold mb-2 opacity-90">Total Cost</p>
-                            <p className="text-3xl font-bold">${breakdown.total.toFixed(2)}</p>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                    
-                    <button
-                      onClick={() => handleCreateOrUpdateErp(post)}
-                      disabled={!breakdown.hasSelection}
-                      className={`block mx-auto w-fit px-6 py-2.5 text-white text-sm font-semibold rounded-xl transition shadow-md ${
-                        breakdown.hasSelection
-                          ? 'bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-700 hover:to-fuchsia-700 dark:from-violet-700 dark:to-fuchsia-700 dark:hover:from-violet-800 dark:hover:to-fuchsia-800 active:scale-[0.99]'
-                          : 'bg-slate-400 dark:bg-slate-600 cursor-not-allowed opacity-70'
-                      }`}
-                    >
-                      ✓ Confirm your Booking
-                    </button>
-                    {!breakdown.hasSelection && (
-                      <p className="mt-3 text-center text-sm font-medium text-slate-500 dark:text-slate-400">
-                        Select at least one category item to enable confirmation.
-                      </p>
-                    )}
+                    <span className="inline-flex flex-shrink-0 items-center rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700">
+                      ✓ Available
+                    </span>
                   </div>
+
+                  {/* TWO-COLUMN LAYOUT */}
+                  <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_280px] gap-0">
+                    {/* LEFT COLUMN - Booking Items */}
+                    <div className="overflow-y-auto">
+                      {/* Blue Hint Bar */}
+                      <div className="border-b border-slate-200 bg-blue-50 px-5 py-3 sm:px-6">
+                        <p className="text-sm font-semibold text-blue-900">ℹ️ Check only what you need — uncheck anything to skip.</p>
+                      </div>
+
+                      {/* EXPERTISE SECTION */}
+                      {(hasExpertiseRows) && (
+                        <div className="border-b border-slate-200 p-5 sm:p-6 space-y-4">
+                          <div className="flex items-center justify-between gap-3">
+                            <h3 className="text-lg font-bold text-slate-900">Expertise</h3>
+                            <CategoryToggle postId={post.id} categoryKey="expertise" checked={breakdown.selection.expertise} />
+                          </div>
+                          <div className="space-y-3">
+                            {((skillBreakdownByPost[post.id]?.expertise || [])
+                              .concat(expertisesByPost[post.id] || []))
+                              .map((item, idx) => {
+                                const isSkill = 'cost_per_unit' in item
+                                const key = isSkill ? `skill-${item.id}` : `expertise-${item.id}`
+                                const workers = isSkill ? Number(skillWorkers[key] || 0) : Number(expertisePersons[`expertise-${item.id}`] || 0)
+                                const duration = isSkill ? 0 : Number(expertiseDurations[`expertise-${item.id}-duration`] || 0)
+                                const cost = isSkill ? Number(item.cost_per_unit || 0) : Number(item.cost || 0)
+                                const totalCost = isSkill ? workers * cost : workers * duration * cost
+                                const name = isSkill ? item.skill_name : item.name
+
+                                return (
+                                  <div
+                                    key={`${key}-${idx}`}
+                                    className={`rounded-xl border-2 p-4 transition ${
+                                      breakdown.selection.expertise
+                                        ? 'border-slate-300 bg-white'
+                                        : 'border-slate-200 bg-slate-50'
+                                    }`}
+                                  >
+                                    <div className="flex items-start justify-between gap-3 mb-3">
+                                      <div className="min-w-0 flex-1">
+                                        <h4 className="font-bold text-slate-900 truncate">{name}</h4>
+                                        <p className="text-xs text-slate-600 mt-0.5">{Number(cost).toFixed(0)} BDT per hour</p>
+                                      </div>
+                                      <input
+                                        type="checkbox"
+                                        checked={breakdown.selection.expertise}
+                                        onChange={() => toggleCategorySelection(post.id, 'expertise')}
+                                        className="mt-1 h-5 w-5 flex-shrink-0 rounded border-slate-300 text-violet-600"
+                                      />
+                                    </div>
+
+                                    {breakdown.selection.expertise && (
+                                      <>
+                                        <div className="space-y-3 mb-3">
+                                          {isSkill ? (
+                                            <CounterControl
+                                              value={workers}
+                                              onChange={(val) => setSkillWorkers((prev) => ({ ...prev, [key]: val }))}
+                                              max={Number(item.available_workers || 10)}
+                                              label="People Required"
+                                              unit="person"
+                                            />
+                                          ) : (
+                                            <>
+                                              <CounterControl
+                                                value={workers}
+                                                onChange={(val) => setExpertisePersons((prev) => ({ ...prev, [`expertise-${item.id}`]: val }))}
+                                                max={item.available_person || 10}
+                                                label="People Required"
+                                                unit="person"
+                                              />
+                                              <CounterControl
+                                                value={duration}
+                                                onChange={(val) => setExpertiseDurations((prev) => ({ ...prev, [`expertise-${item.id}-duration`]: val }))}
+                                                max={365}
+                                                label="Duration (hours)"
+                                                unit="hour"
+                                              />
+                                            </>
+                                          )}
+                                        </div>
+                                        <div className="border-t border-slate-200 pt-3 text-right">
+                                          <p className="text-xs text-slate-600">Subtotal</p>
+                                          <p className="text-lg font-bold text-slate-900">{Number(totalCost).toFixed(0)} BDT</p>
+                                        </div>
+                                      </>
+                                    )}
+                                  </div>
+                                )
+                              })}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* SERVICES SECTION */}
+                      {hasServiceRows && (
+                        <div className="border-b border-slate-200 p-5 sm:p-6 space-y-4">
+                          <div className="flex items-center justify-between gap-3">
+                            <h3 className="text-lg font-bold text-slate-900">Services</h3>
+                            <CategoryToggle postId={post.id} categoryKey="services" checked={breakdown.selection.services} />
+                          </div>
+                          <div className="space-y-3">
+                            {(skillBreakdownByPost[post.id]?.services || []).map((service) => {
+                              const duration = Number(serviceDurations[`service-${service.id}-duration`] || 0)
+                              const cost = Number(service.cost_per_unit || 0)
+                              const totalCost = duration * cost
+
+                              return (
+                                <div
+                                  key={service.id}
+                                  className={`rounded-xl border-2 p-4 transition ${
+                                    breakdown.selection.services
+                                      ? 'border-slate-300 bg-white'
+                                      : 'border-slate-200 bg-slate-50'
+                                  }`}
+                                >
+                                  <div className="flex items-start justify-between gap-3 mb-3">
+                                    <div className="min-w-0 flex-1">
+                                      <h4 className="font-bold text-slate-900 truncate">{service.service_name}</h4>
+                                      <p className="text-xs text-slate-600 mt-0.5">{Number(cost).toFixed(0)} BDT per hour</p>
+                                    </div>
+                                    <input
+                                      type="checkbox"
+                                      checked={breakdown.selection.services}
+                                      onChange={() => toggleCategorySelection(post.id, 'services')}
+                                      className="mt-1 h-5 w-5 flex-shrink-0 rounded border-slate-300 text-violet-600"
+                                    />
+                                  </div>
+
+                                  {breakdown.selection.services && (
+                                    <>
+                                      <div className="mb-3">
+                                        <CounterControl
+                                          value={duration}
+                                          onChange={(val) => setServiceDurations((prev) => ({ ...prev, [`service-${service.id}-duration`]: val }))}
+                                          max={365}
+                                          label="Duration (hours)"
+                                          unit="hour"
+                                        />
+                                      </div>
+                                      <div className="border-t border-slate-200 pt-3 text-right">
+                                        <p className="text-xs text-slate-600">Subtotal</p>
+                                        <p className="text-lg font-bold text-slate-900">{Number(totalCost).toFixed(0)} BDT</p>
+                                      </div>
+                                    </>
+                                  )}
+                                </div>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* PRODUCTS SECTION */}
+                      {hasProductRows && (
+                        <div className="border-b border-slate-200 p-5 sm:p-6 space-y-4">
+                          <div className="flex items-center justify-between gap-3">
+                            <h3 className="text-lg font-bold text-slate-900">Products</h3>
+                            <CategoryToggle postId={post.id} categoryKey="products" checked={breakdown.selection.products} />
+                          </div>
+                          <div className="space-y-3">
+                            {(productsByPost[post.id] || []).map((product) => {
+                              const units = Number(productUnits[`product-${product.id}`] || 0)
+                              const cost = Number(product.cost_per_unit || 0)
+                              const totalCost = units * cost
+                              const availableUnits = Math.max(Number(product.available_units || 0), 0)
+
+                              return (
+                                <div
+                                  key={product.id}
+                                  className={`rounded-xl border-2 p-4 transition ${
+                                    breakdown.selection.products
+                                      ? 'border-slate-300 bg-white'
+                                      : 'border-slate-200 bg-slate-50'
+                                  }`}
+                                >
+                                  <div className="flex items-start justify-between gap-3 mb-3">
+                                    <div className="min-w-0 flex-1">
+                                      <h4 className="font-bold text-slate-900 truncate">{product.product_name}</h4>
+                                      <p className="text-xs text-slate-600 mt-0.5">{Number(cost).toFixed(0)} BDT per unit • {availableUnits} in stock</p>
+                                    </div>
+                                    <input
+                                      type="checkbox"
+                                      checked={breakdown.selection.products}
+                                      onChange={() => toggleCategorySelection(post.id, 'products')}
+                                      className="mt-1 h-5 w-5 flex-shrink-0 rounded border-slate-300 text-violet-600"
+                                    />
+                                  </div>
+
+                                  {breakdown.selection.products && (
+                                    <>
+                                      <div className="mb-3">
+                                        <CounterControl
+                                          value={units}
+                                          onChange={(val) => setProductUnits((prev) => ({ ...prev, [`product-${product.id}`]: val }))}
+                                          max={availableUnits}
+                                          label="Quantity"
+                                          unit="unit"
+                                        />
+                                      </div>
+                                      <div className="border-t border-slate-200 pt-3 text-right">
+                                        <p className="text-xs text-slate-600">Subtotal</p>
+                                        <p className="text-lg font-bold text-slate-900">{Number(totalCost).toFixed(0)} BDT</p>
+                                      </div>
+                                    </>
+                                  )}
+                                </div>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* NOTES FOR SUPPLIER */}
+                      <div className="border-b border-slate-200 bg-slate-50/50 p-5 sm:p-6">
+                        <p className="text-xs font-semibold tracking-wide text-slate-600 mb-3">NOTES FOR SUPPLIER</p>
+                        <textarea
+                          rows={3}
+                          placeholder="Any special requirements, access instructions, or preferred working hours..."
+                          className="w-full resize-none rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-violet-400 focus:ring-1 focus:ring-violet-300"
+                        />
+                      </div>
+                    </div>
+
+                    {/* RIGHT COLUMN - Order Summary (Sticky on lg) */}
+                    <div className="border-l border-slate-200 bg-gradient-to-b from-slate-50 to-white p-5 sm:p-6 lg:sticky lg:top-[120px] lg:max-h-[calc(100vh-140px)] lg:overflow-y-auto">
+                      <h4 className="text-lg font-bold text-slate-900 mb-1">Order summary</h4>
+                      <p className="text-xs text-slate-600 mb-4">
+                        {breakdown.selectedCount > 0 ? (
+                          <>
+                            <span className="inline-block rounded-full bg-violet-100 px-2 py-0.5 text-xs font-semibold text-violet-700">{breakdown.selectedCount} item{breakdown.selectedCount !== 1 ? 's' : ''}</span>
+                          </>
+                        ) : (
+                          'Add items to begin'
+                        )}
+                      </p>
+
+                      {breakdown.selectedCount === 0 ? (
+                        <div className="text-center py-8 text-slate-500">
+                          <p className="text-sm font-semibold">No items selected</p>
+                          <p className="text-xs mt-1">Check boxes above to add items</p>
+                        </div>
+                      ) : (
+                        <>
+                          <div className="space-y-2 border-t border-slate-200 pt-3 mb-4 text-sm">
+                            <div className="flex justify-between">
+                              <span className="text-slate-600">Subtotal</span>
+                              <span className="font-semibold text-slate-900">{Number(breakdown.total).toFixed(0)} BDT</span>
+                            </div>
+                          </div>
+
+                          <div className="border-t border-slate-200 pt-3 mb-4">
+                            <div className="flex justify-between">
+                              <span className="text-lg font-bold text-slate-900">Total</span>
+                              <span className="text-2xl font-bold text-violet-600">{Number(breakdown.total).toFixed(0)} BDT</span>
+                            </div>
+                            <p className="text-xs text-slate-500 mt-2">Booking confirmed once supplier accepts. No charge until then.</p>
+                          </div>
+
+                          <button
+                            onClick={() => handleCreateOrUpdateErp(post)}
+                            disabled={!breakdown.hasSelection}
+                            className={`w-full rounded-xl px-4 py-2.5 text-sm font-semibold transition mb-3 ${
+                              breakdown.hasSelection
+                                ? 'bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white hover:from-violet-700 hover:to-fuchsia-700'
+                                : 'cursor-not-allowed bg-slate-300 text-slate-500'
+                            }`}
+                          >
+                            Request booking ↗
+                          </button>
+
+                          <div className="space-y-2 text-xs text-slate-600">
+                            <div className="flex items-start gap-2">
+                              <span>🔒</span>
+                              <span>Secure booking</span>
+                            </div>
+                            <div className="flex items-start gap-2">
+                              <span>📅</span>
+                              <span>Free cancellation 24h</span>
+                            </div>
+                            <div className="flex items-start gap-2">
+                              <span>💳</span>
+                              <span>No charge until accepted</span>
+                            </div>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  </div>
+
+                  {ownPostIds.has(post.id) && (
+                    <div className="border-t border-slate-200 bg-white p-4 text-center">
+                      <button
+                        onClick={() => handleDeletePost(post.id)}
+                        className="px-6 py-2 bg-red-500 hover:bg-red-600 text-white font-bold rounded-lg transition text-sm"
+                      >
+                        🗑️ Delete Post
+                      </button>
+                    </div>
+                  )}
                 </div>
-                )
-              })}
-            </div>
-          )}
+              )
+            })}
+          </div>
+        )}
       </div>
-    </>
+    </div>
   )
 }
