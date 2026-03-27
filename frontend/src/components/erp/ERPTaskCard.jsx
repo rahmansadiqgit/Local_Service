@@ -18,6 +18,7 @@ export default function ERPTaskCard({
   onTrackNext,
   onToggleReadyProduct,
   users = [],
+  assignableUsers = [],
   onUpdateMemberAssignment,
   onPublishMemberPost,
   onOpenOwner,
@@ -91,7 +92,7 @@ export default function ERPTaskCard({
   const assignedMembersForSelectedRole = users.filter((user) =>
     selectedAssigneeIds.includes(Number(user.id)),
   )
-  const visibleMembers = isProvider ? users : assignedMembersForSelectedRole
+  const visibleMembers = isProvider ? assignableUsers : assignedMembersForSelectedRole
 
   const counterpartyUserId =
     viewerRole === 'Provider'
@@ -294,13 +295,15 @@ export default function ERPTaskCard({
         >
           Pending
         </button>
-        <button
-          type="button"
-          onClick={() => onToggleTrack(erp.id)}
-          className="rounded-full border border-violet-300 bg-violet-50 px-4 py-2 text-sm font-semibold text-violet-700 transition hover:bg-violet-100"
-        >
-          Tasks
-        </button>
+        {isProvider ? (
+          <button
+            type="button"
+            onClick={() => onToggleTrack(erp.id)}
+            className="rounded-full border border-violet-300 bg-violet-50 px-4 py-2 text-sm font-semibold text-violet-700 transition hover:bg-violet-100"
+          >
+            Tasks
+          </button>
+        ) : null}
         <button
           type="button"
           onClick={() => onGeneratePdf(erp)}
@@ -419,7 +422,7 @@ export default function ERPTaskCard({
         </div>
       ) : null}
 
-      {trackOpenId === erp.id && (
+      {isProvider && trackOpenId === erp.id && (
         <div className="space-y-3 rounded-xl border border-violet-200 bg-violet-50/50 p-3 text-xs text-slate-700">
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="rounded-lg border border-slate-200 bg-white p-2">

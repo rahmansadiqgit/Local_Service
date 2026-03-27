@@ -4,6 +4,7 @@ import defaultAvatar from '../assets/default-avatar.svg'
 
 export default function Connections() {
   const [selected, setSelected] = useState(null)
+  const [memberCategory, setMemberCategory] = useState('Expertise')
   const [posts, setPosts] = useState([])
   const [erpItems, setErpItems] = useState([])
   const [currentUserId, setCurrentUserId] = useState(null)
@@ -244,153 +245,176 @@ export default function Connections() {
         </div>
       ) : null}
 
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h3 className="text-lg font-semibold">Live Connections</h3>
-          <p className="text-xs text-slate-400">Connections currently active in ERP.</p>
-        </div>
-        <div className="grid gap-4 lg:grid-cols-3">
-          {overview.live_connections.length ? (
-            overview.live_connections.map((person) => renderCard(person, 'Live'))
-          ) : (
-            <p className="text-sm text-slate-500">No live connections yet.</p>
-          )}
-        </div>
-      </div>
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,4fr)_minmax(0,1fr)]">
+        <div className="space-y-6">
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold">Members</h3>
+              <p className="text-xs text-slate-400">Accepted connection requests.</p>
+            </div>
 
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h3 className="text-lg font-semibold">New Connections</h3>
-          <p className="text-xs text-slate-400">Accepted connection requests.</p>
-        </div>
-        <div className="card border border-slate-200 bg-white/80">
-          <p className="text-sm font-semibold">Incoming Requests</p>
-          <div className="mt-2 space-y-2 text-sm">
-            {overview.incoming_requests.length ? (
-              overview.incoming_requests.map((item) => (
-                <div key={`incoming-${item.id}`} className="rounded-lg border border-slate-200 bg-white p-2">
-                  <p className="font-semibold text-slate-800">{item.requester_name || `User #${item.requester}`}</p>
-                  <p className="text-xs text-slate-500">{item.request_message || 'No request message.'}</p>
-                  <div className="mt-2 flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => handleRespondRequest(item.id, 'accept')}
-                      disabled={requestActionLoading === `${item.id}-accept`}
-                      className="rounded-full border border-emerald-200 px-3 py-1 text-xs font-semibold text-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      Accept
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleRespondRequest(item.id, 'reject')}
-                      disabled={requestActionLoading === `${item.id}-reject`}
-                      className="rounded-full border border-rose-200 px-3 py-1 text-xs font-semibold text-rose-700 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      Reject
-                    </button>
+            <div className="flex flex-wrap gap-2">
+              {['Expertise', 'Skill Providers', 'Delivery Man'].map((category) => (
+                <button
+                  key={category}
+                  type="button"
+                  onClick={() => setMemberCategory(category)}
+                  className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
+                    memberCategory === category
+                      ? 'border-violet-400 bg-violet-100 text-violet-800'
+                      : 'border-slate-300 bg-white text-slate-600 hover:border-violet-300'
+                  }`}
+                >
+                  {category}
+                </button>
+              ))}
+            </div>
+            <div className="card border border-slate-200 bg-white/80">
+              <p className="text-sm font-semibold">Incoming Requests</p>
+              <div className="mt-2 space-y-2 text-sm">
+                {overview.incoming_requests.length ? (
+                  overview.incoming_requests.map((item) => (
+                    <div key={`incoming-${item.id}`} className="rounded-lg border border-slate-200 bg-white p-2">
+                      <p className="font-semibold text-slate-800">{item.requester_name || `User #${item.requester}`}</p>
+                      <p className="text-xs text-slate-500">{item.request_message || 'No request message.'}</p>
+                      <div className="mt-2 flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleRespondRequest(item.id, 'accept')}
+                          disabled={requestActionLoading === `${item.id}-accept`}
+                          className="rounded-full border border-emerald-200 px-3 py-1 text-xs font-semibold text-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          Accept
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleRespondRequest(item.id, 'reject')}
+                          disabled={requestActionLoading === `${item.id}-reject`}
+                          className="rounded-full border border-rose-200 px-3 py-1 text-xs font-semibold text-rose-700 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          Reject
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-slate-500">No incoming requests.</p>
+                )}
+              </div>
+            </div>
+
+            <div className="grid gap-4 lg:grid-cols-3">
+              {overview.new_connections.length ? (
+                overview.new_connections.map((person) => renderCard(person, memberCategory))
+              ) : (
+                <p className="text-sm text-slate-500">No members yet.</p>
+              )}
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold">Live</h3>
+              <p className="text-xs text-slate-400">Connections currently active in ERP.</p>
+            </div>
+            <div className="grid gap-4 lg:grid-cols-3">
+              {overview.live_connections.length ? (
+                overview.live_connections.map((person) => renderCard(person, 'Live'))
+              ) : (
+                <p className="text-sm text-slate-500">No live connections yet.</p>
+              )}
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold">Recent</h3>
+              <p className="text-xs text-slate-400">Previously live ERP connections.</p>
+            </div>
+            <div className="grid gap-4 lg:grid-cols-3">
+              {overview.recent_connections.length ? (
+                overview.recent_connections.map((person) => renderCard(person, 'Recent'))
+              ) : (
+                <p className="text-sm text-slate-500">No recent connections yet.</p>
+              )}
+            </div>
+          </div>
+
+          <div className={profileLikeBoxClass}>
+            <h3 className="text-lg font-semibold">Connection Details</h3>
+            {!selected ? (
+              <p className="mt-3 text-sm text-slate-500">Select a connection to view profile details.</p>
+            ) : (
+              <div className="mt-4 space-y-4">
+                <div className="flex flex-wrap items-center gap-3">
+                  <div>
+                    <p className="text-sm font-semibold">{selected.name || selected.username}</p>
+                    <p className="text-xs text-slate-500">{selected.location}</p>
+                  </div>
+                  <span
+                    className="rounded-full bg-violet-100 px-2 py-1 text-xs font-semibold text-violet-700"
+                  >
+                    {selected.type}
+                  </span>
+                </div>
+
+                <div>
+                  <p className="text-sm font-semibold">Recent Posts</p>
+                  <div className="mt-2 space-y-2 text-sm text-slate-500">
+                    {recentPosts.length === 0 ? (
+                      <p>No posts available.</p>
+                    ) : (
+                      recentPosts.map((post) => (
+                        <div key={post.id} className="flex items-center justify-between">
+                          <span>{post.post_name}</span>
+                          <span className="text-xs text-slate-400">{post.post_type}</span>
+                        </div>
+                      ))
+                    )}
                   </div>
                 </div>
-              ))
-            ) : (
-              <p className="text-slate-500">No incoming requests.</p>
+              </div>
             )}
           </div>
         </div>
 
-        <div className="grid gap-4 lg:grid-cols-3">
-          {overview.new_connections.length ? (
-            overview.new_connections.map((person) => renderCard(person, 'New'))
-          ) : (
-            <p className="text-sm text-slate-500">No new connections yet.</p>
-          )}
-        </div>
-      </div>
-
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h3 className="text-lg font-semibold">Recent Connections</h3>
-          <p className="text-xs text-slate-400">Previously live ERP connections.</p>
-        </div>
-        <div className="grid gap-4 lg:grid-cols-3">
-          {overview.recent_connections.length ? (
-            overview.recent_connections.map((person) => renderCard(person, 'Recent'))
-          ) : (
-            <p className="text-sm text-slate-500">No recent connections yet.</p>
-          )}
-        </div>
-      </div>
-
-      <div className={profileLikeBoxClass}>
-        <h3 className="text-lg font-semibold">Self-Assign ERP Posts</h3>
-        <p className="mt-1 text-xs text-slate-500">If provider generated assignment post, you can assign or remove yourself here.</p>
-        <div className="mt-3 space-y-2">
-          {openSelfAssignPosts.length ? (
-            openSelfAssignPosts.map(({ erp, role, roleLabel, assignedIds }) => {
-              const isAssigned = assignedIds.map((id) => Number(id)).includes(Number(currentUserId))
-              const loadingKey = `${erp.id}-${role}`
-              const postName = posts.find((item) => Number(item.id) === Number(erp.post))?.post_name || `ERP #${erp.id}`
-              return (
-                <div key={`${erp.id}-${role}`} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white p-2">
-                  <div>
-                    <p className="text-sm font-semibold text-slate-800">{postName}</p>
-                    <p className="text-xs text-slate-500">Role: {roleLabel}</p>
-                  </div>
-                  <button
-                    type="button"
-                    disabled={selfAssignLoading === loadingKey}
-                    onClick={() => handleSelfAssign(erp.id, role, !isAssigned)}
-                    className="rounded-full border border-brand-200 px-3 py-1 text-xs font-semibold text-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    {selfAssignLoading === loadingKey
-                      ? 'Updating...'
-                      : isAssigned
-                        ? 'Remove Myself'
-                        : 'Assign Myself'}
-                  </button>
-                </div>
-              )
-            })
-          ) : (
-            <p className="text-sm text-slate-500">No open self-assign posts right now.</p>
-          )}
-        </div>
-      </div>
-
-      <div className={profileLikeBoxClass}>
-        <h3 className="text-lg font-semibold">Connection Details</h3>
-        {!selected ? (
-          <p className="mt-3 text-sm text-slate-500">Select a connection to view profile details.</p>
-        ) : (
-          <div className="mt-4 space-y-4">
-            <div className="flex flex-wrap items-center gap-3">
-              <div>
-                <p className="text-sm font-semibold">{selected.name || selected.username}</p>
-                <p className="text-xs text-slate-500">{selected.location}</p>
-              </div>
-              <span
-                className="rounded-full bg-violet-100 px-2 py-1 text-xs font-semibold text-violet-700"
-              >
-                {selected.type}
-              </span>
-            </div>
-
-            <div>
-              <p className="text-sm font-semibold">Recent Posts</p>
-              <div className="mt-2 space-y-2 text-sm text-slate-500">
-                {recentPosts.length === 0 ? (
-                  <p>No posts available.</p>
-                ) : (
-                  recentPosts.map((post) => (
-                    <div key={post.id} className="flex items-center justify-between">
-                      <span>{post.post_name}</span>
-                      <span className="text-xs text-slate-400">{post.post_type}</span>
+        <div className="space-y-6 lg:sticky lg:top-6 lg:h-fit">
+          <div className={profileLikeBoxClass}>
+            <h3 className="text-lg font-semibold">Self-Assign ERP Posts</h3>
+            <p className="mt-1 text-xs text-slate-500">If provider generated assignment post, you can assign or remove yourself here.</p>
+            <div className="mt-3 space-y-2">
+              {openSelfAssignPosts.length ? (
+                openSelfAssignPosts.map(({ erp, role, roleLabel, assignedIds }) => {
+                  const isAssigned = assignedIds.map((id) => Number(id)).includes(Number(currentUserId))
+                  const loadingKey = `${erp.id}-${role}`
+                  const postName = posts.find((item) => Number(item.id) === Number(erp.post))?.post_name || `ERP #${erp.id}`
+                  return (
+                    <div key={`${erp.id}-${role}`} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white p-2">
+                      <div>
+                        <p className="text-sm font-semibold text-slate-800">{postName}</p>
+                        <p className="text-xs text-slate-500">Role: {roleLabel}</p>
+                      </div>
+                      <button
+                        type="button"
+                        disabled={selfAssignLoading === loadingKey}
+                        onClick={() => handleSelfAssign(erp.id, role, !isAssigned)}
+                        className="rounded-full border border-brand-200 px-3 py-1 text-xs font-semibold text-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {selfAssignLoading === loadingKey
+                          ? 'Updating...'
+                          : isAssigned
+                            ? 'Remove Myself'
+                            : 'Assign Myself'}
+                      </button>
                     </div>
-                  ))
-                )}
-              </div>
+                  )
+                })
+              ) : (
+                <p className="text-sm text-slate-500">No open self-assign posts right now.</p>
+              )}
             </div>
           </div>
-        )}
+        </div>
       </div>
     </div>
   )
