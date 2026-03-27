@@ -58,7 +58,7 @@ export default function CreatePost() {
     { skill_name: '', cost_per_unit: '' },
   ])
   const [expertises, setExpertises] = useState([
-    { name: '', experience: '', unit: '', cost: '', available_person: 0 },
+    { name: '', experience: '', unit: '', needed_budget_unit: '', cost: '', available_person: 0 },
   ])
   const [services, setServices] = useState([
     { service_name: '', description: '', cost_per_unit: '' },
@@ -300,8 +300,19 @@ export default function CreatePost() {
       return hasAnyValue && !item.unit
     })
 
+    const expertiseBudgetUnitAmountMissing = isDemand && expertises.some((item) => {
+      const hasAnyValue = item.name || item.experience || item.cost || String(item.available_person || '').trim()
+      return hasAnyValue && item.unit && Number(item.needed_budget_unit || 0) <= 0
+    })
+
     if (showExpertiseSection && expertiseDurationMissing) {
-      setMessage(isDemand ? 'Please select Work Duration Needed for all expertise rows.' : 'Please select Work Type for all expertise rows.')
+      setMessage(isDemand ? 'Please select Hire Unit for all expertise rows.' : 'Please select Work Type for all expertise rows.')
+      setSaving(false)
+      return
+    }
+
+    if (showExpertiseSection && expertiseBudgetUnitAmountMissing) {
+      setMessage('Please enter Needed Hire Unit value for all expertise rows.')
       setSaving(false)
       return
     }
@@ -339,6 +350,7 @@ export default function CreatePost() {
             name: item.name,
             experience: item.experience,
             unit: item.unit,
+            needed_budget_unit: Number(item.needed_budget_unit) || 0,
             cost: Number(item.cost),
             available_person: Number(item.available_person) || 0,
             post: createdPost.id,
@@ -366,7 +378,7 @@ export default function CreatePost() {
       setShowCategoryMenu(false)
       setImageFile(null)
       setSkills([{ skill_name: '', cost_per_unit: '' }])
-      setExpertises([{ name: '', experience: '', unit: '', cost: '', available_person: 0 }])
+      setExpertises([{ name: '', experience: '', unit: '', needed_budget_unit: '', cost: '', available_person: 0 }])
       setServices([{ service_name: '', description: '', cost_per_unit: '' }])
       setProducts([{ product_name: '', description: '', unit: '', cost_per_unit: '', available_units: 0 }])
       window.dispatchEvent(new Event('post-created'))
@@ -659,7 +671,7 @@ export default function CreatePost() {
               onClick={() =>
                 setExpertises((prev) => [
                   ...prev,
-                  { name: '', experience: '', unit: '', cost: '', available_person: 0 },
+                  { name: '', experience: '', unit: '', needed_budget_unit: '', cost: '', available_person: 0 },
                 ])
               }
               className={addRowButtonClass}
@@ -668,7 +680,7 @@ export default function CreatePost() {
             </button>
           </div>
           {expertises.map((row, index) => (
-            <div key={`expertise-${index}`} className="grid gap-4 lg:grid-cols-5">
+            <div key={`expertise-${index}`} className={`grid gap-4 ${isDemand ? 'lg:grid-cols-6' : 'lg:grid-cols-5'}`}>
               <div>
                 <label className="text-xs font-semibold text-black">{isDemand ? 'Expertise Name' : 'Skill / Expertise Name'}</label>
                 <input
@@ -701,7 +713,7 @@ export default function CreatePost() {
                 />
               </div>
               <div>
-                <label className="text-xs font-semibold text-black">{isDemand ? 'Work Duration Needed' : 'Work Type'}</label>
+                <label className="text-xs font-semibold text-black">{isDemand ? 'Hire Unit' : 'Work Type'}</label>
                 <select
                   value={row.unit}
                   onChange={(event) =>
@@ -718,19 +730,64 @@ export default function CreatePost() {
                     className="bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white"
                     style={{ backgroundColor: '#7c3aed', color: '#ffffff' }}
                   >
-                    Select duration
+                    {isDemand ? 'Select hire unit' : 'Select duration'}
                   </option>
                   <option value="hourly">Hourly</option>
                   <option value="daily">Daily</option>
                   <option value="monthly">Monthly</option>
                 </select>
               </div>
+              {isDemand && row.unit ? (
+                <div>
+                  <label className="text-xs font-semibold text-black">Needed Hire Unit</label>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    placeholder={
+                      row.unit === 'hourly'
+                        ? 'e.g., 2 (hours)'
+                        : row.unit === 'daily'
+                          ? 'e.g., 3 (days)'
+                          : 'e.g., 1 (months)'
+                    }
+                    value={row.needed_budget_unit}
+                    onChange={(event) =>
+                      setExpertises((prev) =>
+                        prev.map((item, i) =>
+                          i === index ? { ...item, needed_budget_unit: event.target.value } : item,
+                        ),
+                      )
+                    }
+                    className={profileLikeInputClass}
+                  />
+                </div>
+              ) : null}
               <div>
-                <label className="text-xs font-semibold text-black">{isDemand ? 'Your Budget (BDT)' : 'Charge (BDT)'}</label>
+                <label className="text-xs font-semibold text-black">
+                  {isDemand
+                    ? row.unit === 'hourly'
+                      ? 'Your Hourly Budget (BDT)'
+                      : row.unit === 'daily'
+                        ? 'Your Daily Budget (BDT)'
+                        : row.unit === 'monthly'
+                          ? 'Your Monthly Budget (BDT)'
+                          : 'Your Budget (BDT)'
+                    : 'Charge (BDT)'}
+                </label>
                 <input
                   type="text"
                   inputMode="decimal"
-                  placeholder={isDemand ? 'Enter your budget (BDT)' : 'Enter charge amount (BDT)'}
+                  placeholder={
+                    isDemand
+                      ? row.unit === 'hourly'
+                        ? 'Enter your hourly budget (BDT)'
+                        : row.unit === 'daily'
+                          ? 'Enter your daily budget (BDT)'
+                          : row.unit === 'monthly'
+                            ? 'Enter your monthly budget (BDT)'
+                            : 'Enter your budget (BDT)'
+                      : 'Enter charge amount (BDT)'
+                  }
                   value={row.cost}
                   onChange={(event) =>
                     setExpertises((prev) =>

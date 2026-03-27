@@ -192,6 +192,7 @@ class ExpertiseSerializer(serializers.ModelSerializer):
             "name",
             "experience",
             "unit",
+            "needed_budget_unit",
             "cost",
             "available_person",
         )
