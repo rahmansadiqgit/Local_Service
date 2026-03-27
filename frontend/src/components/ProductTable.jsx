@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 
-export default function ProductTable({ products = [], postType = 'Supply', showDescription = true }) {
+export default function ProductTable({ products = [], postType = 'Supply', showDescription = true, tone = 'default' }) {
   const [sortKey, setSortKey] = useState('product_name')
   const [sortDir, setSortDir] = useState('asc')
   const isDemand = postType === 'Demand'
@@ -33,10 +33,12 @@ export default function ProductTable({ products = [], postType = 'Supply', showD
     return <p className="text-sm text-slate-500">No products listed.</p>
   }
 
+  const isProfileTone = tone === 'profile'
+
   return (
-    <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800">
+    <div className={`overflow-x-auto rounded-xl border ${isProfileTone ? 'border-violet-200/80 bg-white/55' : 'border-slate-200 dark:border-slate-800'}`}>
       <table className="min-w-[560px] w-full text-left text-xs sm:text-sm">
-        <thead className="bg-slate-50 text-slate-600 dark:bg-slate-900 dark:text-slate-300">
+        <thead className={isProfileTone ? 'bg-gradient-to-r from-violet-100/90 to-fuchsia-100/80 text-violet-900' : 'bg-slate-50 text-slate-600 dark:bg-slate-900 dark:text-slate-300'}>
           <tr>
             <th className="px-3 py-2 whitespace-nowrap">
               <button type="button" onClick={() => handleSort('product_name')}>
@@ -71,9 +73,11 @@ export default function ProductTable({ products = [], postType = 'Supply', showD
           {sorted.map((product, index) => (
             <tr
               key={product.id}
-              className={`border-t border-slate-200 dark:border-slate-800 ${
-                index % 2 === 1 ? 'bg-slate-50 dark:bg-slate-900/40' : ''
-              }`}
+              className={
+                isProfileTone
+                  ? `border-t border-violet-200/70 ${index % 2 === 1 ? 'bg-white/70' : 'bg-violet-50/45'}`
+                  : `border-t border-slate-200 dark:border-slate-800 ${index % 2 === 1 ? 'bg-slate-50 dark:bg-slate-900/40' : ''}`
+              }
             >
               <td className="px-3 py-2 font-medium whitespace-nowrap">{product.product_name}</td>
               {showDescription && <td className="px-3 py-2 whitespace-pre-line break-words">{product.description || '-'}</td>}

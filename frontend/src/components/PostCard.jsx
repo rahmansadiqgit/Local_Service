@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import defaultAvatar from '../assets/default-avatar.svg'
 import ExpertiseTable from './ExpertiseTable'
@@ -17,9 +17,10 @@ export default function PostCard({
   onAction,
   onAddToCart,
   inCart = false,
+  isDetailsOpen = false,
+  onToggleDetails,
 }) {
   const navigate = useNavigate()
-  const [expanded, setExpanded] = useState(false)
 
   const backendOrigin = useMemo(() => {
     const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api'
@@ -168,7 +169,7 @@ export default function PostCard({
 
   return (
     <div
-      className="card flex h-full flex-col space-y-3 p-4 sm:p-5 border border-slate-200 text-black shadow-sm transition-shadow hover:shadow-lg"
+      className="card relative flex h-full flex-col space-y-3 overflow-hidden border border-slate-200 p-4 text-black shadow-sm transition-shadow hover:shadow-lg sm:p-5"
       style={{
         background: 'linear-gradient(135deg, #f8fafc 0%, #e3d5e5 45%, #8763ac 100%)',
       }}
@@ -283,12 +284,13 @@ export default function PostCard({
         )}
         <button
           type="button"
-          onClick={() => setExpanded((prev) => !prev)}
+          onClick={() => onToggleDetails?.(!isDetailsOpen)}
+          aria-expanded={isDetailsOpen}
 
           className="rounded-full border border-slate-700 bg-transparent px-5 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-800 hover:bg-slate-100/40 focus:outline-none focus:ring-2 focus:ring-slate-200"
 
         >
-          {expanded ? 'Hide Details' : 'View Details'}
+          {isDetailsOpen ? 'Hide Details' : 'View Details'}
         </button>
         {post.website_link && (
           <a
@@ -302,45 +304,71 @@ export default function PostCard({
         )}
       </div>
 
-      {expanded && (
-        <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
-          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-2.5">
-            <div className="space-y-3">
+      {isDetailsOpen && (
+        <div className="absolute inset-x-3 bottom-3 z-20 sm:inset-x-4 sm:bottom-4">
+          <div
+            className="flex flex-col overflow-hidden rounded-2xl border border-violet-200/80 shadow-xl backdrop-blur-md"
+            style={{
+              maxHeight: 'calc(100% - 7.5rem)',
+              background: 'linear-gradient(135deg, #c9b6ff 0%, #e6d7ff 60%, #f2eaff 100%)',
+              backgroundColor: 'rgba(236, 225, 255, 0.82)',
+              boxShadow: '0 8px 32px 0 rgba(31, 38, 135, 0.12)',
+              border: '1.5px solid #e0d7fa',
+            }}
+          >
+            <div className="flex items-center justify-between border-b border-violet-200/80 bg-gradient-to-r from-[#c9b6ff]/80 via-[#e6d7ff]/85 to-[#f2eaff]/80 px-4 py-3">
+              <p className="text-sm font-semibold text-violet-900">Post details</p>
+              <button
+                type="button"
+                onClick={() => onToggleDetails?.(false)}
+                className="rounded-full border border-violet-300 bg-white/65 px-3 py-1 text-xs font-semibold text-violet-800 transition hover:bg-violet-50 focus:outline-none focus:ring-2 focus:ring-violet-200"
+              >
+                Close
+              </button>
+            </div>
+
+            <div
+              className="space-y-3 overflow-y-auto p-3"
+              style={{
+                backgroundColor: 'rgba(234, 226, 249, 0.56)',
+                backgroundImage: 'linear-gradient(145deg, rgba(225, 205, 255, 0.28), rgba(244, 230, 255, 0.24))',
+              }}
+            >
               {hasExpertiseCategory && (
-                <div className="space-y-2">
-                  <p className="text-sm font-semibold text-slate-600 dark:text-slate-300">Expertise</p>
+                <div className="space-y-2 rounded-2xl border border-violet-200/80 bg-white/55 p-2.5 shadow-sm backdrop-blur-md">
+                  <p className="text-sm font-semibold text-violet-900">Expertise</p>
                   {expertiseRows.length ? (
-                    <ExpertiseTable expertises={expertiseRows} postType={post.post_type} />
+                    <ExpertiseTable expertises={expertiseRows} postType={post.post_type} tone="profile" />
                   ) : (
-                    <p className="text-sm text-slate-400">No expertise detail listed.</p>
+                    <p className="text-sm text-violet-700/80">No expertise detail listed.</p>
                   )}
                 </div>
               )}
 
               {hasServicesCategory && (
-                <div className="space-y-2">
-                  <p className="text-sm font-semibold text-slate-600 dark:text-slate-300">Services</p>
+                <div className="space-y-2 rounded-2xl border border-violet-200/80 bg-white/55 p-2.5 shadow-sm backdrop-blur-md">
+                  <p className="text-sm font-semibold text-violet-900">Services</p>
                   {serviceRows.length ? (
-                    <ServiceTable services={serviceRows} postType={post.post_type} showDescription={showServiceDescription} />
+                    <ServiceTable services={serviceRows} postType={post.post_type} showDescription={showServiceDescription} tone="profile" />
                   ) : (
-                    <p className="text-sm text-slate-400">No services detail listed.</p>
+                    <p className="text-sm text-violet-700/80">No services detail listed.</p>
                   )}
                 </div>
               )}
 
               {hasProductCategory && (
-                <div className="space-y-2">
-                  <p className="text-sm font-semibold text-slate-600 dark:text-slate-300">Products</p>
+                <div className="space-y-2 rounded-2xl border border-violet-200/80 bg-white/55 p-2.5 shadow-sm backdrop-blur-md">
+                  <p className="text-sm font-semibold text-violet-900">Products</p>
                   {productRows.length ? (
-                    <ProductTable products={productRows} postType={post.post_type} showDescription={showProductDescription} />
+                    <ProductTable products={productRows} postType={post.post_type} showDescription={showProductDescription} tone="profile" />
                   ) : (
-                    <p className="text-sm text-slate-400">No product detail listed.</p>
+                    <p className="text-sm text-violet-700/80">No product detail listed.</p>
                   )}
                 </div>
               )}
 
               {!hasExpertiseCategory && !hasServicesCategory && !hasProductCategory && (
-                <p className="text-sm text-slate-400">No detail listed.</p>
+                <p className="text-sm text-violet-700/80">No detail listed.</p>
               )}
             </div>
           </div>
