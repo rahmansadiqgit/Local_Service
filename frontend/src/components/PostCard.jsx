@@ -304,8 +304,11 @@ export default function PostCard({
       </div>
 
       {expanded && (
-        <div className="absolute inset-0 z-20 flex flex-col bg-slate-950/35 p-3 backdrop-blur-[1px] sm:p-4">
-          <div className="flex h-full flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl">
+        <div className="absolute inset-x-3 bottom-3 z-20 sm:inset-x-4 sm:bottom-4">
+          <div
+            className="flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl"
+            style={{ maxHeight: 'calc(100% - 7.5rem)' }}
+          >
             <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-4 py-3">
               <p className="text-sm font-semibold text-slate-700">Post details</p>
               <button
