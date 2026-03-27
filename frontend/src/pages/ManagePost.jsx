@@ -14,7 +14,6 @@ export default function ManagePost() {
   const [skillWorkers, setSkillWorkers] = useState({})
   const [expertisePersons, setExpertisePersons] = useState({})
   const [expertiseDurations, setExpertiseDurations] = useState({})
-  const [serviceQuantities, setServiceQuantities] = useState({})
   const [productUnits, setProductUnits] = useState({})
   const [itemToggles, setItemToggles] = useState({})
   const [supplierNotesByPost, setSupplierNotesByPost] = useState({})
@@ -267,15 +266,15 @@ export default function ManagePost() {
 
     serviceRows.forEach((row) => {
       const enabled = isItemEnabled(postId, 'service', row.id)
-      const duration = Number(serviceDurations[`service-${row.id}-duration`] || 0)
+      const quantity = enabled ? 1 : 0
       const unitCost = Number(row.cost_per_unit || 0)
-      const lineTotal = enabled ? duration * unitCost : 0
+      const lineTotal = quantity * unitCost
       serviceTotal += lineTotal
-      if (enabled && duration > 0) {
+      if (enabled) {
         lineItems.push({
           key: `service-${row.id}`,
           title: row.service_name,
-          detail: `(${duration} hr)`,
+          detail: '(included)',
           amount: lineTotal,
         })
       }
@@ -384,7 +383,7 @@ export default function ManagePost() {
     const services = serviceRows
       .map((row) => {
         if (!isItemEnabled(postId, 'service', row.id)) return null
-        const duration = Number(serviceDurations[`service-${row.id}-duration`] || 0)
+        const quantity = 1
         const unitCost = Number(row.cost_per_unit || 0)
         return {
           id: row.id,
@@ -394,7 +393,7 @@ export default function ManagePost() {
           line_total: quantity * unitCost,
         }
       })
-      .filter((row) => row && row.duration > 0)
+      .filter((row) => row && row.quantity > 0)
 
     const products = productRows
       .map((row) => {
@@ -595,9 +594,9 @@ export default function ManagePost() {
                 className="text-xl font-extrabold tracking-tight text-violet-900 sm:text-3xl"
                 style={{ fontFamily: "'Sora', 'Trebuchet MS', sans-serif" }}
               >
-                Manage Your Posts
+                Following Post Details
               </h1>
-              <p className="mt-0.5 text-xs text-violet-800/80 sm:text-sm">Adjust expertise workers, service quantity, and product units with real-time cost calculation.</p>
+              <p className="mt-0.5 text-xs text-violet-800/80 sm:text-sm">Defaults follow requested post details. Values can be reduced, but cannot exceed required limits.</p>
               <img
                 src="/images/manage_post.png"
                 alt="Manage post header illustration"
@@ -840,9 +839,8 @@ export default function ManagePost() {
                           </div>
 
                           {(skillBreakdownByPost[post.id]?.services || []).map((service) => {
-                            const duration = Number(serviceDurations[`service-${service.id}-duration`] || 0)
                             const enabled = isItemEnabled(post.id, 'service', service.id)
-                            const subtotal = enabled ? duration * Number(service.cost_per_unit || 0) : 0
+                            const subtotal = enabled ? Number(service.cost_per_unit || 0) : 0
                             return (
                               <div
                                 key={`service-${service.id}`}
@@ -857,22 +855,14 @@ export default function ManagePost() {
                                   priceText={`৳ ${Number(service.cost_per_unit || 0).toFixed(0)}`}
                                   priceUnitText={`per ${formatRateUnit(service.unit).toLowerCase()}`}
                                   checked={enabled}
-                                  onToggle={() =>
-                                    toggleItemEnabled(post.id, 'service', service.id, () => {
-                                      setServiceDurations((prev) => ({ ...prev, [`service-${service.id}-duration`]: 0 }))
-                                    })
-                                  }
+                                  onToggle={() => toggleItemEnabled(post.id, 'service', service.id)}
                                 />
 
                                 {enabled && (
                                   <div className="mt-4 space-y-3 border-t border-white/15 pt-3">
-                                    <CounterControl
-                                      value={duration}
-                                      onChange={(val) => setServiceDurations((prev) => ({ ...prev, [`service-${service.id}-duration`]: val }))}
-                                      max={365}
-                                      label="Duration (hours)"
-                                      helperText="Estimated hours required"
-                                    />
+                                    <p className="rounded-lg border border-emerald-400/30 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-100">
+                                      Included: Yes (binary selection)
+                                    </p>
 
                                     <div className="flex items-center justify-between border-t border-white/15 pt-2">
                                       <span className="text-xs text-slate-300">Service subtotal</span>
