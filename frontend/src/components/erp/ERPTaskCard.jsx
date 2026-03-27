@@ -88,6 +88,10 @@ export default function ERPTaskCard({
         ? 'Receiver'
         : 'Viewer'
   const isProvider = viewerRole === 'Provider'
+  const assignedMembersForSelectedRole = users.filter((user) =>
+    selectedAssigneeIds.includes(Number(user.id)),
+  )
+  const visibleMembers = isProvider ? users : assignedMembersForSelectedRole
 
   const counterpartyUserId =
     viewerRole === 'Provider'
@@ -369,40 +373,47 @@ export default function ERPTaskCard({
           </div>
 
           <p className="text-[11px] text-slate-500">
-            Manual assign: provider can add/remove connections. Self-assign post: connections can assign themselves from Connections page.
+            {isProvider
+              ? 'Manual assign: provider can add/remove connections. Self-assign post: connections can assign themselves from Connections page.'
+              : 'You can only view assigned members for this role.'}
           </p>
           <p className="text-[11px] text-slate-500">
             Self-assign status: {selfAssignEnabled ? 'Open' : 'Closed'}
           </p>
 
           <div className="max-h-40 space-y-1 overflow-y-auto rounded-md border border-slate-100 bg-slate-50 p-2">
-            {users.length ? (
-              users.map((user) => {
+            {visibleMembers.length ? (
+              visibleMembers.map((user) => {
                 const checked = selectedAssigneeIds.includes(Number(user.id))
                 return (
                   <label
                     key={`erp-member-${selectedMemberRole}-${user.id}`}
-                    className="flex cursor-pointer items-center justify-between gap-2 rounded-md px-2 py-1 hover:bg-white"
+                    className={`flex items-center justify-between gap-2 rounded-md px-2 py-1 ${isProvider ? 'cursor-pointer hover:bg-white' : ''}`}
                   >
                     <span className="truncate text-slate-700">{user.name || user.username || `User #${user.id}`}</span>
-                    <input
-                      type="checkbox"
-                      checked={checked}
-                      disabled={!isProvider}
-                      onChange={(event) =>
-                        onUpdateMemberAssignment?.(
-                          erp,
-                          selectedMemberRole,
-                          Number(user.id),
-                          event.target.checked,
-                        )
-                      }
-                    />
+                    {isProvider ? (
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={(event) =>
+                          onUpdateMemberAssignment?.(
+                            erp,
+                            selectedMemberRole,
+                            Number(user.id),
+                            event.target.checked,
+                          )
+                        }
+                      />
+                    ) : (
+                      <span className="text-[11px] font-semibold text-emerald-700">Assigned</span>
+                    )}
                   </label>
                 )
               })
             ) : (
-              <p className="text-[11px] text-slate-500">No connections found.</p>
+              <p className="text-[11px] text-slate-500">
+                {isProvider ? 'No connections found.' : 'No assigned members yet.'}
+              </p>
             )}
           </div>
         </div>
