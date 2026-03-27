@@ -13,6 +13,11 @@ export default function ERP() {
   const [currentUserId, setCurrentUserId] = useState(null)
   const [posts, setPosts] = useState([])
   const [users, setUsers] = useState([])
+  const [connectionsOverview, setConnectionsOverview] = useState({
+    live_connections: [],
+    new_connections: [],
+    recent_connections: [],
+  })
   const [ratings, setRatings] = useState([])
   const [expandedId, setExpandedId] = useState(null)
   const [trackOpenId, setTrackOpenId] = useState(null)
@@ -48,12 +53,13 @@ export default function ERP() {
 
     const load = async () => {
       try {
-        const [erpRes, postRes, userRes, ratingRes, meRes] = await Promise.all([
+        const [erpRes, postRes, userRes, ratingRes, meRes, overviewRes] = await Promise.all([
           api.get('/erp/'),
           api.get('/posts/'),
           api.get('/users/'),
           api.get('/ratings/'),
           api.get('/auth/me/'),
+          api.get('/connections/overview/'),
         ])
         if (!active) return
         setErpItems(erpRes.data)
@@ -61,6 +67,17 @@ export default function ERP() {
         setUsers(userRes.data)
         setRatings(ratingRes.data)
         setCurrentUserId(meRes.data?.id ?? null)
+        setConnectionsOverview({
+          live_connections: Array.isArray(overviewRes.data?.live_connections)
+            ? overviewRes.data.live_connections
+            : [],
+          new_connections: Array.isArray(overviewRes.data?.new_connections)
+            ? overviewRes.data.new_connections
+            : [],
+          recent_connections: Array.isArray(overviewRes.data?.recent_connections)
+            ? overviewRes.data.recent_connections
+            : [],
+        })
       } catch (error) {
         console.error(error)
       }
@@ -79,6 +96,21 @@ export default function ERP() {
       return acc
     }, {})
   }, [posts])
+
+  const assignableUsers = useMemo(() => {
+    const combined = [
+      ...(connectionsOverview.live_connections || []),
+      ...(connectionsOverview.new_connections || []),
+      ...(connectionsOverview.recent_connections || []),
+    ]
+    const byId = new Map()
+    combined.forEach((user) => {
+      if (user && user.id !== undefined && user.id !== null) {
+        byId.set(Number(user.id), user)
+      }
+    })
+    return Array.from(byId.values())
+  }, [connectionsOverview])
 
   const ratingsByPost = useMemo(() => {
     return ratings.reduce((acc, rating) => {
@@ -450,6 +482,7 @@ export default function ERP() {
               onTrackNext={handleTrackStage}
               onToggleReadyProduct={handleToggleReadyProduct}
               users={users}
+              assignableUsers={assignableUsers}
               onUpdateMemberAssignment={handleUpdateMemberAssignment}
               onPublishMemberPost={handlePublishMemberPost}
               onOpenOwner={(ownerId) => navigate(`/dashboard/${ownerId}`)}

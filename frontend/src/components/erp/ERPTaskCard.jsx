@@ -18,6 +18,7 @@ export default function ERPTaskCard({
   onTrackNext,
   onToggleReadyProduct,
   users = [],
+  assignableUsers = [],
   onUpdateMemberAssignment,
   onPublishMemberPost,
   onOpenOwner,
@@ -59,19 +60,19 @@ export default function ERPTaskCard({
   const memberMenuOptions = [
     hasExpertiseCategory ? 'Expertise' : null,
     hasServicesCategory ? 'Skill provider' : null,
-    hasProductCategory ? 'Supplier' : null,
+    hasProductCategory ? 'Delivary Man' : null,
   ].filter(Boolean)
 
   const roleLabelToKey = {
     Expertise: 'expertise',
     'Skill provider': 'skill_provider',
-    Supplier: 'supplier',
+    'Delivary Man': 'supplier',
   }
 
   const roleKeyToLabel = {
     expertise: 'Expertise',
     skill_provider: 'Skill provider',
-    supplier: 'Supplier',
+    supplier: 'Delivary Man',
   }
 
   const membersState = snapshot.members || {}
@@ -88,6 +89,10 @@ export default function ERPTaskCard({
         ? 'Receiver'
         : 'Viewer'
   const isProvider = viewerRole === 'Provider'
+  const assignedMembersForSelectedRole = users.filter((user) =>
+    selectedAssigneeIds.includes(Number(user.id)),
+  )
+  const visibleMembers = isProvider ? assignableUsers : assignedMembersForSelectedRole
 
   const counterpartyUserId =
     viewerRole === 'Provider'
@@ -290,13 +295,15 @@ export default function ERPTaskCard({
         >
           Pending
         </button>
-        <button
-          type="button"
-          onClick={() => onToggleTrack(erp.id)}
-          className="rounded-full border border-violet-300 bg-violet-50 px-4 py-2 text-sm font-semibold text-violet-700 transition hover:bg-violet-100"
-        >
-          Tasks
-        </button>
+        {isProvider ? (
+          <button
+            type="button"
+            onClick={() => onToggleTrack(erp.id)}
+            className="rounded-full border border-violet-300 bg-violet-50 px-4 py-2 text-sm font-semibold text-violet-700 transition hover:bg-violet-100"
+          >
+            Tasks
+          </button>
+        ) : null}
         <button
           type="button"
           onClick={() => onGeneratePdf(erp)}
@@ -350,14 +357,15 @@ export default function ERPTaskCard({
               Assign {roleKeyToLabel[selectedMemberRole] || 'Members'}
             </p>
             <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => onPublishMemberPost?.(erp, selectedMemberRole)}
-                disabled={!isProvider}
-                className="rounded-full border border-brand-200 px-2 py-1 text-[11px] font-semibold text-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                Generate Self-Assign Post
-              </button>
+              {isProvider ? (
+                <button
+                  type="button"
+                  onClick={() => onPublishMemberPost?.(erp, selectedMemberRole)}
+                  className="rounded-full border border-brand-200 px-2 py-1 text-[11px] font-semibold text-brand-700"
+                >
+                  Generate Self-Assign Post
+                </button>
+              ) : null}
               <button
                 type="button"
                 onClick={() => setSelectedMemberRole(null)}
@@ -369,46 +377,53 @@ export default function ERPTaskCard({
           </div>
 
           <p className="text-[11px] text-slate-500">
-            Manual assign: provider can add/remove connections. Self-assign post: connections can assign themselves from Connections page.
+            {isProvider
+              ? 'Manual assign: provider can add/remove connections. Self-assign post: connections can assign themselves from Connections page.'
+              : 'You can only view assigned members for this role.'}
           </p>
           <p className="text-[11px] text-slate-500">
             Self-assign status: {selfAssignEnabled ? 'Open' : 'Closed'}
           </p>
 
           <div className="max-h-40 space-y-1 overflow-y-auto rounded-md border border-slate-100 bg-slate-50 p-2">
-            {users.length ? (
-              users.map((user) => {
+            {visibleMembers.length ? (
+              visibleMembers.map((user) => {
                 const checked = selectedAssigneeIds.includes(Number(user.id))
                 return (
                   <label
                     key={`erp-member-${selectedMemberRole}-${user.id}`}
-                    className="flex cursor-pointer items-center justify-between gap-2 rounded-md px-2 py-1 hover:bg-white"
+                    className={`flex items-center justify-between gap-2 rounded-md px-2 py-1 ${isProvider ? 'cursor-pointer hover:bg-white' : ''}`}
                   >
                     <span className="truncate text-slate-700">{user.name || user.username || `User #${user.id}`}</span>
-                    <input
-                      type="checkbox"
-                      checked={checked}
-                      disabled={!isProvider}
-                      onChange={(event) =>
-                        onUpdateMemberAssignment?.(
-                          erp,
-                          selectedMemberRole,
-                          Number(user.id),
-                          event.target.checked,
-                        )
-                      }
-                    />
+                    {isProvider ? (
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={(event) =>
+                          onUpdateMemberAssignment?.(
+                            erp,
+                            selectedMemberRole,
+                            Number(user.id),
+                            event.target.checked,
+                          )
+                        }
+                      />
+                    ) : (
+                      <span className="text-[11px] font-semibold text-emerald-700">Assigned</span>
+                    )}
                   </label>
                 )
               })
             ) : (
-              <p className="text-[11px] text-slate-500">No connections found.</p>
+              <p className="text-[11px] text-slate-500">
+                {isProvider ? 'No connections found.' : 'No assigned members yet.'}
+              </p>
             )}
           </div>
         </div>
       ) : null}
 
-      {trackOpenId === erp.id && (
+      {isProvider && trackOpenId === erp.id && (
         <div className="space-y-3 rounded-xl border border-violet-200 bg-violet-50/50 p-3 text-xs text-slate-700">
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="rounded-lg border border-slate-200 bg-white p-2">
@@ -577,7 +592,7 @@ export default function ERPTaskCard({
               <span className="font-semibold text-slate-700">Assigned Workers:</span> {(erp.assigned_workers || []).length}
             </p>
             <p className="mt-2">
-              <span className="font-semibold text-slate-700">Note for Supplier:</span>{' '}
+              <span className="font-semibold text-slate-700">Note for Delivary Man:</span>{' '}
               {supplierNote || '-'}
             </p>
           </div>
