@@ -317,6 +317,17 @@ export default function CreatePost() {
       return
     }
 
+    const productQuantityMissing = products.some((item) => {
+      const hasAnyValue = item.product_name || item.description || item.cost_per_unit || String(item.unit || '').trim()
+      return hasAnyValue && Number(item.available_units || 0) <= 0
+    })
+
+    if (showProductsSection && productQuantityMissing) {
+      setMessage('Required Quantity must be greater than 0 for all product rows.')
+      setSaving(false)
+      return
+    }
+
     try {
       const payload = new FormData()
       Object.entries(post).forEach(([key, value]) => {
