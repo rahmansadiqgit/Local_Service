@@ -221,6 +221,8 @@ export default function ManagePost() {
   }
 
   const getBookingBreakdownForPost = (postId) => {
+    const post = posts.find((item) => item.id === postId)
+    const postType = post?.post_type || ''
     const skillExpertiseRows = skillBreakdownByPost[postId]?.expertise || []
     const serviceRows = skillBreakdownByPost[postId]?.services || []
     const newExpertiseRows = expertisesByPost[postId] || []
@@ -233,7 +235,7 @@ export default function ManagePost() {
 
     skillExpertiseRows.forEach((row) => {
       const enabled = isItemEnabled(postId, 'skill', row.id)
-      const workers = Number(skillWorkers[`skill-${row.id}`] || 0)
+      const workers = getSkillWorkersValue(postType, row)
       const unitCost = Number(row.cost_per_unit || 0)
       const lineTotal = enabled ? workers * unitCost : 0
       expertiseTotal += lineTotal
@@ -249,8 +251,8 @@ export default function ManagePost() {
 
     newExpertiseRows.forEach((row) => {
       const enabled = isItemEnabled(postId, 'expertise', row.id)
-      const persons = Number(expertisePersons[`expertise-${row.id}`] || 0)
-      const duration = Number(expertiseDurations[`expertise-${row.id}-duration`] || 0)
+      const persons = getExpertisePersonsValue(postType, row)
+      const duration = getExpertiseDurationValue(postType, row)
       const unitCost = Number(row.cost || 0)
       const lineTotal = enabled ? persons * duration * unitCost : 0
       expertiseTotal += lineTotal
@@ -282,7 +284,7 @@ export default function ManagePost() {
 
     productRows.forEach((row) => {
       const enabled = isItemEnabled(postId, 'product', row.id)
-      const units = Number(productUnits[`product-${row.id}`] || 0)
+      const units = getProductUnitsValue(postType, row)
       const unitCost = Number(row.cost_per_unit || 0)
       const lineTotal = enabled ? units * unitCost : 0
       productTotal += lineTotal
@@ -345,7 +347,7 @@ export default function ManagePost() {
     const skillExpertise = skillExpertiseRows
       .map((row) => {
         if (!isItemEnabled(postId, 'skill', row.id)) return null
-        const quantity = Number(skillWorkers[`skill-${row.id}`] || 0)
+        const quantity = getSkillWorkersValue(post.post_type, row)
         const unitCost = Number(row.cost_per_unit || 0)
         return {
           id: row.id,
@@ -362,8 +364,8 @@ export default function ManagePost() {
     const newExpertise = newExpertiseRows
       .map((row) => {
         if (!isItemEnabled(postId, 'expertise', row.id)) return null
-        const quantity = Number(expertisePersons[`expertise-${row.id}`] || 0)
-        const duration = Number(expertiseDurations[`expertise-${row.id}-duration`] || 0)
+        const quantity = getExpertisePersonsValue(post.post_type, row)
+        const duration = getExpertiseDurationValue(post.post_type, row)
         const unitCost = Number(row.cost || 0)
         return {
           id: row.id,
@@ -398,7 +400,7 @@ export default function ManagePost() {
     const products = productRows
       .map((row) => {
         if (!isItemEnabled(postId, 'product', row.id)) return null
-        const quantity = Number(productUnits[`product-${row.id}`] || 0)
+        const quantity = getProductUnitsValue(post.post_type, row)
         const unitCost = Number(row.cost_per_unit || 0)
         return {
           id: row.id,
@@ -584,6 +586,38 @@ export default function ManagePost() {
     return posts.filter((post) => String(post.id) === String(id))
   }, [posts, id])
 
+  const getSkillWorkersValue = (postType, row) => {
+    const key = `skill-${row.id}`
+    if (Object.prototype.hasOwnProperty.call(skillWorkers, key)) {
+      return Number(skillWorkers[key] || 0)
+    }
+    return postType === 'Demand' ? Math.max(Number(row.available_workers || 0), 0) : 0
+  }
+
+  const getExpertisePersonsValue = (postType, row) => {
+    const key = `expertise-${row.id}`
+    if (Object.prototype.hasOwnProperty.call(expertisePersons, key)) {
+      return Number(expertisePersons[key] || 0)
+    }
+    return postType === 'Demand' ? Math.max(Number(row.available_person || 0), 0) : 0
+  }
+
+  const getExpertiseDurationValue = (postType, row) => {
+    const key = `expertise-${row.id}-duration`
+    if (Object.prototype.hasOwnProperty.call(expertiseDurations, key)) {
+      return Number(expertiseDurations[key] || 0)
+    }
+    return postType === 'Demand' ? Math.max(Number(row.needed_budget_unit || 0), 0) : 0
+  }
+
+  const getProductUnitsValue = (postType, row) => {
+    const key = `product-${row.id}`
+    if (Object.prototype.hasOwnProperty.call(productUnits, key)) {
+      return Number(productUnits[key] || 0)
+    }
+    return postType === 'Demand' ? Math.max(Number(row.available_units || 0), 0) : 0
+  }
+
   return (
     <>
       <div className="space-y-6">
@@ -731,7 +765,10 @@ export default function ManagePost() {
                           </div>
 
                           {(skillBreakdownByPost[post.id]?.expertise || []).map((skill) => {
-                            const workers = Number(skillWorkers[`skill-${skill.id}`] || 0)
+                            const workers = getSkillWorkersValue(post.post_type, skill)
+                            const workersMax = post.post_type === 'Demand'
+                              ? Math.max(Number(skill.available_workers || 0), 0)
+                              : Math.max(Number(skill.available_workers || 0), 1)
                             const enabled = isItemEnabled(post.id, 'skill', skill.id)
                             const subtotal = enabled ? workers * Number(skill.cost_per_unit || 0) : 0
                             return (
@@ -760,9 +797,9 @@ export default function ManagePost() {
                                     <CounterControl
                                       value={workers}
                                       onChange={(val) => setSkillWorkers((prev) => ({ ...prev, [`skill-${skill.id}`]: val }))}
-                                      max={Math.max(Number(skill.available_workers || 0), 1)}
+                                      max={workersMax}
                                       label="People required"
-                                      helperText={`${Number(skill.available_workers || 0)} professionals available`}
+                                      helperText={post.post_type === 'Demand' ? `${Number(skill.available_workers || 0)} required in post details` : `${Number(skill.available_workers || 0)} professionals available`}
                                     />
 
                                     <div className="flex items-center justify-between border-t border-white/15 pt-2">
@@ -776,8 +813,14 @@ export default function ManagePost() {
                           })}
 
                           {(expertisesByPost[post.id] || []).map((expertise) => {
-                            const persons = Number(expertisePersons[`expertise-${expertise.id}`] || 0)
-                            const duration = Number(expertiseDurations[`expertise-${expertise.id}-duration`] || 0)
+                            const persons = getExpertisePersonsValue(post.post_type, expertise)
+                            const duration = getExpertiseDurationValue(post.post_type, expertise)
+                            const personsMax = post.post_type === 'Demand'
+                              ? Math.max(Number(expertise.available_person || 0), 0)
+                              : Math.max(Number(expertise.available_person || 0), 1)
+                            const durationMax = post.post_type === 'Demand'
+                              ? Math.max(Number(expertise.needed_budget_unit || 0), 0)
+                              : 365
                             const enabled = isItemEnabled(post.id, 'expertise', expertise.id)
                             const subtotal = enabled ? persons * duration * Number(expertise.cost || 0) : 0
                             return (
@@ -807,16 +850,16 @@ export default function ManagePost() {
                                     <CounterControl
                                       value={persons}
                                       onChange={(val) => setExpertisePersons((prev) => ({ ...prev, [`expertise-${expertise.id}`]: val }))}
-                                      max={Math.max(Number(expertise.available_person || 0), 1)}
+                                      max={personsMax}
                                       label="People required"
-                                      helperText={`${Number(expertise.available_person || 0)} professionals available`}
+                                      helperText={post.post_type === 'Demand' ? `${Number(expertise.available_person || 0)} required in post details` : `${Number(expertise.available_person || 0)} professionals available`}
                                     />
                                     <CounterControl
                                       value={duration}
                                       onChange={(val) => setExpertiseDurations((prev) => ({ ...prev, [`expertise-${expertise.id}-duration`]: val }))}
-                                      max={365}
-                                      label="Duration (hours)"
-                                      helperText="Total hours needed"
+                                      max={durationMax}
+                                      label={post.post_type === 'Demand' ? 'Needed hire unit' : 'Duration (hours)'}
+                                      helperText={post.post_type === 'Demand' ? `${Number(expertise.needed_budget_unit || 0)} required in post details` : 'Total hours needed'}
                                     />
 
                                     <div className="flex items-center justify-between border-t border-white/15 pt-2">
@@ -884,8 +927,9 @@ export default function ManagePost() {
                           </div>
 
                           {(productsByPost[post.id] || []).map((product) => {
-                            const units = Number(productUnits[`product-${product.id}`] || 0)
+                            const units = getProductUnitsValue(post.post_type, product)
                             const availableUnits = Math.max(Number(product.available_units || 0), 0)
+                            const unitsMax = post.post_type === 'Demand' ? availableUnits : availableUnits
                             const enabled = isItemEnabled(post.id, 'product', product.id)
                             const subtotal = enabled ? units * Number(product.cost_per_unit || 0) : 0
                             return (
@@ -914,9 +958,9 @@ export default function ManagePost() {
                                     <CounterControl
                                       value={units}
                                       onChange={(val) => setProductUnits((prev) => ({ ...prev, [`product-${product.id}`]: val }))}
-                                      max={availableUnits}
+                                      max={unitsMax}
                                       label="Quantity (bags)"
-                                      helperText={`Maximum ${availableUnits} available`}
+                                      helperText={post.post_type === 'Demand' ? `${availableUnits} required in post details (cannot exceed)` : `Maximum ${availableUnits} available`}
                                     />
 
                                     <div className="flex items-center justify-between border-t border-white/15 pt-2">
