@@ -130,15 +130,17 @@ export default function HomeFeed() {
 
     const load = async () => {
       try {
-        const postRes = await api.get('/posts/')
+        const publicRequestConfig = { skipAuth: true, skipAuthRedirect: true }
+
+        const postRes = await api.get('/posts/', publicRequestConfig)
         if (!active) return
         setPosts(postRes.data)
 
         const detailResponses = await Promise.allSettled([
-          api.get('/skills/', { skipAuthRedirect: true }),
-          api.get('/expertises/', { skipAuthRedirect: true }),
-          api.get('/products/', { skipAuthRedirect: true }),
-          api.get('/ratings/', { skipAuthRedirect: true }),
+          api.get('/skills/', publicRequestConfig),
+          api.get('/expertises/', publicRequestConfig),
+          api.get('/products/', publicRequestConfig),
+          api.get('/ratings/', publicRequestConfig),
         ])
 
         if (!active) return
