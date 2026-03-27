@@ -40,6 +40,7 @@ export default function ERPTaskCard({
   const snapshotServices = Array.isArray(snapshot.services) ? snapshot.services : []
   const snapshotProducts = Array.isArray(snapshot.products) ? snapshot.products : []
   const snapshotTotals = snapshot.totals || {}
+  const supplierNote = String(snapshot?.notes?.supplier_note || snapshot?.supplier_note || '').trim()
 
   const parsePostCategories = (value) =>
     String(value || '')
@@ -574,6 +575,10 @@ export default function ERPTaskCard({
             </p>
             <p className="mt-2">
               <span className="font-semibold text-slate-700">Assigned Workers:</span> {(erp.assigned_workers || []).length}
+            </p>
+            <p className="mt-2">
+              <span className="font-semibold text-slate-700">Note for Supplier:</span>{' '}
+              {supplierNote || '-'}
             </p>
           </div>
 
