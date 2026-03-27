@@ -64,7 +64,7 @@ export default function ExpertiseTable({ expertises = [], postType = 'Supply', t
             )}
             <th className="px-3 py-2 whitespace-nowrap">
               <button type="button" onClick={() => handleSort('cost')}>
-                {isDemand ? 'Budget (BDT)' : 'Charge (BDT)'}
+                {isDemand ? 'Your Budget (BDT)' : 'Charge (BDT)'}
               </button>
             </th>
             <th className="px-3 py-2 whitespace-nowrap">
@@ -90,7 +90,19 @@ export default function ExpertiseTable({ expertises = [], postType = 'Supply', t
               {isDemand ? (
                 <td className="px-3 py-2 whitespace-nowrap">{Number(expertise.needed_budget_unit || 0)}</td>
               ) : null}
-              <td className="px-3 py-2 whitespace-nowrap">{expertise.cost}</td>
+              <td className="px-3 py-2 whitespace-nowrap">
+                {isDemand
+                  ? `${expertise.cost} ${
+                      expertise.unit === 'hourly'
+                        ? '(Hourly)'
+                        : expertise.unit === 'daily'
+                          ? '(Daily)'
+                          : expertise.unit === 'monthly'
+                            ? '(Monthly)'
+                            : ''
+                    }`
+                  : expertise.cost}
+              </td>
               <td className="px-3 py-2 whitespace-nowrap">{expertise.available_person}</td>
             </tr>
           ))}
