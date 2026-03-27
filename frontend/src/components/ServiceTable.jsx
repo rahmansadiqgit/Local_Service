@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 
-export default function ServiceTable({ services = [], postType = 'Supply', showDescription = true }) {
+export default function ServiceTable({ services = [], postType = 'Supply', showDescription = true, tone = 'default' }) {
   const [sortKey, setSortKey] = useState('service_name')
   const [sortDir, setSortDir] = useState('asc')
   const isDemand = postType === 'Demand'
@@ -33,10 +33,12 @@ export default function ServiceTable({ services = [], postType = 'Supply', showD
     return <p className="text-sm text-slate-500">No services listed.</p>
   }
 
+  const isProfileTone = tone === 'profile'
+
   return (
-    <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800">
+    <div className={`overflow-x-auto rounded-xl border ${isProfileTone ? 'border-violet-200/80 bg-white/55' : 'border-slate-200 dark:border-slate-800'}`}>
       <table className="min-w-[560px] w-full text-left text-xs sm:text-sm">
-        <thead className="bg-slate-50 text-slate-600 dark:bg-slate-900 dark:text-slate-300">
+        <thead className={isProfileTone ? 'bg-gradient-to-r from-violet-100/90 to-fuchsia-100/80 text-violet-900' : 'bg-slate-50 text-slate-600 dark:bg-slate-900 dark:text-slate-300'}>
           <tr>
             <th className="px-3 py-2 whitespace-nowrap">
               <button type="button" onClick={() => handleSort('service_name')}>
@@ -62,15 +64,26 @@ export default function ServiceTable({ services = [], postType = 'Supply', showD
             </th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
+        <tbody className={isProfileTone ? 'divide-y divide-violet-200/70' : 'divide-y divide-slate-200 dark:divide-slate-800'}>
           {sorted.map((row, idx) => (
-            <tr key={idx} className={idx % 2 === 0 ? 'bg-white dark:bg-slate-950' : 'bg-slate-50 dark:bg-slate-900'}>
-              <td className="px-3 py-2 text-slate-900 dark:text-slate-100 whitespace-nowrap">{row.service_name || '-'}</td>
+            <tr
+              key={idx}
+              className={
+                isProfileTone
+                  ? idx % 2 === 0
+                    ? 'bg-violet-50/45'
+                    : 'bg-white/70'
+                  : idx % 2 === 0
+                    ? 'bg-white dark:bg-slate-950'
+                    : 'bg-slate-50 dark:bg-slate-900'
+              }
+            >
+              <td className={isProfileTone ? 'px-3 py-2 whitespace-nowrap text-slate-800' : 'px-3 py-2 text-slate-900 dark:text-slate-100 whitespace-nowrap'}>{row.service_name || '-'}</td>
               {showDescription && (
-                <td className="px-3 py-2 text-slate-900 dark:text-slate-100 whitespace-pre-line break-words">{row.description || '-'}</td>
+                <td className={isProfileTone ? 'px-3 py-2 whitespace-pre-line break-words text-slate-800' : 'px-3 py-2 text-slate-900 dark:text-slate-100 whitespace-pre-line break-words'}>{row.description || '-'}</td>
               )}
-              <td className="px-3 py-2 text-slate-900 dark:text-slate-100 whitespace-nowrap">{row.unit || '-'}</td>
-              <td className="px-3 py-2 text-slate-900 dark:text-slate-100 whitespace-nowrap">
+              <td className={isProfileTone ? 'px-3 py-2 whitespace-nowrap text-slate-800' : 'px-3 py-2 text-slate-900 dark:text-slate-100 whitespace-nowrap'}>{row.unit || '-'}</td>
+              <td className={isProfileTone ? 'px-3 py-2 whitespace-nowrap text-slate-800' : 'px-3 py-2 text-slate-900 dark:text-slate-100 whitespace-nowrap'}>
                 {!isNaN(parseFloat(row.cost_per_unit)) ? parseFloat(row.cost_per_unit).toFixed(2) : '0.00'}
               </td>
             </tr>

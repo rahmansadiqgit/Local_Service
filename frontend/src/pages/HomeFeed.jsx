@@ -75,6 +75,7 @@ export default function HomeFeed() {
   const [filterLocationLoading, setFilterLocationLoading] = useState(false)
 
   const [actionMessage, setActionMessage] = useState('')
+  const [openDetailsPostId, setOpenDetailsPostId] = useState(null)
   const currentUserId = user?.id
 
   useEffect(() => {
@@ -130,15 +131,17 @@ export default function HomeFeed() {
 
     const load = async () => {
       try {
-        const postRes = await api.get('/posts/')
+        const publicRequestConfig = { skipAuth: true, skipAuthRedirect: true }
+
+        const postRes = await api.get('/posts/', publicRequestConfig)
         if (!active) return
         setPosts(postRes.data)
 
         const detailResponses = await Promise.allSettled([
-          api.get('/skills/', { skipAuthRedirect: true }),
-          api.get('/expertises/', { skipAuthRedirect: true }),
-          api.get('/products/', { skipAuthRedirect: true }),
-          api.get('/ratings/', { skipAuthRedirect: true }),
+          api.get('/skills/', publicRequestConfig),
+          api.get('/expertises/', publicRequestConfig),
+          api.get('/products/', publicRequestConfig),
+          api.get('/ratings/', publicRequestConfig),
         ])
 
         if (!active) return
@@ -436,6 +439,15 @@ export default function HomeFeed() {
     )
   }
 
+  const handleToggleDetails = (postId, shouldOpen) => {
+    setOpenDetailsPostId((prev) => {
+      if (!shouldOpen) {
+        return prev === postId ? null : prev
+      }
+      return postId
+    })
+  }
+
   return (
     <div className="space-y-6">
 
@@ -668,6 +680,8 @@ export default function HomeFeed() {
                 onAction={handleAction}
                 onAddToCart={handleAddToCart}
                 inCart={isInCart(post.id)}
+                isDetailsOpen={openDetailsPostId === post.id}
+                onToggleDetails={(shouldOpen) => handleToggleDetails(post.id, shouldOpen)}
               />
             ))}
           </div>
