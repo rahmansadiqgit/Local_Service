@@ -189,6 +189,8 @@ export default function ManagePost() {
   }, [erpItems])
 
   const getTotalForPost = (postId) => {
+    const post = posts.find((item) => item.id === postId)
+    const postType = post?.post_type || ''
     const skillExpertiseRows = skillBreakdownByPost[postId]?.expertise || []
     const serviceRows = skillBreakdownByPost[postId]?.services || []
     const newExpertiseRows = expertisesByPost[postId] || []
@@ -200,18 +202,18 @@ export default function ManagePost() {
     }, 0)
     
     const newExpertiseTotal = newExpertiseRows.reduce((sum, expertise) => {
-      const persons = Number(expertisePersons[`expertise-${expertise.id}`] || 0)
-      const duration = Number(expertiseDurations[`expertise-${expertise.id}-duration`] || 0)
+      const persons = getExpertisePersonsValue(postType, expertise)
+      const duration = getExpertiseDurationValue(postType, expertise)
       return sum + persons * duration * Number(expertise.cost || 0)
     }, 0)
     
     const serviceTotal = serviceRows.reduce((sum, row) => {
-      const quantity = Number(serviceQuantities[`service-${row.id}-qty`] || 0)
+      const quantity = getServiceQuantityValue(row)
       return sum + quantity * Number(row.cost_per_unit || 0)
     }, 0)
     
     const productTotal = productRows.reduce((sum, row) => {
-      const units = Number(productUnits[`product-${row.id}`] || 0)
+      const units = getProductUnitsValue(postType, row)
       return sum + units * Number(row.cost_per_unit || 0)
     }, 0)
     
@@ -219,6 +221,8 @@ export default function ManagePost() {
   }
 
   const getCostBreakdownForPost = (postId) => {
+    const post = posts.find((item) => item.id === postId)
+    const postType = post?.post_type || ''
     const skillExpertiseRows = skillBreakdownByPost[postId]?.expertise || []
     const serviceRows = skillBreakdownByPost[postId]?.services || []
     const newExpertiseRows = expertisesByPost[postId] || []
@@ -230,18 +234,18 @@ export default function ManagePost() {
         return sum + workers * Number(row.cost_per_unit || 0)
       }, 0) +
       newExpertiseRows.reduce((sum, row) => {
-        const persons = Number(expertisePersons[`expertise-${row.id}`] || 0)
-        const duration = Number(expertiseDurations[`expertise-${row.id}-duration`] || 0)
+        const persons = getExpertisePersonsValue(postType, row)
+        const duration = getExpertiseDurationValue(postType, row)
         return sum + persons * duration * Number(row.cost || 0)
       }, 0)
 
     const serviceTotal = serviceRows.reduce((sum, row) => {
-      const quantity = Number(serviceQuantities[`service-${row.id}-qty`] || 0)
+      const quantity = getServiceQuantityValue(row)
       return sum + quantity * Number(row.cost_per_unit || 0)
     }, 0)
 
     const productTotal = productRows.reduce((sum, row) => {
-      const units = Number(productUnits[`product-${row.id}`] || 0)
+      const units = getProductUnitsValue(postType, row)
       return sum + units * Number(row.cost_per_unit || 0)
     }, 0)
 
@@ -287,8 +291,8 @@ export default function ManagePost() {
 
     const newExpertise = newExpertiseRows
       .map((row) => {
-        const quantity = Number(expertisePersons[`expertise-${row.id}`] || 0)
-        const duration = Number(expertiseDurations[`expertise-${row.id}-duration`] || 0)
+        const quantity = getExpertisePersonsValue(post.post_type, row)
+        const duration = getExpertiseDurationValue(post.post_type, row)
         const unitCost = Number(row.cost || 0)
         return {
           id: row.id,
@@ -307,7 +311,7 @@ export default function ManagePost() {
 
     const services = serviceRows
       .map((row) => {
-        const quantity = Number(serviceQuantities[`service-${row.id}-qty`] || 0)
+        const quantity = getServiceQuantityValue(row)
         const unitCost = Number(row.cost_per_unit || 0)
         return {
           id: row.id,
@@ -321,7 +325,7 @@ export default function ManagePost() {
 
     const products = productRows
       .map((row) => {
-        const quantity = Number(productUnits[`product-${row.id}`] || 0)
+        const quantity = getProductUnitsValue(post.post_type, row)
         const unitCost = Number(row.cost_per_unit || 0)
         return {
           id: row.id,
@@ -445,6 +449,38 @@ export default function ManagePost() {
     return posts.filter((post) => String(post.id) === String(id))
   }, [posts, id])
 
+  const getExpertisePersonsValue = (postType, row) => {
+    const key = `expertise-${row.id}`
+    if (Object.prototype.hasOwnProperty.call(expertisePersons, key)) {
+      return Number(expertisePersons[key] || 0)
+    }
+    return postType === 'Demand' ? Math.max(Number(row.available_person || 0), 0) : 0
+  }
+
+  const getExpertiseDurationValue = (postType, row) => {
+    const key = `expertise-${row.id}-duration`
+    if (Object.prototype.hasOwnProperty.call(expertiseDurations, key)) {
+      return Number(expertiseDurations[key] || 0)
+    }
+    return postType === 'Demand' ? Math.max(Number(row.needed_budget_unit || 0), 0) : 0
+  }
+
+  const getProductUnitsValue = (postType, row) => {
+    const key = `product-${row.id}`
+    if (Object.prototype.hasOwnProperty.call(productUnits, key)) {
+      return Number(productUnits[key] || 0)
+    }
+    return postType === 'Demand' ? Math.max(Number(row.available_units || 0), 0) : 0
+  }
+
+  const getServiceQuantityValue = (row) => {
+    const key = `service-${row.id}-qty`
+    if (Object.prototype.hasOwnProperty.call(serviceQuantities, key)) {
+      return Number(serviceQuantities[key] || 0) > 0 ? 1 : 0
+    }
+    return 1
+  }
+
   return (
     <>
       <div className="space-y-6">
@@ -455,9 +491,9 @@ export default function ManagePost() {
                 className="text-xl font-extrabold tracking-tight text-violet-900 sm:text-3xl"
                 style={{ fontFamily: "'Sora', 'Trebuchet MS', sans-serif" }}
               >
-                Manage Your Posts
+                Following Post Details
               </h1>
-              <p className="mt-0.5 text-xs text-violet-800/80 sm:text-sm">Adjust expertise workers, service quantity, and product units with real-time cost calculation.</p>
+              <p className="mt-0.5 text-xs text-violet-800/80 sm:text-sm">Defaults follow requested post details. Values can be reduced, but cannot exceed required limits.</p>
               <img
                 src="/images/manage_post.png"
                 alt="Manage post header illustration"
@@ -635,11 +671,15 @@ export default function ManagePost() {
                       </div>
                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                         {(expertisesByPost[post.id] || []).map((expertise) => {
-                          const persons = Number(expertisePersons[`expertise-${expertise.id}`] || 0)
-                          const duration = Number(expertiseDurations[`expertise-${expertise.id}-duration`] || 0)
+                          const persons = getExpertisePersonsValue(post.post_type, expertise)
+                          const duration = getExpertiseDurationValue(post.post_type, expertise)
                           const durationUnit = expertise.unit || 'duration unit'
                           const workType = formatRateUnit(expertise.unit)
                           const totalCost = persons * duration * Number(expertise.cost || 0)
+                          const requiredPersons = Math.max(Number(expertise.available_person || 0), 0)
+                          const requiredHireUnits = Math.max(Number(expertise.needed_budget_unit || 0), 0)
+                          const personMax = post.post_type === 'Demand' ? requiredPersons : Math.max(requiredPersons, 1)
+                          const durationMax = post.post_type === 'Demand' ? requiredHireUnits : 365
                           return (
                             <div key={expertise.id} className="bg-gradient-to-br from-purple-50 to-pink-50 dark:from-slate-800 dark:to-slate-700/50 rounded-2xl p-6 border-2 border-slate-200 dark:border-slate-600 hover:border-purple-400 dark:hover:border-purple-500 transition">
                               <p className="text-sm font-bold text-slate-700 dark:text-slate-300 uppercase tracking-widest mb-2">Expertise</p>
@@ -650,21 +690,25 @@ export default function ManagePost() {
                               <p className="text-sm text-slate-700 dark:text-slate-200 mb-4">
                                 Charge: <span className="font-semibold">{Number(expertise.cost || 0).toFixed(2)} BDT</span> per <span className="font-semibold">{workType}</span>
                               </p>
-                              <p className="text-xs text-slate-600 dark:text-slate-300 mb-4">Available Person: {expertise.available_person}</p>
+                              <p className="text-xs text-slate-600 dark:text-slate-300 mb-4">
+                                {post.post_type === 'Demand'
+                                  ? `Required Person: ${requiredPersons} | Required ${workType}: ${requiredHireUnits}`
+                                  : `Available Person: ${expertise.available_person}`}
+                              </p>
                               
                               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
                                 <CounterControl
                                   value={persons}
                                   onChange={(val) => setExpertisePersons((prev) => ({ ...prev, [`expertise-${expertise.id}`]: val }))}
-                                  max={Math.max(expertise.available_person || 1, 1)}
+                                  max={personMax}
                                   label="People Required"
                                   unit={persons === 1 ? 'person' : 'persons'}
                                 />
                                 <CounterControl
                                   value={duration}
                                   onChange={(val) => setExpertiseDurations((prev) => ({ ...prev, [`expertise-${expertise.id}-duration`]: val }))}
-                                  max={365}
-                                  label="Duration Needed"
+                                  max={durationMax}
+                                  label={post.post_type === 'Demand' ? 'Needed Hire Unit' : 'Duration Needed'}
                                   unit={durationUnit}
                                 />
                               </div>
@@ -692,7 +736,8 @@ export default function ManagePost() {
                       </div>
                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                         {(skillBreakdownByPost[post.id]?.services || []).map((service) => {
-                          const quantity = Number(serviceQuantities[`service-${service.id}-qty`] || 0)
+                          const quantity = getServiceQuantityValue(service)
+                          const isIncluded = quantity > 0
                           const totalCost = quantity * Number(service.cost_per_unit || 0)
 
                           return (
@@ -703,14 +748,32 @@ export default function ManagePost() {
                                 Service Cost: <span className="font-semibold">{Number(service.cost_per_unit || 0).toFixed(2)} BDT</span> each
                               </p>
 
-                              <div className="grid grid-cols-1 gap-4 mb-4">
-                                <CounterControl
-                                  value={quantity}
-                                  onChange={(val) => setServiceQuantities((prev) => ({ ...prev, [`service-${service.id}-qty`]: val }))}
-                                  max={365}
-                                  label="Required Quantity"
-                                  unit={quantity === 1 ? 'item' : 'items'}
-                                />
+                              <div className="mb-4 rounded-xl border border-cyan-200/80 bg-cyan-50/60 px-3 py-2 text-sm text-cyan-900">
+                                <p className="mb-2 font-semibold">Include this service?</p>
+                                <div className="flex gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => setServiceQuantities((prev) => ({ ...prev, [`service-${service.id}-qty`]: 1 }))}
+                                    className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
+                                      isIncluded
+                                        ? 'bg-emerald-600 text-white'
+                                        : 'bg-white text-slate-700 border border-slate-300 hover:bg-slate-50'
+                                    }`}
+                                  >
+                                    Yes
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setServiceQuantities((prev) => ({ ...prev, [`service-${service.id}-qty`]: 0 }))}
+                                    className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
+                                      !isIncluded
+                                        ? 'bg-rose-600 text-white'
+                                        : 'bg-white text-slate-700 border border-slate-300 hover:bg-slate-50'
+                                    }`}
+                                  >
+                                    No
+                                  </button>
+                                </div>
                               </div>
 
                               <div className="pt-4 border-t-2 border-slate-300 dark:border-slate-600">
@@ -736,8 +799,9 @@ export default function ManagePost() {
                       </div>
                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                         {(productsByPost[post.id] || []).map((product) => {
-                          const units = Number(productUnits[`product-${product.id}`] || 0)
+                          const units = getProductUnitsValue(post.post_type, product)
                           const availableUnits = Math.max(Number(product.available_units || 0), 0)
+                          const productMax = post.post_type === 'Demand' ? availableUnits : availableUnits
                           const productUnit = product.unit || 'unit'
                           const totalCost = units * Number(product.cost_per_unit || 0)
                           return (
@@ -751,14 +815,14 @@ export default function ManagePost() {
                                 Cost: <span className="font-semibold">{Number(product.cost_per_unit || 0).toFixed(2)} BDT</span> per <span className="font-semibold">{productUnit}</span>
                               </p>
                               <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
-                                Available Quantity: {availableUnits}
+                                {post.post_type === 'Demand' ? `Required Quantity (max): ${availableUnits}` : `Available Quantity: ${availableUnits}`}
                               </p>
                               
                               <div className="mb-4">
                                 <CounterControl
                                   value={units}
                                   onChange={(val) => setProductUnits((prev) => ({ ...prev, [`product-${product.id}`]: val }))}
-                                  max={availableUnits}
+                                  max={productMax}
                                   label="Units Required"
                                   unit={units === 1 ? 'unit' : 'units'}
                                 />
