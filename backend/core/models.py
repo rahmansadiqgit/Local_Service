@@ -61,7 +61,6 @@ class Skill(models.Model):
     post = models.ForeignKey(Post, on_delete=models.CASCADE, related_name="skills")
     skill_name = models.CharField(max_length=255)
     description = models.TextField(blank=True)
-    unit = models.CharField(max_length=50)
     cost_per_unit = models.DecimalField(max_digits=12, decimal_places=2)
 
     def __str__(self) -> str:
@@ -73,6 +72,7 @@ class Expertise(models.Model):
     name = models.CharField(max_length=255)
     experience = models.CharField(max_length=100)
     unit = models.CharField(max_length=50)
+    needed_budget_unit = models.PositiveIntegerField(default=0)
     cost = models.DecimalField(max_digits=12, decimal_places=2)
     available_person = models.PositiveIntegerField(default=0)
 

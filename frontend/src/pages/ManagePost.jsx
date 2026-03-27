@@ -14,7 +14,7 @@ export default function ManagePost() {
   const [skillWorkers, setSkillWorkers] = useState({})
   const [expertisePersons, setExpertisePersons] = useState({})
   const [expertiseDurations, setExpertiseDurations] = useState({})
-  const [serviceDurations, setServiceDurations] = useState({})
+  const [serviceQuantities, setServiceQuantities] = useState({})
   const [productUnits, setProductUnits] = useState({})
   const [itemToggles, setItemToggles] = useState({})
   const [supplierNotesByPost, setSupplierNotesByPost] = useState({})
@@ -389,11 +389,9 @@ export default function ManagePost() {
         return {
           id: row.id,
           name: row.service_name,
-          unit: row.unit,
-          quantity: duration > 0 ? 1 : 0,
-          duration,
+          quantity,
           unit_cost: unitCost,
-          line_total: duration * unitCost,
+          line_total: quantity * unitCost,
         }
       })
       .filter((row) => row && row.duration > 0)
@@ -599,7 +597,7 @@ export default function ManagePost() {
               >
                 Manage Your Posts
               </h1>
-              <p className="mt-0.5 text-xs text-violet-800/80 sm:text-sm">Adjust expertise workers, service duration, and product units with real-time cost calculation.</p>
+              <p className="mt-0.5 text-xs text-violet-800/80 sm:text-sm">Adjust expertise workers, service quantity, and product units with real-time cost calculation.</p>
               <img
                 src="/images/manage_post.png"
                 alt="Manage post header illustration"

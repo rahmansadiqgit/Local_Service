@@ -598,8 +598,6 @@ export default function ERPTaskCard({
             rows: snapshotServices,
             columns: [
               { key: 'name', label: 'Name' },
-              { key: 'duration', label: 'Duration' },
-              { key: 'unit', label: 'Unit' },
               { key: 'unit_cost', label: 'Unit Cost' },
               { key: 'quantity', label: 'Packages' },
               { key: 'line_total', label: 'Line Total' },
@@ -608,7 +606,10 @@ export default function ERPTaskCard({
             title: 'Products (Modified)',
             rows: snapshotProducts,
           }].map((section) => {
-            const showDuration = section.title !== 'Products (Modified)'
+            const isProductsSection = section.title === 'Products (Modified)'
+            const isServicesSection = section.title === 'Services (Modified)'
+            const showDuration = !isProductsSection && !isServicesSection
+            const showUnit = !isServicesSection
 
             return (
             section.rows.length > 0 ? (
@@ -619,7 +620,7 @@ export default function ERPTaskCard({
                     <thead>
                       <tr className="border-b border-slate-200 text-slate-500">
                         <th className="px-2 py-1">Name</th>
-                        <th className="px-2 py-1">Unit</th>
+                        {showUnit ? <th className="px-2 py-1">Unit</th> : null}
                         <th className="px-2 py-1">Qty</th>
                         {showDuration ? <th className="px-2 py-1">Duration</th> : null}
                         <th className="px-2 py-1">Unit Cost</th>
@@ -630,7 +631,7 @@ export default function ERPTaskCard({
                       {section.rows.map((row) => (
                         <tr key={`${section.title}-${row.id}`} className="border-b border-slate-100 last:border-none">
                           <td className="px-2 py-1 font-medium text-slate-700">{row.name || '-'}</td>
-                          <td className="px-2 py-1">{row.unit || '-'}</td>
+                          {showUnit ? <td className="px-2 py-1">{row.unit || '-'}</td> : null}
                           <td className="px-2 py-1">{Number(row.quantity || 0)}</td>
                           {showDuration ? <td className="px-2 py-1">{Number(row.duration || 0)}</td> : null}
                           <td className="px-2 py-1">${Number(row.unit_cost || 0).toFixed(2)}</td>

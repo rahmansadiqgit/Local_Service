@@ -179,7 +179,6 @@ class SkillSerializer(serializers.ModelSerializer):
             "post",
             "skill_name",
             "description",
-            "unit",
             "cost_per_unit",
         )
 
@@ -193,6 +192,7 @@ class ExpertiseSerializer(serializers.ModelSerializer):
             "name",
             "experience",
             "unit",
+            "needed_budget_unit",
             "cost",
             "available_person",
         )

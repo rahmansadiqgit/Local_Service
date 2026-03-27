@@ -37,10 +37,10 @@ export default function ProductTable({ products = [], postType = 'Supply', showD
 
   return (
     <div className={`overflow-x-auto rounded-xl border ${isProfileTone ? 'border-violet-200/80 bg-white/55' : 'border-slate-200 dark:border-slate-800'}`}>
-      <table className="min-w-[560px] w-full text-left text-xs sm:text-sm">
+      <table className="w-full text-left text-xs sm:text-sm">
         <thead className={isProfileTone ? 'bg-gradient-to-r from-violet-100/90 to-fuchsia-100/80 text-violet-900' : 'bg-slate-50 text-slate-600 dark:bg-slate-900 dark:text-slate-300'}>
           <tr>
-            <th className="px-3 py-2 whitespace-nowrap">
+            <th className="px-3 py-2 whitespace-nowrap w-32">
               <button type="button" onClick={() => handleSort('product_name')}>
                 Product Name
               </button>
@@ -79,7 +79,7 @@ export default function ProductTable({ products = [], postType = 'Supply', showD
                   : `border-t border-slate-200 dark:border-slate-800 ${index % 2 === 1 ? 'bg-slate-50 dark:bg-slate-900/40' : ''}`
               }
             >
-              <td className="px-3 py-2 font-medium whitespace-nowrap">{product.product_name}</td>
+              <td className={isProfileTone ? 'px-3 py-2 whitespace-normal break-words text-slate-800 w-32' : 'px-3 py-2 text-slate-900 dark:text-slate-100 whitespace-normal break-words w-32'}>{product.product_name || '-'}</td>
               {showDescription && <td className="px-3 py-2 whitespace-pre-line break-words">{product.description || '-'}</td>}
               {!isDemand && <td className="px-3 py-2 whitespace-nowrap">{product.unit}</td>}
               <td className="px-3 py-2 whitespace-nowrap">{product.cost_per_unit}</td>
