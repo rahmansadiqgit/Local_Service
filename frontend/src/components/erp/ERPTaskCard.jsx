@@ -150,14 +150,18 @@ export default function ERPTaskCard({
 
   const renderTaskRow = (task, listType) => {
     const isOpenPending = listType === 'pending' && !task.done
+    const isReadyProductTask = task.toggleable && task.key === 'ready_product'
+    const shouldBounceRow = isOpenPending && !(task.toggleable && task.key === 'ready_product')
     return (
       <li
         key={`${erp.id}-${listType}-${task.key || task.label}`}
         className={`flex items-center gap-1 rounded-md px-2 py-1 ${
-          isOpenPending ? 'animate-bounce border border-rose-200 bg-rose-100/80 text-rose-800' : ''
+          isOpenPending
+            ? `${shouldBounceRow ? 'animate-bounce ' : ''}border border-rose-200 bg-rose-100/80 text-rose-800`
+            : ''
         }`}
       >
-      {task.toggleable && task.key === 'ready_product' ? (
+      {isReadyProductTask ? (
         <button
           type="button"
           onClick={() => onToggleReadyProduct?.(erp.id)}
@@ -167,13 +171,18 @@ export default function ERPTaskCard({
           className={`h-4 w-4 rounded-full border transition ${
             task.done
               ? 'border-emerald-600 bg-emerald-500'
-              : 'animate-bounce border-rose-400 bg-rose-200 hover:border-rose-500'
+              : 'border-rose-400 bg-rose-200 hover:border-rose-500'
           }`}
         />
       ) : (
         <span className={task.done ? 'text-emerald-600' : 'text-rose-600'}>{task.done ? '✓' : '•'}</span>
       )}
       <span>{task.label}</span>
+      {isReadyProductTask && isOpenPending ? (
+        <span className="ml-1 rounded-full border border-rose-300 bg-white px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-rose-700">
+          Click circle
+        </span>
+      ) : null}
       </li>
     )
   }
@@ -399,7 +408,7 @@ export default function ERPTaskCard({
         <div
           className={`space-y-2 rounded-lg border bg-white p-3 text-xs ${
             pendingMemberRoles.has(selectedMemberRole)
-              ? 'animate-bounce border-rose-300 bg-rose-50/70'
+              ? 'border-rose-300 bg-rose-50/70'
               : 'border-slate-200'
           }`}
         >
