@@ -793,6 +793,43 @@ class ERPViewSet(viewsets.ModelViewSet):
         has_linked_post = bool(erp.post_id)
 
         assigned_workers = [user_label(worker) for worker in erp.assigned_workers.all()]
+        member_roles = [
+            ("expertise", "Expertise"),
+            ("skill_provider", "Skill provider"),
+            ("supplier", "Delivary Man"),
+        ]
+        snapshot_members = snapshot.get("members") or {}
+        associated_member_ids = set()
+        role_member_ids = {}
+
+        for role_key, _ in member_roles:
+            role_bucket = snapshot_members.get(role_key) or {}
+            raw_ids = role_bucket.get("assignee_ids") or []
+            clean_ids = []
+            for raw_id in raw_ids:
+                try:
+                    parsed = int(raw_id)
+                except (TypeError, ValueError):
+                    continue
+                if parsed > 0:
+                    clean_ids.append(parsed)
+            unique_ids = sorted(list(set(clean_ids)))
+            role_member_ids[role_key] = unique_ids
+            associated_member_ids.update(unique_ids)
+
+        associated_users_by_id = {
+            user.id: user for user in User.objects.filter(id__in=list(associated_member_ids))
+        }
+
+        def member_card_text(user):
+            if not user:
+                return "Unknown user"
+
+            display_name = user.name or user.username or user.email or f"User #{user.id}"
+            phone = user.phone or "-"
+            email = user.email or "-"
+            location = user.location or "-"
+            return f"{display_name} | Phone: {phone} | Email: {email} | Location: {location}"
 
         buffer = BytesIO()
         pdf = canvas.Canvas(buffer, pagesize=A4)
@@ -933,6 +970,21 @@ class ERPViewSet(viewsets.ModelViewSet):
         draw_kv("Description", snapshot_post.get("description") or (post.description if post else "-"), wrap=90)
         draw_kv("Assigned Workers Count", len(assigned_workers))
         draw_kv("Assigned Workers", ", ".join(assigned_workers) if assigned_workers else "None", wrap=90)
+
+        draw_section("View Details - Associated Members")
+        has_any_associated_members = False
+        for role_key, role_label in member_roles:
+            ids = role_member_ids.get(role_key) or []
+            if not ids:
+                draw_kv(f"{role_label}", "None")
+                continue
+
+            has_any_associated_members = True
+            role_details = [member_card_text(associated_users_by_id.get(user_id)) for user_id in ids]
+            draw_kv(f"{role_label}", " ; ".join(role_details), wrap=92)
+
+        if not has_any_associated_members:
+            draw_kv("Info", "No associated members assigned yet.")
 
         draw_section("View Details - Final Cost Summary")
         draw_kv("Expertise Total", as_money(snapshot_totals.get("expertise", 0)))

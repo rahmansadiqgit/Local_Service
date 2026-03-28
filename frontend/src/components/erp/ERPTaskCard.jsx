@@ -75,8 +75,23 @@ export default function ERPTaskCard({
     skill_provider: 'Skill provider',
     supplier: 'Delivary Man',
   }
+  const associatedMemberRoles = ['expertise', 'skill_provider', 'supplier']
 
   const membersState = snapshot.members || {}
+  const associatedMembersByRole = associatedMemberRoles.map((roleKey) => {
+    const roleBucket = membersState[roleKey] || {}
+    const assigneeIds = Array.isArray(roleBucket.assignee_ids)
+      ? roleBucket.assignee_ids.map((id) => Number(id)).filter((id) => Number.isFinite(id) && id > 0)
+      : []
+    const members = users.filter((user) => assigneeIds.includes(Number(user.id)))
+
+    return {
+      roleKey,
+      roleLabel: roleKeyToLabel[roleKey] || roleKey,
+      members,
+    }
+  })
+  const hasAssociatedMembers = associatedMembersByRole.some((entry) => entry.members.length > 0)
   const selectedRoleState = selectedMemberRole ? membersState[selectedMemberRole] || {} : {}
   const selectedAssigneeIds = Array.isArray(selectedRoleState.assignee_ids)
     ? selectedRoleState.assignee_ids.map((id) => Number(id))
@@ -696,6 +711,53 @@ export default function ERPTaskCard({
               <span className="font-semibold text-slate-700">Note for Delivary Man:</span>{' '}
               {supplierNote || '-'}
             </p>
+          </div>
+
+          <div className="rounded-xl border border-slate-200 bg-white p-3">
+            <h4 className="text-sm font-semibold text-slate-800">Associated Members</h4>
+            {hasAssociatedMembers ? (
+              <div className="mt-3 space-y-3">
+                {associatedMembersByRole.map(({ roleKey, roleLabel, members }) => (
+                  <div key={`erp-associated-${erp.id}-${roleKey}`} className="space-y-2">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{roleLabel}</p>
+                    {members.length ? (
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        {members.map((member) => (
+                          <button
+                            key={`erp-associated-user-${roleKey}-${member.id}`}
+                            type="button"
+                            onClick={() => onOpenOwner?.(Number(member.id))}
+                            className="rounded-lg border border-slate-200 bg-slate-50 p-2 text-left transition hover:border-brand-300 hover:bg-brand-50/50"
+                          >
+                            <div className="flex items-center gap-2">
+                              <img
+                                src={toMediaUrl(member.profile_photo) || defaultAvatar}
+                                alt={member.name || member.username || `User #${member.id}`}
+                                className="h-8 w-8 rounded-full border border-slate-200 object-cover"
+                              />
+                              <div className="min-w-0">
+                                <p className="truncate text-xs font-semibold text-slate-800">
+                                  {member.name || member.username || `User #${member.id}`}
+                                </p>
+                                <p className="truncate text-[11px] text-slate-500">{member.location || 'Unknown location'}</p>
+                              </div>
+                            </div>
+                            <div className="mt-2 space-y-0.5 text-[11px] text-slate-600">
+                              <p><span className="font-semibold text-slate-700">Phone:</span> {member.phone || '-'}</p>
+                              <p className="truncate"><span className="font-semibold text-slate-700">Email:</span> {member.email || '-'}</p>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-slate-500">No assigned members.</p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="mt-2 text-xs text-slate-500">No associated members assigned yet.</p>
+            )}
           </div>
 
           {[{
