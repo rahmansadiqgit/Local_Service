@@ -2,6 +2,12 @@ import { useEffect, useMemo, useState } from 'react'
 import api from '../api/client'
 import defaultAvatar from '../assets/default-avatar.svg'
 
+const ROLE_ENTRIES = [
+  { key: 'expertise', label: 'Expertise' },
+  { key: 'skill_provider', label: 'Skill provider' },
+  { key: 'supplier', label: 'Supplier' },
+]
+
 export default function Connections() {
   const [selected, setSelected] = useState(null)
   const [memberCategory, setMemberCategory] = useState('Expertise')
@@ -86,12 +92,6 @@ export default function Connections() {
       .slice(0, 3)
   }, [posts, selected])
 
-  const roleEntries = [
-    { key: 'expertise', label: 'Expertise' },
-    { key: 'skill_provider', label: 'Skill provider' },
-    { key: 'supplier', label: 'Supplier' },
-  ]
-
   const memberCategoryToRoleKey = {
     Expertise: 'expertise',
     'Skill Providers': 'skill_provider',
@@ -108,16 +108,33 @@ export default function Connections() {
       const snapshot = erp.configuration_snapshot || {}
       const members = snapshot.members || {}
 
-      return roleEntries
-        .filter(({ key }) => Boolean(members[key]?.self_assign_enabled))
+      return ROLE_ENTRIES
+        .filter(({ key }) => {
+          if (!members[key]?.self_assign_enabled) return false
+
+          const rawTargetIds = Array.isArray(members[key]?.self_assign_target_ids)
+            ? members[key].self_assign_target_ids
+            : []
+          const targetIds = rawTargetIds
+            .map((id) => Number(id))
+            .filter((id) => Number.isFinite(id) && id > 0)
+
+          // Backward compatibility: if no targets were stored, keep role visible.
+          if (!targetIds.length) return true
+          return targetIds.includes(Number(currentUserId))
+        })
         .map(({ key, label }) => ({
           erp,
           role: key,
           roleLabel: label,
           assignedIds: Array.isArray(members[key]?.assignee_ids) ? members[key].assignee_ids : [],
+          selfAssignMessage: String(members[key]?.self_assign_message || '').trim(),
+          postLink: String(members[key]?.self_assign_post_link || '').trim(),
+          postTitle: String(members[key]?.self_assign_post_title || '').trim(),
+          sourcePostId: members[key]?.self_assign_post_id,
         }))
     })
-  }, [erpItems])
+  }, [erpItems, currentUserId])
 
   const handleSelfAssign = async (erpId, role, assign) => {
     const loadingKey = `${erpId}-${role}`
@@ -466,28 +483,43 @@ export default function Connections() {
             <p className="mt-1 text-xs text-slate-500">If provider generated assignment post, you can assign or remove yourself here.</p>
             <div className="mt-3 space-y-2">
               {openSelfAssignPosts.length ? (
-                openSelfAssignPosts.map(({ erp, role, roleLabel, assignedIds }) => {
+                openSelfAssignPosts.map(({ erp, role, roleLabel, assignedIds, selfAssignMessage, postLink, postTitle, sourcePostId }) => {
                   const isAssigned = assignedIds.map((id) => Number(id)).includes(Number(currentUserId))
                   const loadingKey = `${erp.id}-${role}`
                   const postName = posts.find((item) => Number(item.id) === Number(erp.post))?.post_name || `ERP #${erp.id}`
+                  const resolvedPostLink = postLink || '/erp'
                   return (
-                    <div key={`${erp.id}-${role}`} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white p-2">
-                      <div>
+                    <div key={`${erp.id}-${role}`} className="rounded-lg border border-slate-200 bg-white p-2">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
                         <p className="text-sm font-semibold text-slate-800">{postName}</p>
                         <p className="text-xs text-slate-500">Role: {roleLabel}</p>
                       </div>
-                      <button
-                        type="button"
-                        disabled={selfAssignLoading === loadingKey}
-                        onClick={() => handleSelfAssign(erp.id, role, !isAssigned)}
-                        className="rounded-full border border-brand-200 px-3 py-1 text-xs font-semibold text-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
-                      >
-                        {selfAssignLoading === loadingKey
-                          ? 'Updating...'
-                          : isAssigned
-                            ? 'Remove Myself'
-                            : 'Assign Myself'}
-                      </button>
+
+                      {selfAssignMessage ? (
+                        <p className="mt-1 text-xs text-slate-600">Message: {selfAssignMessage}</p>
+                      ) : null}
+
+                      <p className="mt-1 text-xs text-slate-500">
+                        Post link:{' '}
+                        <a href={resolvedPostLink} className="font-semibold text-brand-700 hover:underline">
+                          {postTitle || (sourcePostId ? `Post #${sourcePostId}` : 'Open post')}
+                        </a>
+                      </p>
+
+                      <div className="mt-2 flex justify-end">
+                        <button
+                          type="button"
+                          disabled={selfAssignLoading === loadingKey}
+                          onClick={() => handleSelfAssign(erp.id, role, !isAssigned)}
+                          className="rounded-full border border-brand-200 px-3 py-1 text-xs font-semibold text-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {selfAssignLoading === loadingKey
+                            ? 'Updating...'
+                            : isAssigned
+                              ? 'Remove Myself'
+                              : 'Assign Myself'}
+                        </button>
+                      </div>
                     </div>
                   )
                 })

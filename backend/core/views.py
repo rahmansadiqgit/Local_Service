@@ -386,9 +386,43 @@ class ERPViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
-        return ERP.objects.filter(
+        base_queryset = ERP.objects.filter(
             Q(provider=user) | Q(receiver=user) | Q(post__owner=user) | Q(assigned_workers=user)
         ).distinct()
+
+        base_ids = set(base_queryset.values_list("id", flat=True))
+        additional_ids = set()
+        candidates = ERP.objects.exclude(id__in=base_ids).select_related("provider", "receiver", "post")
+
+        for item in candidates:
+            snapshot = item.configuration_snapshot or {}
+            members = snapshot.get("members") or {}
+
+            for role in self._allowed_member_roles():
+                role_bucket = members.get(role) or {}
+                if not bool(role_bucket.get("self_assign_enabled", False)):
+                    continue
+
+                raw_targets = role_bucket.get("self_assign_target_ids") or []
+                target_ids = set()
+                for raw_id in raw_targets:
+                    try:
+                        target_ids.add(int(raw_id))
+                    except (TypeError, ValueError):
+                        continue
+
+                if not target_ids and item.provider:
+                    # Backward compatibility for snapshots created before target IDs were stored.
+                    target_ids = self._get_accepted_connection_member_ids(item.provider, role=role)
+
+                if int(user.id) in target_ids:
+                    additional_ids.add(int(item.id))
+                    break
+
+        if not additional_ids:
+            return base_queryset
+
+        return ERP.objects.filter(Q(id__in=base_ids) | Q(id__in=additional_ids)).distinct()
 
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
@@ -458,9 +492,29 @@ class ERPViewSet(viewsets.ModelViewSet):
             except (TypeError, ValueError):
                 continue
 
+        existing_target_ids = role_bucket.get("self_assign_target_ids") or []
+        target_ids = []
+        for raw_id in existing_target_ids:
+            try:
+                target_ids.append(int(raw_id))
+            except (TypeError, ValueError):
+                continue
+
+        post_id_value = role_bucket.get("self_assign_post_id")
+        try:
+            post_id_value = int(post_id_value) if post_id_value is not None else None
+        except (TypeError, ValueError):
+            post_id_value = None
+
         role_bucket = {
             "assignee_ids": sorted(list(set(assignee_ids))),
             "self_assign_enabled": bool(role_bucket.get("self_assign_enabled", False)),
+            "self_assign_message": str(role_bucket.get("self_assign_message", "") or "").strip(),
+            "self_assign_post_link": str(role_bucket.get("self_assign_post_link", "") or "").strip(),
+            "self_assign_post_title": str(role_bucket.get("self_assign_post_title", "") or "").strip(),
+            "self_assign_post_id": post_id_value,
+            "self_assign_target_ids": sorted(list(set(target_ids))),
+            "self_assign_published_at": role_bucket.get("self_assign_published_at"),
         }
         members[role] = role_bucket
         snapshot["members"] = members
@@ -470,16 +524,32 @@ class ERPViewSet(viewsets.ModelViewSet):
         erp.configuration_snapshot = snapshot
         erp.save(update_fields=["configuration_snapshot", "updated_at"])
 
-    def _get_connection_member_ids(self, user):
-        accepted = Connection.objects.filter(
-            status=ConnectionStatus.ACCEPTED
-        ).filter(Q(requester=user) | Q(addressee=user))
+    def _get_accepted_connection_member_ids(self, user, role=None):
+        if not user:
+            return set()
+
+        role_filter = str(role or "").strip().lower()
+        if role_filter and role_filter not in self._allowed_member_roles():
+            role_filter = ""
+
+        accepted = Connection.objects.filter(status=ConnectionStatus.ACCEPTED).filter(
+            Q(requester=user) | Q(addressee=user)
+        )
 
         accepted_ids = set()
         for conn in accepted:
+            requested_role = str(conn.requested_role or "").strip().lower()
+            if role_filter and requested_role != role_filter:
+                continue
+
             other_id = conn.addressee_id if conn.requester_id == user.id else conn.requester_id
             if other_id and int(other_id) != int(user.id):
                 accepted_ids.add(int(other_id))
+
+        return accepted_ids
+
+    def _get_connection_member_ids(self, user):
+        accepted_ids = self._get_accepted_connection_member_ids(user)
 
         erp_items = ERP.objects.filter(Q(provider=user) | Q(receiver=user)).select_related(
             "post"
@@ -567,20 +637,44 @@ class ERPViewSet(viewsets.ModelViewSet):
         if role not in self._allowed_member_roles():
             return Response({"detail": "Invalid member role."}, status=status.HTTP_400_BAD_REQUEST)
 
+        custom_message = str(request.data.get("message", "") or "").strip()
+        role_title = role.replace("_", " ").title()
+        post_title = (
+            (erp.configuration_snapshot or {}).get("post", {}).get("title")
+            or getattr(erp.post, "post_title", "")
+            or getattr(erp.post, "post_name", "")
+            or f"Post #{erp.post_id}"
+        )
+        post_link = (
+            f"/dashboard/{erp.post.owner_id}?post={erp.post_id}"
+            if erp.post and erp.post.owner_id
+            else f"/erp?erp_id={erp.id}&role={role}"
+        )
+        target_ids = sorted(list(self._get_accepted_connection_member_ids(request.user, role=role)))
+
         snapshot, members, role_bucket = self._get_member_bucket(erp, role)
         role_bucket["self_assign_enabled"] = True
+        role_bucket["self_assign_message"] = custom_message
+        role_bucket["self_assign_post_link"] = post_link
+        role_bucket["self_assign_post_title"] = str(post_title)
+        role_bucket["self_assign_post_id"] = int(erp.post_id) if erp.post_id else None
+        role_bucket["self_assign_target_ids"] = target_ids
+        role_bucket["self_assign_published_at"] = timezone.now().isoformat()
         members[role] = role_bucket
         snapshot["members"] = members
         self._save_snapshot(erp, snapshot)
 
-        role_title = role.replace("_", " ").title()
-        target_ids = self._get_connection_member_ids(request.user)
         receivers = User.objects.filter(id__in=list(target_ids)).exclude(id=request.user.id)
+        body = f"ERP #{erp.id} is open for self-assignment as {role_title} for post '{post_title}'."
+        if custom_message:
+            body = f"{body} Message: {custom_message}"
+        body = f"{body} Post link: {post_link}"
+
         notifications = [
             Notification(
                 user=target,
                 title=f"ERP Self-Assign Open: {role_title}",
-                message=f"ERP #{erp.id} is open for self-assignment as {role_title}. Visit Connections to assign yourself.",
+                message=body,
             )
             for target in receivers
         ]
@@ -603,7 +697,11 @@ class ERPViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        allowed_member_ids = self._get_connection_member_ids(erp.provider) if erp.provider else set()
+        allowed_member_ids = set(role_bucket.get("self_assign_target_ids") or [])
+        if not allowed_member_ids and erp.provider:
+            # Backward compatibility for old records published before role target IDs were saved.
+            allowed_member_ids = self._get_accepted_connection_member_ids(erp.provider, role=role)
+
         if request.user.id not in allowed_member_ids:
             raise PermissionDenied("Only connection members can self-assign to this ERP role.")
 

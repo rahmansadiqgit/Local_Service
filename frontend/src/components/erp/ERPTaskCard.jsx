@@ -31,6 +31,7 @@ export default function ERPTaskCard({
   const [replyTargetId, setReplyTargetId] = useState(null)
   const [isLoadingMessages, setIsLoadingMessages] = useState(false)
   const [isSendingMessage, setIsSendingMessage] = useState(false)
+  const [selfAssignMessageByRole, setSelfAssignMessageByRole] = useState({})
 
   const phases = ['Pending', 'On Process', 'Completed']
   const activePhaseIndex = phases.indexOf(erp.stage)
@@ -81,6 +82,13 @@ export default function ERPTaskCard({
     ? selectedRoleState.assignee_ids.map((id) => Number(id))
     : []
   const selfAssignEnabled = Boolean(selectedRoleState.self_assign_enabled)
+  const selectedSelfAssignMessage =
+    selectedMemberRole && Object.prototype.hasOwnProperty.call(selfAssignMessageByRole, selectedMemberRole)
+      ? selfAssignMessageByRole[selectedMemberRole]
+      : String(selectedRoleState.self_assign_message || '')
+  const selectedSelfAssignPostLink = String(selectedRoleState.self_assign_post_link || '').trim()
+  const selectedSelfAssignPostTitle =
+    String(selectedRoleState.self_assign_post_title || snapshotPost?.title || post?.post_title || '').trim()
 
   const viewerRole =
     currentUserId && String(erp.provider) === String(currentUserId)
@@ -99,7 +107,18 @@ export default function ERPTaskCard({
         ? assignableUsersByRole.all
         : []
     : []
-  const visibleMembers = isProvider ? providerAssignableMembers : assignedMembersForSelectedRole
+  const currentUserRecord = users.find((user) => Number(user.id) === Number(currentUserId)) || null
+  const providerMembersWithSelfFirst = isProvider
+    ? [
+        currentUserRecord || {
+          id: Number(currentUserId),
+          name: 'Assign myself',
+          username: 'Assign myself',
+        },
+        ...providerAssignableMembers.filter((user) => Number(user.id) !== Number(currentUserId)),
+      ]
+    : []
+  const visibleMembers = isProvider ? providerMembersWithSelfFirst : assignedMembersForSelectedRole
 
   const counterpartyUserId =
     viewerRole === 'Provider'
@@ -420,7 +439,7 @@ export default function ERPTaskCard({
               {isProvider ? (
                 <button
                   type="button"
-                  onClick={() => onPublishMemberPost?.(erp, selectedMemberRole)}
+                  onClick={() => onPublishMemberPost?.(erp, selectedMemberRole, selectedSelfAssignMessage)}
                   className="rounded-full border border-brand-200 px-2 py-1 text-[11px] font-semibold text-brand-700"
                 >
                   Generate Self-Assign Post
@@ -445,16 +464,53 @@ export default function ERPTaskCard({
             Self-assign status: {selfAssignEnabled ? 'Open' : 'Closed'}
           </p>
 
+          {isProvider ? (
+            <div className="space-y-1">
+              <label className="text-[11px] font-semibold text-slate-600">
+                Self-assign message
+              </label>
+              <textarea
+                value={selectedSelfAssignMessage}
+                onChange={(event) =>
+                  setSelfAssignMessageByRole((prev) => ({
+                    ...prev,
+                    [selectedMemberRole]: event.target.value,
+                  }))
+                }
+                rows={2}
+                placeholder="Write a short manual message for connection members"
+                className="w-full rounded-md border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700 outline-none focus:border-brand-300"
+              />
+            </div>
+          ) : null}
+
+          {selectedSelfAssignPostLink ? (
+            <p className="text-[11px] text-slate-500">
+              Post link:{' '}
+              <a
+                href={selectedSelfAssignPostLink}
+                className="font-semibold text-brand-700 hover:underline"
+              >
+                {selectedSelfAssignPostTitle || 'Open post'}
+              </a>
+            </p>
+          ) : null}
+
           <div className="max-h-40 space-y-1 overflow-y-auto rounded-md border border-slate-100 bg-slate-50 p-2">
             {visibleMembers.length ? (
               visibleMembers.map((user) => {
                 const checked = selectedAssigneeIds.includes(Number(user.id))
+                const isCurrentUser = Number(user.id) === Number(currentUserId)
                 return (
                   <label
                     key={`erp-member-${selectedMemberRole}-${user.id}`}
                     className={`flex items-center justify-between gap-2 rounded-md px-2 py-1 ${isProvider ? 'cursor-pointer hover:bg-white' : ''}`}
                   >
-                    <span className="truncate text-slate-700">{user.name || user.username || `User #${user.id}`}</span>
+                    <span className="truncate text-slate-700">
+                      {isCurrentUser
+                        ? 'Assign myself'
+                        : user.name || user.username || `User #${user.id}`}
+                    </span>
                     {isProvider ? (
                       <input
                         type="checkbox"
