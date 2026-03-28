@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import api from '../api/client'
 import ERPAnalyticsGrid from '../components/erp/ERPAnalyticsGrid'
 import ERPFiltersBar from '../components/erp/ERPFiltersBar'
@@ -9,6 +9,7 @@ import ERPTopRatedServices from '../components/erp/ERPTopRatedServices'
 
 export default function ERP() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const [erpItems, setErpItems] = useState([])
   const [currentUserId, setCurrentUserId] = useState(null)
   const [posts, setPosts] = useState([])
@@ -211,6 +212,9 @@ export default function ERP() {
   }, [erpItems, filters, postMap, averageRatingByPost])
 
   const uniqueFilteredTasks = useMemo(() => {
+    const focusErpIdRaw = searchParams.get('erp_id')
+    const focusErpId = Number(focusErpIdRaw)
+
     const byKey = new Map()
 
     filteredTasks.forEach((erp) => {
@@ -222,8 +226,13 @@ export default function ERP() {
       }
     })
 
-    return Array.from(byKey.values())
-  }, [filteredTasks])
+    const deduped = Array.from(byKey.values())
+    if (!Number.isFinite(focusErpId) || focusErpId <= 0) {
+      return deduped
+    }
+
+    return deduped.filter((erp) => Number(erp.id) === focusErpId)
+  }, [filteredTasks, searchParams])
 
   const notify = async (title, messageText) => {
     try {

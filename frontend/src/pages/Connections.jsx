@@ -12,6 +12,7 @@ export default function Connections() {
   const [selected, setSelected] = useState(null)
   const [memberCategory, setMemberCategory] = useState('Expertise')
   const [posts, setPosts] = useState([])
+  const [users, setUsers] = useState([])
   const [erpItems, setErpItems] = useState([])
   const [currentUserId, setCurrentUserId] = useState(null)
   const [overview, setOverview] = useState({
@@ -62,14 +63,16 @@ export default function Connections() {
 
     const load = async () => {
       try {
-        const [postRes, erpRes, meRes, overviewRes] = await Promise.all([
+        const [postRes, userRes, erpRes, meRes, overviewRes] = await Promise.all([
           api.get('/posts/'),
+          api.get('/users/'),
           api.get('/erp/'),
           api.get('/auth/me/'),
           api.get('/connections/overview/'),
         ])
         if (!active) return
         setPosts(postRes.data)
+        setUsers(Array.isArray(userRes.data) ? userRes.data : [])
         setErpItems(erpRes.data)
         setCurrentUserId(meRes.data?.id ?? null)
         setOverview(normalizeOverview(overviewRes.data))
@@ -91,6 +94,16 @@ export default function Connections() {
       .filter((post) => post.owner_id === selected.id)
       .slice(0, 3)
   }, [posts, selected])
+
+  const usersById = useMemo(() => {
+    const map = new Map()
+    ;(Array.isArray(users) ? users : []).forEach((user) => {
+      if (user && user.id !== undefined && user.id !== null) {
+        map.set(Number(user.id), user)
+      }
+    })
+    return map
+  }, [users])
 
   const memberCategoryToRoleKey = {
     Expertise: 'expertise',
@@ -483,26 +496,35 @@ export default function Connections() {
             <p className="mt-1 text-xs text-slate-500">If provider generated assignment post, you can assign or remove yourself here.</p>
             <div className="mt-3 space-y-2">
               {openSelfAssignPosts.length ? (
-                openSelfAssignPosts.map(({ erp, role, roleLabel, assignedIds, selfAssignMessage, postLink, postTitle, sourcePostId }) => {
+                openSelfAssignPosts.map(({ erp, role, roleLabel, assignedIds, selfAssignMessage, postTitle }) => {
                   const isAssigned = assignedIds.map((id) => Number(id)).includes(Number(currentUserId))
                   const loadingKey = `${erp.id}-${role}`
-                  const postName = posts.find((item) => Number(item.id) === Number(erp.post))?.post_name || `ERP #${erp.id}`
-                  const resolvedPostLink = postLink || '/erp'
+                  const postRecord = posts.find((item) => Number(item.id) === Number(erp.post)) || null
+                  const titleText =
+                    postRecord?.post_title ||
+                    postTitle ||
+                    postRecord?.post_name ||
+                    `ERP #${erp.id}`
+                  const provider = usersById.get(Number(erp.provider))
+                  const providerName =
+                    provider?.name || provider?.username || (erp.provider ? `User #${erp.provider}` : 'Unknown')
+                  const erpTaskLink = `/erp?erp_id=${erp.id}`
                   return (
                     <div key={`${erp.id}-${role}`} className="rounded-lg border border-slate-200 bg-white p-2">
                       <div className="flex flex-wrap items-center justify-between gap-2">
-                        <p className="text-sm font-semibold text-slate-800">{postName}</p>
+                        <p className="text-sm font-semibold text-slate-800">{titleText}</p>
                         <p className="text-xs text-slate-500">Role: {roleLabel}</p>
                       </div>
 
+                      <p className="mt-1 text-xs text-slate-500">Requested by: {providerName}</p>
                       {selfAssignMessage ? (
                         <p className="mt-1 text-xs text-slate-600">Message: {selfAssignMessage}</p>
                       ) : null}
 
                       <p className="mt-1 text-xs text-slate-500">
-                        Post link:{' '}
-                        <a href={resolvedPostLink} className="font-semibold text-brand-700 hover:underline">
-                          {postTitle || (sourcePostId ? `Post #${sourcePostId}` : 'Open post')}
+                        ERPTaskCard link:{' '}
+                        <a href={erpTaskLink} className="font-semibold text-brand-700 hover:underline">
+                          Open this ERP task
                         </a>
                       </p>
 
