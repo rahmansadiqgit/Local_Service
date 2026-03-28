@@ -21,6 +21,7 @@ export default function ERPTaskCard({
   assignableUsersByRole = {},
   onUpdateMemberAssignment,
   onPublishMemberPost,
+  onCloseMemberPost,
   onOpenOwner,
   toMediaUrl,
 }) {
@@ -31,6 +32,7 @@ export default function ERPTaskCard({
   const [replyTargetId, setReplyTargetId] = useState(null)
   const [isLoadingMessages, setIsLoadingMessages] = useState(false)
   const [isSendingMessage, setIsSendingMessage] = useState(false)
+  const [selfAssignMessageByRole, setSelfAssignMessageByRole] = useState({})
 
   const phases = ['Pending', 'On Process', 'Completed']
   const activePhaseIndex = phases.indexOf(erp.stage)
@@ -74,13 +76,32 @@ export default function ERPTaskCard({
     skill_provider: 'Skill provider',
     supplier: 'Delivary Man',
   }
+  const associatedMemberRoles = ['expertise', 'skill_provider', 'supplier']
 
   const membersState = snapshot.members || {}
+  const associatedMembersByRole = associatedMemberRoles.map((roleKey) => {
+    const roleBucket = membersState[roleKey] || {}
+    const assigneeIds = Array.isArray(roleBucket.assignee_ids)
+      ? roleBucket.assignee_ids.map((id) => Number(id)).filter((id) => Number.isFinite(id) && id > 0)
+      : []
+    const members = users.filter((user) => assigneeIds.includes(Number(user.id)))
+
+    return {
+      roleKey,
+      roleLabel: roleKeyToLabel[roleKey] || roleKey,
+      members,
+    }
+  })
+  const hasAssociatedMembers = associatedMembersByRole.some((entry) => entry.members.length > 0)
   const selectedRoleState = selectedMemberRole ? membersState[selectedMemberRole] || {} : {}
   const selectedAssigneeIds = Array.isArray(selectedRoleState.assignee_ids)
     ? selectedRoleState.assignee_ids.map((id) => Number(id))
     : []
   const selfAssignEnabled = Boolean(selectedRoleState.self_assign_enabled)
+  const selectedSelfAssignMessage =
+    selectedMemberRole && Object.prototype.hasOwnProperty.call(selfAssignMessageByRole, selectedMemberRole)
+      ? selfAssignMessageByRole[selectedMemberRole]
+      : String(selectedRoleState.self_assign_message || '')
 
   const viewerRole =
     currentUserId && String(erp.provider) === String(currentUserId)
@@ -99,7 +120,18 @@ export default function ERPTaskCard({
         ? assignableUsersByRole.all
         : []
     : []
-  const visibleMembers = isProvider ? providerAssignableMembers : assignedMembersForSelectedRole
+  const currentUserRecord = users.find((user) => Number(user.id) === Number(currentUserId)) || null
+  const providerMembersWithSelfFirst = isProvider
+    ? [
+        currentUserRecord || {
+          id: Number(currentUserId),
+          name: 'Assign myself',
+          username: 'Assign myself',
+        },
+        ...providerAssignableMembers.filter((user) => Number(user.id) !== Number(currentUserId)),
+      ]
+    : []
+  const visibleMembers = isProvider ? providerMembersWithSelfFirst : assignedMembersForSelectedRole
 
   const counterpartyUserId =
     viewerRole === 'Provider'
@@ -135,9 +167,33 @@ export default function ERPTaskCard({
   const completedStageTasks = (phaseTasks.Completed || []).filter((task) => task.done)
   const completedTasks = [...donePendingTasks, ...completedStageTasks]
 
-  const renderTaskRow = (task, listType) => (
-    <li key={`${erp.id}-${listType}-${task.key || task.label}`} className="flex items-center gap-1">
-      {task.toggleable && task.key === 'ready_product' ? (
+  const openPendingTaskKeys = new Set(openPendingTasks.map((task) => String(task.key || '').trim()))
+  const pendingMemberRoleByTaskKey = {
+    member_expertise: 'expertise',
+    member_skill_provider: 'skill_provider',
+    member_supplier: 'supplier',
+  }
+  const pendingMemberRoles = new Set(
+    openPendingTasks
+      .map((task) => pendingMemberRoleByTaskKey[String(task.key || '').trim()])
+      .filter(Boolean),
+  )
+  const shouldPulseMembersButton = pendingMemberRoles.size > 0
+
+  const renderTaskRow = (task, listType) => {
+    const isOpenPending = listType === 'pending' && !task.done
+    const isReadyProductTask = task.toggleable && task.key === 'ready_product'
+    const shouldBounceRow = isOpenPending && !(task.toggleable && task.key === 'ready_product')
+    return (
+      <li
+        key={`${erp.id}-${listType}-${task.key || task.label}`}
+        className={`flex items-center gap-1 rounded-md px-2 py-1 ${
+          isOpenPending
+            ? `${shouldBounceRow ? 'animate-bounce ' : ''}border border-rose-200 bg-rose-100/80 text-rose-800`
+            : ''
+        }`}
+      >
+      {isReadyProductTask ? (
         <button
           type="button"
           onClick={() => onToggleReadyProduct?.(erp.id)}
@@ -147,15 +203,21 @@ export default function ERPTaskCard({
           className={`h-4 w-4 rounded-full border transition ${
             task.done
               ? 'border-emerald-600 bg-emerald-500'
-              : 'border-slate-400 bg-white hover:border-brand-400'
+              : 'border-rose-400 bg-rose-200 hover:border-rose-500'
           }`}
         />
       ) : (
-        <span className={task.done ? 'text-emerald-600' : 'text-amber-600'}>{task.done ? '✓' : '•'}</span>
+        <span className={task.done ? 'text-emerald-600' : 'text-rose-600'}>{task.done ? '✓' : '•'}</span>
       )}
       <span>{task.label}</span>
-    </li>
-  )
+      {isReadyProductTask && isOpenPending ? (
+        <span className="ml-1 rounded-full border border-rose-300 bg-white px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-rose-700">
+          Click circle
+        </span>
+      ) : null}
+      </li>
+    )
+  }
 
   const loadMessages = useCallback(async () => {
     if (erp.stage !== 'On Process') return
@@ -306,7 +368,11 @@ export default function ERPTaskCard({
           <button
             type="button"
             onClick={() => onToggleTrack(erp.id)}
-            className="rounded-full border border-violet-300 bg-violet-50 px-4 py-2 text-sm font-semibold text-violet-700 transition hover:bg-violet-100"
+            className={`rounded-full border px-4 py-2 text-sm font-semibold transition ${
+              openPendingTasks.length > 0
+                ? 'animate-bounce border-rose-300 bg-rose-100 text-rose-700 hover:bg-rose-200'
+                : 'border-violet-300 bg-violet-50 text-violet-700 hover:bg-violet-100'
+            }`}
           >
             Tasks
           </button>
@@ -322,26 +388,39 @@ export default function ERPTaskCard({
           <button
             type="button"
             onClick={() => setIsMembersMenuOpen((prev) => !prev)}
-            className="rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-400"
+            className={`rounded-full border px-4 py-2 text-sm font-semibold transition ${
+              shouldPulseMembersButton
+                ? 'animate-bounce border-rose-300 bg-rose-100 text-rose-700 hover:border-rose-400'
+                : 'border-slate-300 bg-white text-slate-700 hover:border-slate-400'
+            }`}
           >
             Members
           </button>
           {isMembersMenuOpen && (
             <div className="absolute bottom-full left-0 z-30 mb-2 min-w-[150px] rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
               {memberMenuOptions.length ? (
-                memberMenuOptions.map((option) => (
-                  <button
-                    key={option}
-                    type="button"
-                    onClick={() => {
-                      setSelectedMemberRole(roleLabelToKey[option] || null)
-                      setIsMembersMenuOpen(false)
-                    }}
-                    className="block w-full rounded-lg px-3 py-2 text-left text-xs font-medium text-slate-700 hover:bg-slate-50"
-                  >
-                    {option}
-                  </button>
-                ))
+                memberMenuOptions.map((option) => {
+                  const roleKey = roleLabelToKey[option] || null
+                  const shouldPulseRole = roleKey ? pendingMemberRoles.has(roleKey) : false
+
+                  return (
+                    <button
+                      key={option}
+                      type="button"
+                      onClick={() => {
+                        setSelectedMemberRole(roleKey)
+                        setIsMembersMenuOpen(false)
+                      }}
+                      className={`block w-full rounded-lg px-3 py-2 text-left text-xs font-medium transition ${
+                        shouldPulseRole
+                          ? 'animate-bounce border border-rose-200 bg-rose-100 text-rose-700 hover:bg-rose-200'
+                          : 'text-slate-700 hover:bg-slate-50'
+                      }`}
+                    >
+                      {option}
+                    </button>
+                  )
+                })
               ) : (
                 <p className="px-3 py-2 text-xs text-slate-500">No members available</p>
               )}
@@ -358,20 +437,37 @@ export default function ERPTaskCard({
       </div>
 
       {selectedMemberRole ? (
-        <div className="space-y-2 rounded-lg border border-slate-200 bg-white p-3 text-xs">
+        <div
+          className={`space-y-2 rounded-lg border bg-white p-3 text-xs ${
+            pendingMemberRoles.has(selectedMemberRole)
+              ? 'border-rose-300 bg-rose-50/70'
+              : 'border-slate-200'
+          }`}
+        >
           <div className="flex flex-wrap items-center justify-between gap-2">
             <p className="font-semibold text-slate-800">
               Assign {roleKeyToLabel[selectedMemberRole] || 'Members'}
             </p>
             <div className="flex items-center gap-2">
               {isProvider ? (
-                <button
-                  type="button"
-                  onClick={() => onPublishMemberPost?.(erp, selectedMemberRole)}
-                  className="rounded-full border border-brand-200 px-2 py-1 text-[11px] font-semibold text-brand-700"
-                >
-                  Generate Self-Assign Post
-                </button>
+                <>
+                  <button
+                    type="button"
+                    onClick={() => onPublishMemberPost?.(erp, selectedMemberRole, selectedSelfAssignMessage)}
+                    className="rounded-full border border-brand-200 px-2 py-1 text-[11px] font-semibold text-brand-700"
+                  >
+                    Generate Self-Assign Post
+                  </button>
+                  {selfAssignEnabled ? (
+                    <button
+                      type="button"
+                      onClick={() => onCloseMemberPost?.(erp, selectedMemberRole)}
+                      className="rounded-full border border-rose-200 px-2 py-1 text-[11px] font-semibold text-rose-700"
+                    >
+                      Remove Self-Assign Post
+                    </button>
+                  ) : null}
+                </>
               ) : null}
               <button
                 type="button"
@@ -392,16 +488,41 @@ export default function ERPTaskCard({
             Self-assign status: {selfAssignEnabled ? 'Open' : 'Closed'}
           </p>
 
+          {isProvider ? (
+            <div className="space-y-1">
+              <label className="text-[11px] font-semibold text-slate-600">
+                Self-assign message
+              </label>
+              <textarea
+                value={selectedSelfAssignMessage}
+                onChange={(event) =>
+                  setSelfAssignMessageByRole((prev) => ({
+                    ...prev,
+                    [selectedMemberRole]: event.target.value,
+                  }))
+                }
+                rows={2}
+                placeholder="Write a short manual message for connection members"
+                className="w-full rounded-md border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700 outline-none focus:border-brand-300"
+              />
+            </div>
+          ) : null}
+
           <div className="max-h-40 space-y-1 overflow-y-auto rounded-md border border-slate-100 bg-slate-50 p-2">
             {visibleMembers.length ? (
               visibleMembers.map((user) => {
                 const checked = selectedAssigneeIds.includes(Number(user.id))
+                const isCurrentUser = Number(user.id) === Number(currentUserId)
                 return (
                   <label
                     key={`erp-member-${selectedMemberRole}-${user.id}`}
                     className={`flex items-center justify-between gap-2 rounded-md px-2 py-1 ${isProvider ? 'cursor-pointer hover:bg-white' : ''}`}
                   >
-                    <span className="truncate text-slate-700">{user.name || user.username || `User #${user.id}`}</span>
+                    <span className="truncate text-slate-700">
+                      {isCurrentUser
+                        ? 'Assign myself'
+                        : user.name || user.username || `User #${user.id}`}
+                    </span>
                     {isProvider ? (
                       <input
                         type="checkbox"
@@ -602,6 +723,53 @@ export default function ERPTaskCard({
               <span className="font-semibold text-slate-700">Note for Delivary Man:</span>{' '}
               {supplierNote || '-'}
             </p>
+          </div>
+
+          <div className="rounded-xl border border-slate-200 bg-white p-3">
+            <h4 className="text-sm font-semibold text-slate-800">Associated Members</h4>
+            {hasAssociatedMembers ? (
+              <div className="mt-3 space-y-3">
+                {associatedMembersByRole.map(({ roleKey, roleLabel, members }) => (
+                  <div key={`erp-associated-${erp.id}-${roleKey}`} className="space-y-2">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{roleLabel}</p>
+                    {members.length ? (
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        {members.map((member) => (
+                          <button
+                            key={`erp-associated-user-${roleKey}-${member.id}`}
+                            type="button"
+                            onClick={() => onOpenOwner?.(Number(member.id))}
+                            className="rounded-lg border border-slate-200 bg-slate-50 p-2 text-left transition hover:border-brand-300 hover:bg-brand-50/50"
+                          >
+                            <div className="flex items-center gap-2">
+                              <img
+                                src={toMediaUrl(member.profile_photo) || defaultAvatar}
+                                alt={member.name || member.username || `User #${member.id}`}
+                                className="h-8 w-8 rounded-full border border-slate-200 object-cover"
+                              />
+                              <div className="min-w-0">
+                                <p className="truncate text-xs font-semibold text-slate-800">
+                                  {member.name || member.username || `User #${member.id}`}
+                                </p>
+                                <p className="truncate text-[11px] text-slate-500">{member.location || 'Unknown location'}</p>
+                              </div>
+                            </div>
+                            <div className="mt-2 space-y-0.5 text-[11px] text-slate-600">
+                              <p><span className="font-semibold text-slate-700">Phone:</span> {member.phone || '-'}</p>
+                              <p className="truncate"><span className="font-semibold text-slate-700">Email:</span> {member.email || '-'}</p>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-slate-500">No assigned members.</p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="mt-2 text-xs text-slate-500">No associated members assigned yet.</p>
+            )}
           </div>
 
           {[{

@@ -200,10 +200,48 @@ export default function Header() {
     return title.includes("connection request")
   }
 
+  const getNotificationTarget = (item) => {
+    const title = String(item?.title || "").toLowerCase()
+    const message = String(item?.message || "")
+    const messageLower = message.toLowerCase()
+
+    // Prefer an explicit in-message link when available.
+    const postLinkMatch = message.match(/post\s+link:\s*([^\s]+)/i)
+    if (postLinkMatch && postLinkMatch[1]) {
+      return postLinkMatch[1].trim()
+    }
+
+    if (title.includes("connection request") || messageLower.includes("connection request")) {
+      return "/connections"
+    }
+
+    const erpIdMatch = message.match(/erp\s*#\s*(\d+)/i)
+    if (erpIdMatch && erpIdMatch[1]) {
+      return `/erp?erp_id=${erpIdMatch[1]}`
+    }
+
+    if (title.includes("erp") || messageLower.includes("erp")) {
+      return "/erp"
+    }
+
+    if (title.includes("cart") || messageLower.includes("cart")) {
+      return "/cart"
+    }
+
+    return "/dashboard"
+  }
+
   const handleNotificationClick = (item) => {
-    if (!isConnectionRequestNotification(item)) return
+    const target = getNotificationTarget(item)
+    if (!target) return
+
+    if (String(target).startsWith("http://") || String(target).startsWith("https://")) {
+      window.open(target, "_blank", "noopener,noreferrer")
+      return
+    }
+
     setOpenDropdown(null)
-    navigate("/connections")
+    navigate(target)
   }
 
   const resolveMediaUrl = (value) => {
@@ -308,11 +346,10 @@ export default function Header() {
                       {notifications.slice(0, 10).map((item) => (
                         <div
                           key={item.id}
-                          role={isConnectionRequestNotification(item) ? "button" : undefined}
-                          tabIndex={isConnectionRequestNotification(item) ? 0 : undefined}
+                          role="button"
+                          tabIndex={0}
                           onClick={() => handleNotificationClick(item)}
                           onKeyDown={(event) => {
-                            if (!isConnectionRequestNotification(item)) return
                             if (event.key === "Enter" || event.key === " ") {
                               event.preventDefault()
                               handleNotificationClick(item)
@@ -322,11 +359,7 @@ export default function Header() {
                             item?.is_read
                               ? "border-slate-200 bg-slate-50 text-slate-600"
                               : "border-violet-200 bg-violet-50 text-slate-700"
-                          } ${
-                            isConnectionRequestNotification(item)
-                              ? "cursor-pointer transition hover:border-violet-300 hover:bg-violet-100"
-                              : ""
-                          }`}
+                          } cursor-pointer transition hover:border-violet-300 hover:bg-violet-100`}
                         >
                           <div className="flex items-start justify-between gap-2">
                             <p className="font-semibold text-slate-800">{item.title || "Notification"}</p>

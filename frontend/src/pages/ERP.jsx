@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import api from '../api/client'
 import ERPAnalyticsGrid from '../components/erp/ERPAnalyticsGrid'
 import ERPFiltersBar from '../components/erp/ERPFiltersBar'
@@ -9,6 +9,7 @@ import ERPTopRatedServices from '../components/erp/ERPTopRatedServices'
 
 export default function ERP() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const [erpItems, setErpItems] = useState([])
   const [currentUserId, setCurrentUserId] = useState(null)
   const [posts, setPosts] = useState([])
@@ -211,6 +212,9 @@ export default function ERP() {
   }, [erpItems, filters, postMap, averageRatingByPost])
 
   const uniqueFilteredTasks = useMemo(() => {
+    const focusErpIdRaw = searchParams.get('erp_id')
+    const focusErpId = Number(focusErpIdRaw)
+
     const byKey = new Map()
 
     filteredTasks.forEach((erp) => {
@@ -222,8 +226,13 @@ export default function ERP() {
       }
     })
 
-    return Array.from(byKey.values())
-  }, [filteredTasks])
+    const deduped = Array.from(byKey.values())
+    if (!Number.isFinite(focusErpId) || focusErpId <= 0) {
+      return deduped
+    }
+
+    return deduped.filter((erp) => Number(erp.id) === focusErpId)
+  }, [filteredTasks, searchParams])
 
   const notify = async (title, messageText) => {
     try {
@@ -310,12 +319,14 @@ export default function ERP() {
       pendingTasks.push({
         label: 'Post linked to ERP task',
         done: hasLinkedPost,
+        key: 'post_link',
       })
 
       if (hasExpertiseCategory) {
         pendingTasks.push({
-          label: `Assign Expertise qty in Members → Expertise${requiredExpertiseQty > 0 ? ` (required: ${requiredExpertiseQty})` : ''}`,
+          label: `Assign Expertise in Members → Expertise${requiredExpertiseQty > 0 ? ` (required: ${requiredExpertiseQty})` : ''}`,
           done: requiredExpertiseQty > 0 ? assignedExpertiseQty >= requiredExpertiseQty : hasWorkers,
+          key: 'member_expertise',
         })
       }
 
@@ -323,13 +334,15 @@ export default function ERP() {
         pendingTasks.push({
           label: 'Assign Skill provider in Members → Skill provider (at least one)',
           done: hasAssignedSkillProvider,
+          key: 'member_skill_provider',
         })
       }
 
       if (hasProductCategory) {
         pendingTasks.push({
-          label: 'Assign Supplier in Members → Supplier (at least one)',
+          label: 'Assign Delivary Man in Members → Delivary man (at least one)',
           done: hasAssignedSupplier,
+          key: 'member_supplier',
         })
 
         pendingTasks.push({
@@ -398,7 +411,7 @@ export default function ERP() {
     }
   }
 
-  const handlePublishMemberPost = async (erp, role) => {
+  const handlePublishMemberPost = async (erp, role, messageText = '') => {
     const isProvider = currentUserId && String(erp.provider) === String(currentUserId)
     if (!isProvider) {
       setMessage('Only provider can publish self-assign post.')
@@ -406,12 +419,34 @@ export default function ERP() {
     }
 
     try {
-      const { data } = await api.post(`/erp/${erp.id}/publish_member_post/`, { role })
+      const { data } = await api.post(`/erp/${erp.id}/publish_member_post/`, {
+        role,
+        message: String(messageText || '').trim(),
+      })
       setErpItems((prev) => prev.map((item) => (item.id === data.id ? data : item)))
       setMessage(`Self-assign post published for ${role.replace('_', ' ')}.`)
     } catch (error) {
       console.error(error)
       setMessage('Failed to publish self-assign post.')
+    }
+  }
+
+  const handleCloseMemberPost = async (erp, role) => {
+    const isProvider = currentUserId && String(erp.provider) === String(currentUserId)
+    if (!isProvider) {
+      setMessage('Only provider can remove self-assign post.')
+      return
+    }
+
+    try {
+      const { data } = await api.post(`/erp/${erp.id}/close_member_post/`, {
+        role,
+      })
+      setErpItems((prev) => prev.map((item) => (item.id === data.id ? data : item)))
+      setMessage(`Self-assign post removed for ${role.replace('_', ' ')}.`)
+    } catch (error) {
+      console.error(error)
+      setMessage('Failed to remove self-assign post.')
     }
   }
 
@@ -521,6 +556,7 @@ export default function ERP() {
               assignableUsersByRole={assignableUsersByRole}
               onUpdateMemberAssignment={handleUpdateMemberAssignment}
               onPublishMemberPost={handlePublishMemberPost}
+              onCloseMemberPost={handleCloseMemberPost}
               onOpenOwner={(ownerId) => navigate(`/dashboard/${ownerId}`)}
               toMediaUrl={toMediaUrl}
             />
