@@ -1137,3 +1137,53 @@ class ConnectionViewSet(viewsets.GenericViewSet):
             )
 
         return Response(ConnectionSerializer(connection).data)
+
+    @action(detail=False, methods=["post"])
+    def remove(self, request):
+        target_user_id = request.data.get("target_user_id")
+
+        try:
+            target_user_id = int(target_user_id)
+        except (TypeError, ValueError):
+            return Response(
+                {"detail": "Valid target_user_id is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if target_user_id == request.user.id:
+            return Response(
+                {"detail": "You cannot remove yourself."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        accepted_connections = Connection.objects.filter(
+            Q(requester_id=request.user.id, addressee_id=target_user_id)
+            | Q(requester_id=target_user_id, addressee_id=request.user.id),
+            status=ConnectionStatus.ACCEPTED,
+        )
+
+        if not accepted_connections.exists():
+            return Response(
+                {"detail": "No accepted connection found for this user."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        removed_count = accepted_connections.count()
+        accepted_connections.delete()
+
+        target_user = User.objects.filter(id=target_user_id).first()
+        actor_name = request.user.name or request.user.username or request.user.email
+        if target_user:
+            Notification.objects.create(
+                user=target_user,
+                title="Connection Removed",
+                message=f"{actor_name} removed your connection.",
+            )
+
+        return Response(
+            {
+                "detail": "Connection removed successfully.",
+                "removed_count": removed_count,
+                "target_user_id": target_user_id,
+            }
+        )
