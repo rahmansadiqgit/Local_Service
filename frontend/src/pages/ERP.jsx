@@ -310,12 +310,14 @@ export default function ERP() {
       pendingTasks.push({
         label: 'Post linked to ERP task',
         done: hasLinkedPost,
+        key: 'post_link',
       })
 
       if (hasExpertiseCategory) {
         pendingTasks.push({
-          label: `Assign Expertise qty in Members → Expertise${requiredExpertiseQty > 0 ? ` (required: ${requiredExpertiseQty})` : ''}`,
+          label: `Assign Expertise in Members → Expertise${requiredExpertiseQty > 0 ? ` (required: ${requiredExpertiseQty})` : ''}`,
           done: requiredExpertiseQty > 0 ? assignedExpertiseQty >= requiredExpertiseQty : hasWorkers,
+          key: 'member_expertise',
         })
       }
 
@@ -323,13 +325,15 @@ export default function ERP() {
         pendingTasks.push({
           label: 'Assign Skill provider in Members → Skill provider (at least one)',
           done: hasAssignedSkillProvider,
+          key: 'member_skill_provider',
         })
       }
 
       if (hasProductCategory) {
         pendingTasks.push({
-          label: 'Assign Supplier in Members → Supplier (at least one)',
+          label: 'Assign Delivary Man in Members → Delivary man (at least one)',
           done: hasAssignedSupplier,
+          key: 'member_supplier',
         })
 
         pendingTasks.push({

@@ -135,8 +135,28 @@ export default function ERPTaskCard({
   const completedStageTasks = (phaseTasks.Completed || []).filter((task) => task.done)
   const completedTasks = [...donePendingTasks, ...completedStageTasks]
 
-  const renderTaskRow = (task, listType) => (
-    <li key={`${erp.id}-${listType}-${task.key || task.label}`} className="flex items-center gap-1">
+  const openPendingTaskKeys = new Set(openPendingTasks.map((task) => String(task.key || '').trim()))
+  const pendingMemberRoleByTaskKey = {
+    member_expertise: 'expertise',
+    member_skill_provider: 'skill_provider',
+    member_supplier: 'supplier',
+  }
+  const pendingMemberRoles = new Set(
+    openPendingTasks
+      .map((task) => pendingMemberRoleByTaskKey[String(task.key || '').trim()])
+      .filter(Boolean),
+  )
+  const shouldPulseMembersButton = pendingMemberRoles.size > 0
+
+  const renderTaskRow = (task, listType) => {
+    const isOpenPending = listType === 'pending' && !task.done
+    return (
+      <li
+        key={`${erp.id}-${listType}-${task.key || task.label}`}
+        className={`flex items-center gap-1 rounded-md px-2 py-1 ${
+          isOpenPending ? 'animate-bounce border border-rose-200 bg-rose-100/80 text-rose-800' : ''
+        }`}
+      >
       {task.toggleable && task.key === 'ready_product' ? (
         <button
           type="button"
@@ -147,15 +167,16 @@ export default function ERPTaskCard({
           className={`h-4 w-4 rounded-full border transition ${
             task.done
               ? 'border-emerald-600 bg-emerald-500'
-              : 'border-slate-400 bg-white hover:border-brand-400'
+              : 'animate-bounce border-rose-400 bg-rose-200 hover:border-rose-500'
           }`}
         />
       ) : (
-        <span className={task.done ? 'text-emerald-600' : 'text-amber-600'}>{task.done ? '✓' : '•'}</span>
+        <span className={task.done ? 'text-emerald-600' : 'text-rose-600'}>{task.done ? '✓' : '•'}</span>
       )}
       <span>{task.label}</span>
-    </li>
-  )
+      </li>
+    )
+  }
 
   const loadMessages = useCallback(async () => {
     if (erp.stage !== 'On Process') return
@@ -306,7 +327,11 @@ export default function ERPTaskCard({
           <button
             type="button"
             onClick={() => onToggleTrack(erp.id)}
-            className="rounded-full border border-violet-300 bg-violet-50 px-4 py-2 text-sm font-semibold text-violet-700 transition hover:bg-violet-100"
+            className={`rounded-full border px-4 py-2 text-sm font-semibold transition ${
+              openPendingTasks.length > 0
+                ? 'animate-bounce border-rose-300 bg-rose-100 text-rose-700 hover:bg-rose-200'
+                : 'border-violet-300 bg-violet-50 text-violet-700 hover:bg-violet-100'
+            }`}
           >
             Tasks
           </button>
@@ -322,26 +347,39 @@ export default function ERPTaskCard({
           <button
             type="button"
             onClick={() => setIsMembersMenuOpen((prev) => !prev)}
-            className="rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-400"
+            className={`rounded-full border px-4 py-2 text-sm font-semibold transition ${
+              shouldPulseMembersButton
+                ? 'animate-bounce border-rose-300 bg-rose-100 text-rose-700 hover:border-rose-400'
+                : 'border-slate-300 bg-white text-slate-700 hover:border-slate-400'
+            }`}
           >
             Members
           </button>
           {isMembersMenuOpen && (
             <div className="absolute bottom-full left-0 z-30 mb-2 min-w-[150px] rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
               {memberMenuOptions.length ? (
-                memberMenuOptions.map((option) => (
-                  <button
-                    key={option}
-                    type="button"
-                    onClick={() => {
-                      setSelectedMemberRole(roleLabelToKey[option] || null)
-                      setIsMembersMenuOpen(false)
-                    }}
-                    className="block w-full rounded-lg px-3 py-2 text-left text-xs font-medium text-slate-700 hover:bg-slate-50"
-                  >
-                    {option}
-                  </button>
-                ))
+                memberMenuOptions.map((option) => {
+                  const roleKey = roleLabelToKey[option] || null
+                  const shouldPulseRole = roleKey ? pendingMemberRoles.has(roleKey) : false
+
+                  return (
+                    <button
+                      key={option}
+                      type="button"
+                      onClick={() => {
+                        setSelectedMemberRole(roleKey)
+                        setIsMembersMenuOpen(false)
+                      }}
+                      className={`block w-full rounded-lg px-3 py-2 text-left text-xs font-medium transition ${
+                        shouldPulseRole
+                          ? 'animate-bounce border border-rose-200 bg-rose-100 text-rose-700 hover:bg-rose-200'
+                          : 'text-slate-700 hover:bg-slate-50'
+                      }`}
+                    >
+                      {option}
+                    </button>
+                  )
+                })
               ) : (
                 <p className="px-3 py-2 text-xs text-slate-500">No members available</p>
               )}
@@ -358,7 +396,13 @@ export default function ERPTaskCard({
       </div>
 
       {selectedMemberRole ? (
-        <div className="space-y-2 rounded-lg border border-slate-200 bg-white p-3 text-xs">
+        <div
+          className={`space-y-2 rounded-lg border bg-white p-3 text-xs ${
+            pendingMemberRoles.has(selectedMemberRole)
+              ? 'animate-bounce border-rose-300 bg-rose-50/70'
+              : 'border-slate-200'
+          }`}
+        >
           <div className="flex flex-wrap items-center justify-between gap-2">
             <p className="font-semibold text-slate-800">
               Assign {roleKeyToLabel[selectedMemberRole] || 'Members'}
