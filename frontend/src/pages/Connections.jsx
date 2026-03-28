@@ -118,6 +118,10 @@ export default function Connections() {
 
   const openSelfAssignPosts = useMemo(() => {
     return (erpItems || []).flatMap((erp) => {
+      if (String(erp?.stage || '').trim().toLowerCase() === 'on process') {
+        return []
+      }
+
       const snapshot = erp.configuration_snapshot || {}
       const members = snapshot.members || {}
 
