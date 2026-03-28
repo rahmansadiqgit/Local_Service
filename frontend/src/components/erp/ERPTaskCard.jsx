@@ -86,9 +86,6 @@ export default function ERPTaskCard({
     selectedMemberRole && Object.prototype.hasOwnProperty.call(selfAssignMessageByRole, selectedMemberRole)
       ? selfAssignMessageByRole[selectedMemberRole]
       : String(selectedRoleState.self_assign_message || '')
-  const selectedSelfAssignPostLink = String(selectedRoleState.self_assign_post_link || '').trim()
-  const selectedSelfAssignPostTitle =
-    String(selectedRoleState.self_assign_post_title || snapshotPost?.title || post?.post_title || '').trim()
 
   const viewerRole =
     currentUserId && String(erp.provider) === String(currentUserId)
@@ -482,18 +479,6 @@ export default function ERPTaskCard({
                 className="w-full rounded-md border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700 outline-none focus:border-brand-300"
               />
             </div>
-          ) : null}
-
-          {selectedSelfAssignPostLink ? (
-            <p className="text-[11px] text-slate-500">
-              Post link:{' '}
-              <a
-                href={selectedSelfAssignPostLink}
-                className="font-semibold text-brand-700 hover:underline"
-              >
-                {selectedSelfAssignPostTitle || 'Open post'}
-              </a>
-            </p>
           ) : null}
 
           <div className="max-h-40 space-y-1 overflow-y-auto rounded-md border border-slate-100 bg-slate-50 p-2">

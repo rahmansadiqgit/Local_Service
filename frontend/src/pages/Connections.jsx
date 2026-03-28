@@ -517,9 +517,9 @@ export default function Connections() {
                       </div>
 
                       <p className="mt-1 text-xs text-slate-500">Requested by: {providerName}</p>
-                      {selfAssignMessage ? (
-                        <p className="mt-1 text-xs text-slate-600">Message: {selfAssignMessage}</p>
-                      ) : null}
+                      <p className="mt-1 text-xs text-slate-600">
+                        Message: {selfAssignMessage || 'No message from provider.'}
+                      </p>
 
                       <p className="mt-1 text-xs text-slate-500">
                         ERPTaskCard link:{' '}
