@@ -55,11 +55,13 @@ export default function HomeFeed() {
   const { addToCart, isInCart } = useCart()
 
   const [posts, setPosts] = useState([])
+  const [allUsers, setAllUsers] = useState([])
   const [skills, setSkills] = useState([])
   const [expertises, setExpertises] = useState([])
   const [products, setProducts] = useState([])
   const [ratings, setRatings] = useState([])
   const [loading, setLoading] = useState(true)
+  const [peopleSearch, setPeopleSearch] = useState('')
 
   const [filters, setFilters] = useState({
     search: '',
@@ -150,6 +152,15 @@ export default function HomeFeed() {
         setProducts(detailResponses[2].status === 'fulfilled' ? detailResponses[2].value.data : [])
         setRatings(detailResponses[3].status === 'fulfilled' ? detailResponses[3].value.data : [])
 
+        if (isAuthenticated) {
+          const usersRes = await api.get('/users/')
+          if (active) {
+            setAllUsers(Array.isArray(usersRes.data) ? usersRes.data : [])
+          }
+        } else {
+          setAllUsers([])
+        }
+
       } catch (error) {
         console.error(error)
       } finally {
@@ -172,6 +183,24 @@ export default function HomeFeed() {
     }
 
   }, [isAuthenticated])
+
+  const searchedUsers = useMemo(() => {
+    const query = String(peopleSearch || '').trim().toLowerCase()
+    if (!query) return []
+
+    return (allUsers || [])
+      .filter((item) => {
+        const name = `${item?.name || ''} ${item?.username || ''}`.toLowerCase()
+        const educationSkills = String(item?.education_skills || '').toLowerCase()
+        return name.includes(query) || educationSkills.includes(query)
+      })
+      .sort((a, b) => {
+        const aName = String(a?.name || a?.username || '').toLowerCase()
+        const bName = String(b?.name || b?.username || '').toLowerCase()
+        return aName.localeCompare(bName)
+      })
+      .slice(0, 8)
+  }, [allUsers, peopleSearch])
 
   const skillsByPost = useMemo(() => {
     return skills.reduce((acc, skill) => {
@@ -509,6 +538,70 @@ export default function HomeFeed() {
               </p>
             </div>
           </div>
+        </div>
+      </section>
+
+      <section className="relative overflow-hidden rounded-3xl border border-brand-200/60 bg-gradient-to-r from-white via-brand-50/70 to-cyan-50/60 p-4 shadow-[0_12px_26px_rgba(14,165,233,0.12)] sm:p-5">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.55),transparent_58%)]" />
+        <div className="relative space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-xl font-extrabold text-slate-900">Find People & Skills</h2>
+            <p className="text-xs text-slate-500">Search members by name or Education & Skills</p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              type="text"
+              value={peopleSearch}
+              onChange={(event) => setPeopleSearch(event.target.value)}
+              placeholder="Find someone or find skills"
+              className="h-11 min-w-[240px] flex-1 rounded-xl border border-brand-200/70 bg-white px-3 text-sm text-slate-800 shadow-sm placeholder:text-slate-400 focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand-200"
+            />
+            <button
+              type="button"
+              onClick={() => setPeopleSearch((prev) => String(prev || '').trim())}
+              className="inline-flex h-11 items-center justify-center rounded-xl bg-brand-600 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-700"
+            >
+              Search
+            </button>
+          </div>
+
+          {!isAuthenticated ? (
+            <p className="text-sm text-slate-600">
+              Login to search all users, including members who have not posted yet.
+            </p>
+          ) : String(peopleSearch || '').trim() ? (
+            searchedUsers.length ? (
+              <div className="grid gap-2 md:grid-cols-2">
+                {searchedUsers.map((person) => (
+                  <div
+                    key={`user-search-${person.id}`}
+                    className="flex items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-slate-800">
+                        {person.name || person.username || `User #${person.id}`}
+                      </p>
+                      <p className="truncate text-xs text-slate-500">
+                        {person.education_skills || 'No education/skills added yet'}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => navigate(`/dashboard/${person.id}`)}
+                      className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-700 transition hover:border-brand-300 hover:text-brand-700"
+                    >
+                      View
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-slate-600">No matching user found.</p>
+            )
+          ) : (
+            <p className="text-sm text-slate-600">Type a name like "Prithibi" or a skill like "Electrician".</p>
+          )}
         </div>
       </section>
 
