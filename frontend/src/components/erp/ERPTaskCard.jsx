@@ -25,6 +25,7 @@ export default function ERPTaskCard({
   onOpenOwner,
   toMediaUrl,
 }) {
+  const [isActionsMenuOpen, setIsActionsMenuOpen] = useState(false)
   const [isMembersMenuOpen, setIsMembersMenuOpen] = useState(false)
   const [selectedMemberRole, setSelectedMemberRole] = useState(null)
   const [messages, setMessages] = useState([])
@@ -179,6 +180,23 @@ export default function ERPTaskCard({
       .filter(Boolean),
   )
   const shouldPulseMembersButton = pendingMemberRoles.size > 0
+  const shouldPulseActionsButton = openPendingTasks.length > 0 || shouldPulseMembersButton
+
+  useEffect(() => {
+    const handleOutsideClick = (event) => {
+      const target = event.target
+      if (!(target instanceof Element)) return
+      if (!target.closest('[data-erp-actions-root]')) {
+        setIsActionsMenuOpen(false)
+        setIsMembersMenuOpen(false)
+      }
+    }
+
+    document.addEventListener('mousedown', handleOutsideClick)
+    return () => {
+      document.removeEventListener('mousedown', handleOutsideClick)
+    }
+  }, [])
 
   const renderTaskRow = (task, listType) => {
     const isOpenPending = listType === 'pending' && !task.done
@@ -348,92 +366,134 @@ export default function ERPTaskCard({
         </div>
       </div>
 
-      <div className="relative flex flex-wrap gap-2.5">
+      <div className="relative flex justify-end" data-erp-actions-root>
         <button
           type="button"
-          onClick={() => onSetPending(erp)}
-          disabled={!isProvider}
-          title={!isProvider ? 'Only provider can manage Pending actions' : ''}
-          className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
-            erp.stage === 'Pending'
-              ? 'bg-brand-600 text-white shadow-sm hover:bg-brand-700'
-              : !isProvider
-                ? 'cursor-not-allowed border border-slate-200 bg-slate-100 text-slate-400'
-                : 'border border-slate-300 bg-white text-slate-700 hover:border-brand-300 hover:text-brand-700'
+          onClick={() => {
+            setIsActionsMenuOpen((prev) => !prev)
+            if (isActionsMenuOpen) {
+              setIsMembersMenuOpen(false)
+            }
+          }}
+          className={`rounded-full border px-4 py-2 text-sm font-semibold transition ${
+            shouldPulseActionsButton
+              ? 'animate-bounce border-rose-300 bg-rose-100 text-rose-700 hover:border-rose-400 hover:bg-rose-200'
+              : 'border-slate-300 bg-white text-slate-700 hover:border-slate-400'
           }`}
         >
-          Pending
+          Menu
         </button>
-        {isProvider ? (
-          <button
-            type="button"
-            onClick={() => onToggleTrack(erp.id)}
-            className={`rounded-full border px-4 py-2 text-sm font-semibold transition ${
-              openPendingTasks.length > 0
-                ? 'animate-bounce border-rose-300 bg-rose-100 text-rose-700 hover:bg-rose-200'
-                : 'border-violet-300 bg-violet-50 text-violet-700 hover:bg-violet-100'
-            }`}
-          >
-            Tasks
-          </button>
-        ) : null}
-        <button
-          type="button"
-          onClick={() => onGeneratePdf(erp)}
-          className="rounded-full border border-slate-700 bg-white px-4 py-2 text-sm font-bold text-slate-800 transition hover:bg-slate-50"
-        >
-          Generate PDF
-        </button>
-        <div className="relative">
-          <button
-            type="button"
-            onClick={() => setIsMembersMenuOpen((prev) => !prev)}
-            className={`rounded-full border px-4 py-2 text-sm font-semibold transition ${
-              shouldPulseMembersButton
-                ? 'animate-bounce border-rose-300 bg-rose-100 text-rose-700 hover:border-rose-400'
-                : 'border-slate-300 bg-white text-slate-700 hover:border-slate-400'
-            }`}
-          >
-            Members
-          </button>
-          {isMembersMenuOpen && (
-            <div className="absolute bottom-full left-0 z-30 mb-2 min-w-[150px] rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
-              {memberMenuOptions.length ? (
-                memberMenuOptions.map((option) => {
-                  const roleKey = roleLabelToKey[option] || null
-                  const shouldPulseRole = roleKey ? pendingMemberRoles.has(roleKey) : false
 
-                  return (
-                    <button
-                      key={option}
-                      type="button"
-                      onClick={() => {
-                        setSelectedMemberRole(roleKey)
-                        setIsMembersMenuOpen(false)
-                      }}
-                      className={`block w-full rounded-lg px-3 py-2 text-left text-xs font-medium transition ${
-                        shouldPulseRole
-                          ? 'animate-bounce border border-rose-200 bg-rose-100 text-rose-700 hover:bg-rose-200'
-                          : 'text-slate-700 hover:bg-slate-50'
-                      }`}
-                    >
-                      {option}
-                    </button>
-                  )
-                })
-              ) : (
-                <p className="px-3 py-2 text-xs text-slate-500">No members available</p>
+        {isActionsMenuOpen ? (
+          <div className="absolute bottom-full right-0 z-30 mb-2 w-56 space-y-2 rounded-xl border border-slate-200 bg-white p-2 shadow-sm">
+            <button
+              type="button"
+              onClick={() => {
+                onSetPending(erp)
+                setIsActionsMenuOpen(false)
+                setIsMembersMenuOpen(false)
+              }}
+              disabled={!isProvider}
+              title={!isProvider ? 'Only provider can manage Pending actions' : ''}
+              className={`w-full rounded-full px-4 py-2 text-sm font-semibold transition ${
+                erp.stage === 'Pending'
+                  ? 'bg-brand-600 text-white shadow-sm hover:bg-brand-700'
+                  : !isProvider
+                    ? 'cursor-not-allowed border border-slate-200 bg-slate-100 text-slate-400'
+                    : 'border border-slate-300 bg-white text-slate-700 hover:border-brand-300 hover:text-brand-700'
+              }`}
+            >
+              Pending
+            </button>
+
+            {isProvider ? (
+              <button
+                type="button"
+                onClick={() => {
+                  onToggleTrack(erp.id)
+                  setIsActionsMenuOpen(false)
+                  setIsMembersMenuOpen(false)
+                }}
+                className={`w-full rounded-full border px-4 py-2 text-sm font-semibold transition ${
+                  openPendingTasks.length > 0
+                    ? 'animate-bounce border-rose-300 bg-rose-100 text-rose-700 hover:bg-rose-200'
+                    : 'border-violet-300 bg-violet-50 text-violet-700 hover:bg-violet-100'
+                }`}
+              >
+                Tasks
+              </button>
+            ) : null}
+
+            <button
+              type="button"
+              onClick={() => {
+                onGeneratePdf(erp)
+                setIsActionsMenuOpen(false)
+                setIsMembersMenuOpen(false)
+              }}
+              className="w-full rounded-full border border-slate-700 bg-white px-4 py-2 text-sm font-bold text-slate-800 transition hover:bg-slate-50"
+            >
+              Generate PDF
+            </button>
+
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setIsMembersMenuOpen((prev) => !prev)}
+                className={`w-full rounded-full border px-4 py-2 text-sm font-semibold transition ${
+                  shouldPulseMembersButton
+                    ? 'animate-bounce border-rose-300 bg-rose-100 text-rose-700 hover:border-rose-400'
+                    : 'border-slate-300 bg-white text-slate-700 hover:border-slate-400'
+                }`}
+              >
+                Members
+              </button>
+              {isMembersMenuOpen && (
+                <div className="absolute right-full top-0 z-40 mr-2 min-w-[150px] rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
+                  {memberMenuOptions.length ? (
+                    memberMenuOptions.map((option) => {
+                      const roleKey = roleLabelToKey[option] || null
+                      const shouldPulseRole = roleKey ? pendingMemberRoles.has(roleKey) : false
+
+                      return (
+                        <button
+                          key={option}
+                          type="button"
+                          onClick={() => {
+                            setSelectedMemberRole(roleKey)
+                            setIsMembersMenuOpen(false)
+                            setIsActionsMenuOpen(false)
+                          }}
+                          className={`block w-full rounded-lg px-3 py-2 text-left text-xs font-medium transition ${
+                            shouldPulseRole
+                              ? 'animate-bounce border border-rose-200 bg-rose-100 text-rose-700 hover:bg-rose-200'
+                              : 'text-slate-700 hover:bg-slate-50'
+                          }`}
+                        >
+                          {option}
+                        </button>
+                      )
+                    })
+                  ) : (
+                    <p className="px-3 py-2 text-xs text-slate-500">No members available</p>
+                  )}
+                </div>
               )}
             </div>
-          )}
-        </div>
-        <button
-          type="button"
-          onClick={() => onToggleDetails(erp.id)}
-          className="rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-400"
-        >
-          {expandedId === erp.id ? 'Hide Details' : 'View Details'}
-        </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                onToggleDetails(erp.id)
+                setIsActionsMenuOpen(false)
+                setIsMembersMenuOpen(false)
+              }}
+              className="w-full rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-400"
+            >
+              {expandedId === erp.id ? 'Hide Details' : 'View Details'}
+            </button>
+          </div>
+        ) : null}
       </div>
 
       {selectedMemberRole ? (
