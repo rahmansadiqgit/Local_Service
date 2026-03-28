@@ -947,6 +947,23 @@ class ConnectionViewSet(viewsets.GenericViewSet):
         users = User.objects.filter(id__in=list(user_ids)).order_by("name", "username", "id")
         return UserSerializer(users, many=True).data
 
+    def _default_member_role_ids(self, accepted_ids):
+        # Keep a dedicated role map so role-specific connection logic can be extended later.
+        base_ids = set(accepted_ids or set())
+        return {
+            "expertise": set(base_ids),
+            "skill_provider": set(base_ids),
+            "supplier": set(base_ids),
+        }
+
+    def _serialize_member_role_map(self, role_ids_map):
+        role_ids_map = role_ids_map or {}
+        return {
+            "expertise": self._serialize_users(role_ids_map.get("expertise") or set()),
+            "skill_provider": self._serialize_users(role_ids_map.get("skill_provider") or set()),
+            "supplier": self._serialize_users(role_ids_map.get("supplier") or set()),
+        }
+
     @action(detail=False, methods=["get"])
     def overview(self, request):
         user = request.user
@@ -998,6 +1015,7 @@ class ConnectionViewSet(viewsets.GenericViewSet):
 
         recent_ids = history_ids.difference(live_ids)
         new_ids = manual_new_ids.difference(live_ids).difference(recent_ids)
+        member_role_ids = self._default_member_role_ids(manual_new_ids)
 
         incoming_data = ConnectionSerializer(pending_incoming, many=True).data
         outgoing_data = ConnectionSerializer(pending_outgoing, many=True).data
@@ -1007,6 +1025,7 @@ class ConnectionViewSet(viewsets.GenericViewSet):
                 "live_connections": self._serialize_users(live_ids),
                 "new_connections": self._serialize_users(new_ids),
                 "recent_connections": self._serialize_users(recent_ids),
+                "member_connections": self._serialize_member_role_map(member_role_ids),
                 "incoming_requests": incoming_data,
                 "outgoing_requests": outgoing_data,
             }
