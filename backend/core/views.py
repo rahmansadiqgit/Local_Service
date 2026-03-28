@@ -25,7 +25,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 
-from .models import Connection, ConnectionStatus, ERP, ERPMessage, Expertise, Notification, Post, ProblemReport, Product, Rating, Skill
+from .models import Connection, ConnectionRole, ConnectionStatus, ERP, ERPMessage, Expertise, Notification, Post, ProblemReport, Product, Rating, Skill
 from .serializers import (
     ChangePasswordSerializer,
     ConnectionSerializer,
@@ -947,21 +947,19 @@ class ConnectionViewSet(viewsets.GenericViewSet):
         users = User.objects.filter(id__in=list(user_ids)).order_by("name", "username", "id")
         return UserSerializer(users, many=True).data
 
-    def _default_member_role_ids(self, accepted_ids):
-        # Keep a dedicated role map so role-specific connection logic can be extended later.
-        base_ids = set(accepted_ids or set())
+    def _empty_member_role_ids(self):
         return {
-            "expertise": set(base_ids),
-            "skill_provider": set(base_ids),
-            "supplier": set(base_ids),
+            ConnectionRole.EXPERTISE: set(),
+            ConnectionRole.SKILL_PROVIDER: set(),
+            ConnectionRole.SUPPLIER: set(),
         }
 
     def _serialize_member_role_map(self, role_ids_map):
         role_ids_map = role_ids_map or {}
         return {
-            "expertise": self._serialize_users(role_ids_map.get("expertise") or set()),
-            "skill_provider": self._serialize_users(role_ids_map.get("skill_provider") or set()),
-            "supplier": self._serialize_users(role_ids_map.get("supplier") or set()),
+            ConnectionRole.EXPERTISE: self._serialize_users(role_ids_map.get(ConnectionRole.EXPERTISE) or set()),
+            ConnectionRole.SKILL_PROVIDER: self._serialize_users(role_ids_map.get(ConnectionRole.SKILL_PROVIDER) or set()),
+            ConnectionRole.SUPPLIER: self._serialize_users(role_ids_map.get(ConnectionRole.SUPPLIER) or set()),
         }
 
     @action(detail=False, methods=["get"])
@@ -974,10 +972,24 @@ class ConnectionViewSet(viewsets.GenericViewSet):
         pending_outgoing = queryset.filter(status=ConnectionStatus.PENDING, requester=user)
 
         manual_new_ids = set()
+        member_role_ids = self._empty_member_role_ids()
+        hired_ids = set()
+        valid_roles = {choice for choice, _ in ConnectionRole.choices}
+
         for conn in accepted:
             other_id = conn.addressee_id if conn.requester_id == user.id else conn.requester_id
-            if other_id:
-                manual_new_ids.add(int(other_id))
+            if not other_id:
+                continue
+
+            other_id = int(other_id)
+            manual_new_ids.add(other_id)
+
+            requested_role = conn.requested_role if conn.requested_role in valid_roles else ConnectionRole.SKILL_PROVIDER
+
+            if conn.requester_id == user.id:
+                member_role_ids[requested_role].add(other_id)
+            else:
+                hired_ids.add(other_id)
 
         erp_items = ERP.objects.filter(Q(provider=user) | Q(receiver=user)).select_related(
             "provider", "receiver", "post__owner"
@@ -1015,13 +1027,12 @@ class ConnectionViewSet(viewsets.GenericViewSet):
 
         recent_ids = history_ids.difference(live_ids)
         new_ids = manual_new_ids.difference(live_ids).difference(recent_ids)
-        member_role_ids = self._default_member_role_ids(manual_new_ids)
-
         incoming_data = ConnectionSerializer(pending_incoming, many=True).data
         outgoing_data = ConnectionSerializer(pending_outgoing, many=True).data
 
         return Response(
             {
+                "hired_connections": self._serialize_users(hired_ids),
                 "live_connections": self._serialize_users(live_ids),
                 "new_connections": self._serialize_users(new_ids),
                 "recent_connections": self._serialize_users(recent_ids),
@@ -1035,6 +1046,14 @@ class ConnectionViewSet(viewsets.GenericViewSet):
     def request(self, request):
         addressee_id = request.data.get("addressee_id")
         message = str(request.data.get("request_message", "")).strip()
+        requested_role = str(request.data.get("requested_role", ConnectionRole.SKILL_PROVIDER)).strip().lower()
+
+        valid_roles = {choice for choice, _ in ConnectionRole.choices}
+        if requested_role not in valid_roles:
+            return Response(
+                {"detail": "requested_role must be one of expertise, skill_provider or supplier."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         try:
             addressee_id = int(addressee_id)
@@ -1063,14 +1082,16 @@ class ConnectionViewSet(viewsets.GenericViewSet):
             requester=request.user,
             addressee=addressee,
             status=ConnectionStatus.PENDING,
+            requested_role=requested_role,
             request_message=message,
         )
 
         sender_name = request.user.name or request.user.username or request.user.email
+        role_label = connection.get_requested_role_display()
         Notification.objects.create(
             user=addressee,
             title="Connection Request",
-            message=f"{sender_name} sent you a connection request.{f' Message: {message}' if message else ''}",
+            message=f"{sender_name} sent you a connection request for {role_label}.{f' Message: {message}' if message else ''}",
         )
 
         return Response(ConnectionSerializer(connection).data, status=status.HTTP_201_CREATED)
@@ -1116,3 +1137,53 @@ class ConnectionViewSet(viewsets.GenericViewSet):
             )
 
         return Response(ConnectionSerializer(connection).data)
+
+    @action(detail=False, methods=["post"])
+    def remove(self, request):
+        target_user_id = request.data.get("target_user_id")
+
+        try:
+            target_user_id = int(target_user_id)
+        except (TypeError, ValueError):
+            return Response(
+                {"detail": "Valid target_user_id is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if target_user_id == request.user.id:
+            return Response(
+                {"detail": "You cannot remove yourself."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        accepted_connections = Connection.objects.filter(
+            Q(requester_id=request.user.id, addressee_id=target_user_id)
+            | Q(requester_id=target_user_id, addressee_id=request.user.id),
+            status=ConnectionStatus.ACCEPTED,
+        )
+
+        if not accepted_connections.exists():
+            return Response(
+                {"detail": "No accepted connection found for this user."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        removed_count = accepted_connections.count()
+        accepted_connections.delete()
+
+        target_user = User.objects.filter(id=target_user_id).first()
+        actor_name = request.user.name or request.user.username or request.user.email
+        if target_user:
+            Notification.objects.create(
+                user=target_user,
+                title="Connection Removed",
+                message=f"{actor_name} removed your connection.",
+            )
+
+        return Response(
+            {
+                "detail": "Connection removed successfully.",
+                "removed_count": removed_count,
+                "target_user_id": target_user_id,
+            }
+        )

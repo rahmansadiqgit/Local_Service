@@ -20,6 +20,7 @@ export default function Dashboard() {
   const [error, setError] = useState(null)
   const [deleteMessage, setDeleteMessage] = useState('')
   const [connectionRequestMessage, setConnectionRequestMessage] = useState('')
+  const [connectionRequestRole, setConnectionRequestRole] = useState('skill_provider')
   const [connectionNote, setConnectionNote] = useState('')
   const [isSendingConnectionRequest, setIsSendingConnectionRequest] = useState(false)
 
@@ -297,6 +298,7 @@ export default function Dashboard() {
     try {
       await api.post('/connections/request/', {
         addressee_id: profile.id,
+        requested_role: connectionRequestRole,
         request_message: connectionRequestMessage.trim(),
       })
       setConnectionRequestMessage('')
@@ -482,8 +484,17 @@ export default function Dashboard() {
       {canSendConnectionRequest && (
         <div className="card border border-sky-200 bg-sky-50/80">
           <p className="text-sm font-semibold text-sky-900">Connection Request</p>
-          <p className="mt-1 text-xs text-sky-800">Send a request message to connect with this user.</p>
+          <p className="mt-1 text-xs text-sky-800">Choose a connection role and send a request message.</p>
           <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center">
+            <select
+              value={connectionRequestRole}
+              onChange={(event) => setConnectionRequestRole(event.target.value)}
+              className="w-full rounded-lg border border-sky-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-sky-400 sm:max-w-[210px]"
+            >
+              <option value="expertise">Expertise</option>
+              <option value="skill_provider">Skill provider</option>
+              <option value="supplier">Delivery Man</option>
+            </select>
             <input
               type="text"
               value={connectionRequestMessage}

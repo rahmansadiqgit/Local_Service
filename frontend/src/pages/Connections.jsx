@@ -9,6 +9,7 @@ export default function Connections() {
   const [erpItems, setErpItems] = useState([])
   const [currentUserId, setCurrentUserId] = useState(null)
   const [overview, setOverview] = useState({
+    hired_connections: [],
     live_connections: [],
     new_connections: [],
     recent_connections: [],
@@ -22,9 +23,11 @@ export default function Connections() {
   })
   const [selfAssignLoading, setSelfAssignLoading] = useState('')
   const [requestActionLoading, setRequestActionLoading] = useState('')
+  const [removeConnectionLoading, setRemoveConnectionLoading] = useState('')
   const [message, setMessage] = useState('')
 
   const normalizeOverview = (data) => ({
+    hired_connections: Array.isArray(data?.hired_connections) ? data.hired_connections : [],
     live_connections: Array.isArray(data?.live_connections) ? data.live_connections : [],
     new_connections: Array.isArray(data?.new_connections) ? data.new_connections : [],
     recent_connections: Array.isArray(data?.recent_connections) ? data.recent_connections : [],
@@ -147,6 +150,28 @@ export default function Connections() {
     }
   }
 
+  const handleRemoveConnection = async (person) => {
+    const personId = Number(person?.id)
+    if (!personId) return
+
+    const personName = person?.name || person?.username || `User #${personId}`
+    const confirmed = window.confirm(`Remove connection with ${personName}?`)
+    if (!confirmed) return
+
+    setRemoveConnectionLoading(String(personId))
+    try {
+      await api.post('/connections/remove/', { target_user_id: personId })
+      setMessage(`Connection removed with ${personName}.`)
+      await loadOverview()
+      setSelected((prev) => (prev && Number(prev.id) === personId ? null : prev))
+    } catch (error) {
+      console.error(error)
+      setMessage(error?.response?.data?.detail || 'Failed to remove connection.')
+    } finally {
+      setRemoveConnectionLoading('')
+    }
+  }
+
   const profileLikeBoxClass =
     'card relative overflow-hidden border border-violet-200/70 bg-gradient-to-br from-white/55 via-violet-100/45 to-fuchsia-100/40 shadow-xl backdrop-blur-md'
 
@@ -240,6 +265,19 @@ export default function Connections() {
         </span>
       </div>
       <p className="mt-3 text-sm text-slate-500">{person.location}</p>
+      <div className="mt-2 flex justify-end">
+        <button
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation()
+            handleRemoveConnection(person)
+          }}
+          disabled={removeConnectionLoading === String(person.id)}
+          className="rounded-full border border-rose-200 px-3 py-1 text-xs font-semibold text-rose-700 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {removeConnectionLoading === String(person.id) ? 'Removing...' : 'Remove'}
+        </button>
+      </div>
     </div>
   )
 
@@ -276,6 +314,20 @@ export default function Connections() {
         <div className="space-y-6">
           <div className="space-y-4">
             <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold">Hired</h3>
+              <p className="text-xs text-slate-400">People who requested to connect with you.</p>
+            </div>
+            <div className="grid gap-4 lg:grid-cols-3">
+              {overview.hired_connections.length ? (
+                overview.hired_connections.map((person) => renderCard(person, 'Hired'))
+              ) : (
+                <p className="text-sm text-slate-500">No hired connections yet.</p>
+              )}
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
               <h3 className="text-lg font-semibold">Members</h3>
               <p className="text-xs text-slate-400">Accepted connection requests.</p>
             </div>
@@ -303,6 +355,9 @@ export default function Connections() {
                   overview.incoming_requests.map((item) => (
                     <div key={`incoming-${item.id}`} className="rounded-lg border border-slate-200 bg-white p-2">
                       <p className="font-semibold text-slate-800">{item.requester_name || `User #${item.requester}`}</p>
+                      <p className="text-xs font-semibold text-violet-700">
+                        Requested as: {item.requested_role_label || 'Skill provider'}
+                      </p>
                       <p className="text-xs text-slate-500">{item.request_message || 'No request message.'}</p>
                       <div className="mt-2 flex items-center gap-2">
                         <button
