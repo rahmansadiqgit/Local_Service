@@ -17,6 +17,11 @@ export default function ERP() {
     live_connections: [],
     new_connections: [],
     recent_connections: [],
+    member_connections: {
+      expertise: [],
+      skill_provider: [],
+      supplier: [],
+    },
   })
   const [ratings, setRatings] = useState([])
   const [expandedId, setExpandedId] = useState(null)
@@ -77,6 +82,17 @@ export default function ERP() {
           recent_connections: Array.isArray(overviewRes.data?.recent_connections)
             ? overviewRes.data.recent_connections
             : [],
+          member_connections: {
+            expertise: Array.isArray(overviewRes.data?.member_connections?.expertise)
+              ? overviewRes.data.member_connections.expertise
+              : [],
+            skill_provider: Array.isArray(overviewRes.data?.member_connections?.skill_provider)
+              ? overviewRes.data.member_connections.skill_provider
+              : [],
+            supplier: Array.isArray(overviewRes.data?.member_connections?.supplier)
+              ? overviewRes.data.member_connections.supplier
+              : [],
+          },
         })
       } catch (error) {
         console.error(error)
@@ -111,6 +127,26 @@ export default function ERP() {
     })
     return Array.from(byId.values())
   }, [connectionsOverview])
+
+  const assignableUsersByRole = useMemo(() => {
+    const roleBuckets = connectionsOverview.member_connections || {}
+    const normalizeUsers = (items) => {
+      const byId = new Map()
+      ;(Array.isArray(items) ? items : []).forEach((user) => {
+        if (user && user.id !== undefined && user.id !== null) {
+          byId.set(Number(user.id), user)
+        }
+      })
+      return Array.from(byId.values())
+    }
+
+    return {
+      expertise: normalizeUsers(roleBuckets.expertise),
+      skill_provider: normalizeUsers(roleBuckets.skill_provider),
+      supplier: normalizeUsers(roleBuckets.supplier),
+      all: assignableUsers,
+    }
+  }, [connectionsOverview, assignableUsers])
 
   const ratingsByPost = useMemo(() => {
     return ratings.reduce((acc, rating) => {
@@ -482,7 +518,7 @@ export default function ERP() {
               onTrackNext={handleTrackStage}
               onToggleReadyProduct={handleToggleReadyProduct}
               users={users}
-              assignableUsers={assignableUsers}
+              assignableUsersByRole={assignableUsersByRole}
               onUpdateMemberAssignment={handleUpdateMemberAssignment}
               onPublishMemberPost={handlePublishMemberPost}
               onOpenOwner={(ownerId) => navigate(`/dashboard/${ownerId}`)}

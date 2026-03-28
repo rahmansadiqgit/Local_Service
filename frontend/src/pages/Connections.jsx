@@ -12,6 +12,11 @@ export default function Connections() {
     live_connections: [],
     new_connections: [],
     recent_connections: [],
+    member_connections: {
+      expertise: [],
+      skill_provider: [],
+      supplier: [],
+    },
     incoming_requests: [],
     outgoing_requests: [],
   })
@@ -23,6 +28,17 @@ export default function Connections() {
     live_connections: Array.isArray(data?.live_connections) ? data.live_connections : [],
     new_connections: Array.isArray(data?.new_connections) ? data.new_connections : [],
     recent_connections: Array.isArray(data?.recent_connections) ? data.recent_connections : [],
+    member_connections: {
+      expertise: Array.isArray(data?.member_connections?.expertise)
+        ? data.member_connections.expertise
+        : [],
+      skill_provider: Array.isArray(data?.member_connections?.skill_provider)
+        ? data.member_connections.skill_provider
+        : [],
+      supplier: Array.isArray(data?.member_connections?.supplier)
+        ? data.member_connections.supplier
+        : [],
+    },
     incoming_requests: Array.isArray(data?.incoming_requests) ? data.incoming_requests : [],
     outgoing_requests: Array.isArray(data?.outgoing_requests) ? data.outgoing_requests : [],
   })
@@ -72,6 +88,17 @@ export default function Connections() {
     { key: 'skill_provider', label: 'Skill provider' },
     { key: 'supplier', label: 'Supplier' },
   ]
+
+  const memberCategoryToRoleKey = {
+    Expertise: 'expertise',
+    'Skill Providers': 'skill_provider',
+    'Delivery Man': 'supplier',
+  }
+
+  const selectedMemberRoleKey = memberCategoryToRoleKey[memberCategory] || 'expertise'
+  const memberCards = Array.isArray(overview.member_connections?.[selectedMemberRoleKey])
+    ? overview.member_connections[selectedMemberRoleKey]
+    : []
 
   const openSelfAssignPosts = useMemo(() => {
     return (erpItems || []).flatMap((erp) => {
@@ -304,8 +331,8 @@ export default function Connections() {
             </div>
 
             <div className="grid gap-4 lg:grid-cols-3">
-              {overview.new_connections.length ? (
-                overview.new_connections.map((person) => renderCard(person, memberCategory))
+              {memberCards.length ? (
+                memberCards.map((person) => renderCard(person, memberCategory))
               ) : (
                 <p className="text-sm text-slate-500">No members yet.</p>
               )}

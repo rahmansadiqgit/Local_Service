@@ -18,7 +18,7 @@ export default function ERPTaskCard({
   onTrackNext,
   onToggleReadyProduct,
   users = [],
-  assignableUsers = [],
+  assignableUsersByRole = {},
   onUpdateMemberAssignment,
   onPublishMemberPost,
   onOpenOwner,
@@ -92,7 +92,14 @@ export default function ERPTaskCard({
   const assignedMembersForSelectedRole = users.filter((user) =>
     selectedAssigneeIds.includes(Number(user.id)),
   )
-  const visibleMembers = isProvider ? assignableUsers : assignedMembersForSelectedRole
+  const providerAssignableMembers = isProvider
+    ? Array.isArray(assignableUsersByRole?.[selectedMemberRole])
+      ? assignableUsersByRole[selectedMemberRole]
+      : Array.isArray(assignableUsersByRole?.all)
+        ? assignableUsersByRole.all
+        : []
+    : []
+  const visibleMembers = isProvider ? providerAssignableMembers : assignedMembersForSelectedRole
 
   const counterpartyUserId =
     viewerRole === 'Provider'
