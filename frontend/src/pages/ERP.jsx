@@ -431,6 +431,25 @@ export default function ERP() {
     }
   }
 
+  const handleCloseMemberPost = async (erp, role) => {
+    const isProvider = currentUserId && String(erp.provider) === String(currentUserId)
+    if (!isProvider) {
+      setMessage('Only provider can remove self-assign post.')
+      return
+    }
+
+    try {
+      const { data } = await api.post(`/erp/${erp.id}/close_member_post/`, {
+        role,
+      })
+      setErpItems((prev) => prev.map((item) => (item.id === data.id ? data : item)))
+      setMessage(`Self-assign post removed for ${role.replace('_', ' ')}.`)
+    } catch (error) {
+      console.error(error)
+      setMessage('Failed to remove self-assign post.')
+    }
+  }
+
   const handleTrackStage = async (erp) => {
     if (erp.stage === 'Completed') {
       setMessage(`Task ${erp.id} is already in Completed phase.`)
@@ -537,6 +556,7 @@ export default function ERP() {
               assignableUsersByRole={assignableUsersByRole}
               onUpdateMemberAssignment={handleUpdateMemberAssignment}
               onPublishMemberPost={handlePublishMemberPost}
+              onCloseMemberPost={handleCloseMemberPost}
               onOpenOwner={(ownerId) => navigate(`/dashboard/${ownerId}`)}
               toMediaUrl={toMediaUrl}
             />

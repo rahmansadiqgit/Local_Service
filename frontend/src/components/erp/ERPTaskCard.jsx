@@ -21,6 +21,7 @@ export default function ERPTaskCard({
   assignableUsersByRole = {},
   onUpdateMemberAssignment,
   onPublishMemberPost,
+  onCloseMemberPost,
   onOpenOwner,
   toMediaUrl,
 }) {
@@ -449,13 +450,24 @@ export default function ERPTaskCard({
             </p>
             <div className="flex items-center gap-2">
               {isProvider ? (
-                <button
-                  type="button"
-                  onClick={() => onPublishMemberPost?.(erp, selectedMemberRole, selectedSelfAssignMessage)}
-                  className="rounded-full border border-brand-200 px-2 py-1 text-[11px] font-semibold text-brand-700"
-                >
-                  Generate Self-Assign Post
-                </button>
+                <>
+                  <button
+                    type="button"
+                    onClick={() => onPublishMemberPost?.(erp, selectedMemberRole, selectedSelfAssignMessage)}
+                    className="rounded-full border border-brand-200 px-2 py-1 text-[11px] font-semibold text-brand-700"
+                  >
+                    Generate Self-Assign Post
+                  </button>
+                  {selfAssignEnabled ? (
+                    <button
+                      type="button"
+                      onClick={() => onCloseMemberPost?.(erp, selectedMemberRole)}
+                      className="rounded-full border border-rose-200 px-2 py-1 text-[11px] font-semibold text-rose-700"
+                    >
+                      Remove Self-Assign Post
+                    </button>
+                  ) : null}
+                </>
               ) : null}
               <button
                 type="button"

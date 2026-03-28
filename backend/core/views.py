@@ -684,6 +684,31 @@ class ERPViewSet(viewsets.ModelViewSet):
         return Response(self.get_serializer(erp).data)
 
     @action(detail=True, methods=["post"])
+    def close_member_post(self, request, pk=None):
+        erp = self.get_object()
+
+        if not erp.provider or erp.provider.id != request.user.id:
+            raise PermissionDenied("Only provider can close member assignment posts.")
+
+        role = str(request.data.get("role", "")).strip().lower()
+        if role not in self._allowed_member_roles():
+            return Response({"detail": "Invalid member role."}, status=status.HTTP_400_BAD_REQUEST)
+
+        snapshot, members, role_bucket = self._get_member_bucket(erp, role)
+        role_bucket["self_assign_enabled"] = False
+        role_bucket["self_assign_message"] = ""
+        role_bucket["self_assign_post_link"] = ""
+        role_bucket["self_assign_post_title"] = ""
+        role_bucket["self_assign_post_id"] = None
+        role_bucket["self_assign_target_ids"] = []
+        role_bucket["self_assign_published_at"] = None
+        members[role] = role_bucket
+        snapshot["members"] = members
+        self._save_snapshot(erp, snapshot)
+
+        return Response(self.get_serializer(erp).data)
+
+    @action(detail=True, methods=["post"])
     def self_assign(self, request, pk=None):
         erp = self.get_object()
         role = str(request.data.get("role", "")).strip().lower()
