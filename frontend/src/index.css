@@ -94,3 +94,75 @@ button:not(.header-auth-btn):not(.settings-gear-btn):not(.post-owner-name-btn):n
 .leaflet-container {
   background: transparent !important;
 }
+
+.rating-ring-avatar {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 9999px;
+  vertical-align: middle;
+  isolation: isolate;
+  box-shadow:
+    0 0 0 2px rgba(255, 255, 255, 0.62),
+    0 0 0 3px rgba(71, 85, 105, 0.12);
+}
+
+.rating-ring-avatar__ring {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background:
+    conic-gradient(
+      from 0deg,
+      #ef4444 0deg,
+      #facc15 calc(var(--ring-progress) * 0.33),
+      #22c55e calc(var(--ring-progress) * 0.66),
+      #3b82f6 var(--ring-progress),
+      rgba(100, 116, 139, 0.72) var(--ring-progress),
+      rgba(148, 163, 184, 0.42) 360deg
+    );
+  animation:
+    ratingRingSpin var(--ring-speed, 6s) linear infinite,
+    ratingRingPulse 2.2s ease-in-out infinite;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.5),
+    0 0 16px rgba(59, 130, 246, 0.32);
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - var(--ring-width, 2px)), #000 calc(100% - var(--ring-width, 2px)));
+  mask: radial-gradient(farthest-side, transparent calc(100% - var(--ring-width, 2px)), #000 calc(100% - var(--ring-width, 2px)));
+}
+
+.rating-ring-avatar--no-ring {
+  box-shadow: none;
+}
+
+.rating-ring-avatar--no-ring .rating-ring-avatar__inner {
+  inset: 0;
+  border: 2px solid rgba(203, 213, 225, 0.9);
+}
+
+.rating-ring-avatar__inner {
+  position: absolute;
+  inset: var(--ring-width, 2px);
+  border-radius: inherit;
+  overflow: hidden;
+  background: #fff;
+}
+
+@keyframes ratingRingSpin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes ratingRingPulse {
+  0%,
+  100% {
+    filter: saturate(1) brightness(1);
+  }
+  50% {
+    filter: saturate(1.2) brightness(1.08);
+  }
+}
