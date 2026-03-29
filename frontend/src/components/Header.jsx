@@ -344,7 +344,7 @@ export default function Header() {
       : null
 
   const iconButtonClass =
-    "rounded-full bg-white/90 p-2 shadow-md hover:bg-yellow-100 hover:scale-105 hover:shadow-lg transition-all duration-200"
+    "rounded-full bg-white/90 p-2 shadow-md hover:bg-orange-100 hover:scale-105 hover:shadow-lg transition-all duration-200"
 
   const avatarButtonClass =
     "h-10 w-10 shrink-0 rounded-full shadow-md hover:scale-105 hover:shadow-lg transition-all duration-200 flex items-center justify-center"
@@ -353,7 +353,7 @@ export default function Header() {
     "absolute right-0 mt-3 rounded-2xl border border-white/60 bg-white/95 p-2 shadow-2xl backdrop-blur-sm"
 
   const dropdownItemClass =
-    "block rounded-xl px-4 py-2.5 text-sm font-semibold !text-slate-700 transition hover:bg-violet-100 hover:!text-violet-700"
+    "block rounded-xl px-4 py-2.5 text-sm font-semibold !text-slate-700 transition hover:bg-orange-100 hover:!text-orange-700"
 
   return (
     <header className="sticky top-0 z-40 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 shadow-lg">
@@ -503,7 +503,7 @@ export default function Header() {
             <div className="relative" data-header-dropdown>
               <button
                 onClick={() => toggleDropdown("user")}
-                className={`${avatarButtonClass} ${avatarSrc ? "" : "bg-white/90 hover:bg-yellow-100"}`}
+                className={`${avatarButtonClass} ${avatarSrc ? "" : "bg-white/90 hover:bg-orange-100"}`}
               >
                 {avatarSrc ? (
                   <RatingRingAvatar
@@ -536,7 +536,7 @@ export default function Header() {
                   </Link>
                   <button
                     onClick={handleLogout}
-                    className="w-full rounded-xl px-4 py-2.5 text-left text-sm font-semibold text-slate-700 transition hover:bg-violet-100 hover:text-violet-700"
+                    className="w-full rounded-xl px-4 py-2.5 text-left text-sm font-semibold text-slate-700 transition hover:bg-orange-100 hover:text-orange-700"
                   >
                     Logout
                   </button>
