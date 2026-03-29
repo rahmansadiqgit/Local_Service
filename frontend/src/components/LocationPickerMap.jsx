@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import L from 'leaflet'
 import {
   Circle,
@@ -112,6 +112,7 @@ export default function LocationPickerMap({
 }) {
   const [geoLoading, setGeoLoading] = useState(false)
   const [geoError, setGeoError] = useState('')
+  const popupRef = useRef(null)
 
   const selectedPosition = useMemo(() => {
     const lat = toCoordinateOrNull(latitude)
@@ -156,6 +157,7 @@ export default function LocationPickerMap({
   const handleConfirmSelectedLocation = () => {
     if (!selectedPosition) return
     onPick(selectedPosition[0], selectedPosition[1])
+    popupRef.current?.close()
   }
 
   return (
@@ -211,16 +213,18 @@ export default function LocationPickerMap({
 
             {selectedPosition && (
               <Marker position={selectedPosition} icon={GOOGLE_STYLE_MARKER_ICON}>
-                <Popup>
+                <Popup ref={popupRef}>
                   <div className="space-y-2">
                     <div className="text-xs font-semibold text-slate-700">{popupText}</div>
-                    <button
-                      type="button"
-                      onClick={handleConfirmSelectedLocation}
-                      className="rounded-md bg-violet-600 px-2.5 py-1 text-xs font-semibold text-white transition hover:bg-violet-700"
-                    >
-                      Confirm
-                    </button>
+                    <div className="flex justify-center">
+                      <button
+                        type="button"
+                        onClick={handleConfirmSelectedLocation}
+                        className="inline-flex items-center rounded-lg bg-gradient-to-r from-violet-600 to-fuchsia-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:from-violet-700 hover:to-fuchsia-700"
+                      >
+                        Confirm
+                      </button>
+                    </div>
                   </div>
                 </Popup>
               </Marker>
