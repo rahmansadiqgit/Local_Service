@@ -28,6 +28,7 @@ export default function ERPTaskCard({
   onLeaveAssignment,
   onCompleteByReceiver,
   onRateParticipant,
+  onRateProvider,
   onOpenOwner,
   toMediaUrl,
 }) {
@@ -53,6 +54,12 @@ export default function ERPTaskCard({
   const [participantRatingError, setParticipantRatingError] = useState('')
   const [participantRatingSuccess, setParticipantRatingSuccess] = useState('')
   const [isSubmittingParticipantRating, setIsSubmittingParticipantRating] = useState(false)
+  const [isProviderFeedbackOpen, setIsProviderFeedbackOpen] = useState(false)
+  const [providerFeedbackRating, setProviderFeedbackRating] = useState('')
+  const [providerFeedbackComment, setProviderFeedbackComment] = useState('')
+  const [providerFeedbackError, setProviderFeedbackError] = useState('')
+  const [providerFeedbackSuccess, setProviderFeedbackSuccess] = useState('')
+  const [isSubmittingProviderFeedback, setIsSubmittingProviderFeedback] = useState(false)
 
   const phases = ['Pending', 'On Process', 'Completed']
   const activePhaseIndex = phases.indexOf(erp.stage)
@@ -253,7 +260,7 @@ export default function ERPTaskCard({
         }))
       })()
     : []
-  const canLeaveTask = currentUserRoleResponsibilities.length > 0
+  const canLeaveTask = currentUserRoleResponsibilities.length > 0 && erp.stage !== 'Completed'
   const isReceiver = viewerRole === 'Receiver'
   const canUseMessenger = isProvider || isReceiver || currentUserRoleResponsibilities.length > 0
   const canCompleteAsReceiver = isReceiver && erp.stage === 'On Process'
@@ -278,6 +285,16 @@ export default function ERPTaskCard({
 
   const roleLabel =
     viewerRole === 'Provider' ? 'Providing' : viewerRole === 'Receiver' ? 'Receiving' : erp.category
+
+  const providerRatedUserIds = new Set(
+    (Array.isArray(snapshot?.feedback?.provider_rating_user_ids)
+      ? snapshot.feedback.provider_rating_user_ids
+      : [])
+      .map((id) => Number(id))
+      .filter((id) => Number.isFinite(id) && id > 0),
+  )
+  const hasRatedProvider = providerRatedUserIds.has(Number(currentUserId))
+  const shouldShowProviderCommentButton = erp.stage === 'Completed' && !isProvider && !hasRatedProvider
 
   const alreadyRatedParticipantIds = new Set(
     (Array.isArray(ratings) ? ratings : [])
@@ -537,6 +554,49 @@ export default function ERPTaskCard({
     }
   }
 
+  const handleSubmitProviderFeedback = async () => {
+    const ratingValue = Number(providerFeedbackRating)
+    const commentValue = providerFeedbackComment.trim()
+
+    if (!Number.isInteger(ratingValue) || ratingValue < 1 || ratingValue > 5) {
+      setProviderFeedbackError('Please select a rating from 1 to 5.')
+      return
+    }
+
+    if (!commentValue) {
+      setProviderFeedbackError('Please write your comment about the provider.')
+      return
+    }
+
+    if (!onRateProvider) {
+      setProviderFeedbackError('Feedback service is unavailable right now.')
+      return
+    }
+
+    setIsSubmittingProviderFeedback(true)
+    setProviderFeedbackError('')
+    setProviderFeedbackSuccess('')
+
+    try {
+      const result = await onRateProvider(erp, {
+        rating: ratingValue,
+        comment: commentValue,
+      })
+
+      if (!result?.ok) {
+        setProviderFeedbackError(result?.detail || 'Failed to submit feedback.')
+        return
+      }
+
+      setProviderFeedbackSuccess(result?.detail || 'Your feedback has been submitted.')
+      setProviderFeedbackRating('')
+      setProviderFeedbackComment('')
+      setIsProviderFeedbackOpen(false)
+    } finally {
+      setIsSubmittingProviderFeedback(false)
+    }
+  }
+
   return (
     <div className="card relative overflow-hidden rounded-3xl border border-slate-200/80 bg-gradient-to-br from-white via-slate-50 to-brand-50/30 p-5 shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-xl">
       <div className="pointer-events-none absolute -right-14 -top-14 h-40 w-40 rounded-full bg-brand-200/20 blur-2xl" />
@@ -648,6 +708,18 @@ export default function ERPTaskCard({
               className="rounded-full border border-emerald-300 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-700 transition hover:border-emerald-400 hover:bg-emerald-100"
             >
               Completed
+            </button>
+          ) : shouldShowProviderCommentButton ? (
+            <button
+              type="button"
+              onClick={() => {
+                setProviderFeedbackError('')
+                setProviderFeedbackSuccess('')
+                setIsProviderFeedbackOpen((prev) => !prev)
+              }}
+              className="rounded-full border border-brand-300 bg-brand-50 px-4 py-2 text-sm font-semibold text-brand-700 transition hover:border-brand-400 hover:bg-brand-100"
+            >
+              Rating
             </button>
           ) : canLeaveTask ? (
             <button
@@ -1310,6 +1382,78 @@ export default function ERPTaskCard({
               onClick={() => {
                 setIsCompletionFormOpen(false)
                 setCompletionError('')
+              }}
+              className="rounded-md border border-slate-300 bg-white px-3 py-1 text-xs font-semibold text-slate-600"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      {erp.stage === 'Completed' && !isProvider && hasRatedProvider ? (
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50/40 p-3 text-xs text-emerald-800">
+          Your comment about provider has already been submitted.
+        </div>
+      ) : null}
+
+      {erp.stage === 'Completed' && !isProvider && isProviderFeedbackOpen && !hasRatedProvider ? (
+        <div className="space-y-2 rounded-xl border border-brand-200 bg-brand-50/50 p-3 text-xs text-slate-700">
+          <p className="text-sm font-semibold text-brand-800">Rate and Comment Provider</p>
+          <p className="text-[11px] text-brand-700">
+            Share how satisfied you were working with {counterpartyName || 'the provider'}.
+          </p>
+
+          <label className="text-xs font-semibold text-slate-700">
+            Rating
+            <select
+              value={providerFeedbackRating}
+              onChange={(event) => {
+                setProviderFeedbackRating(event.target.value)
+                if (providerFeedbackError) setProviderFeedbackError('')
+              }}
+              className="mt-1 w-full rounded-md border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700 outline-none focus:border-brand-300"
+            >
+              <option value="">Select rating</option>
+              <option value="5">5 - Excellent</option>
+              <option value="4">4 - Good</option>
+              <option value="3">3 - Average</option>
+              <option value="2">2 - Poor</option>
+              <option value="1">1 - Very Poor</option>
+            </select>
+          </label>
+
+          <label className="text-xs font-semibold text-slate-700">
+            Comment
+            <textarea
+              value={providerFeedbackComment}
+              onChange={(event) => {
+                setProviderFeedbackComment(event.target.value)
+                if (providerFeedbackError) setProviderFeedbackError('')
+              }}
+              rows={3}
+              placeholder={`Write your feedback about working with ${counterpartyName || 'the provider'}`}
+              className="mt-1 w-full rounded-md border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700 outline-none focus:border-brand-300"
+            />
+          </label>
+
+          {providerFeedbackError ? <p className="text-[11px] text-rose-600">{providerFeedbackError}</p> : null}
+          {providerFeedbackSuccess ? <p className="text-[11px] text-emerald-700">{providerFeedbackSuccess}</p> : null}
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleSubmitProviderFeedback}
+              disabled={isSubmittingProviderFeedback}
+              className="rounded-md border border-brand-300 bg-white px-3 py-1 text-xs font-semibold text-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {isSubmittingProviderFeedback ? 'Submitting...' : 'Submit Rating'}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setIsProviderFeedbackOpen(false)
+                setProviderFeedbackError('')
               }}
               className="rounded-md border border-slate-300 bg-white px-3 py-1 text-xs font-semibold text-slate-600"
             >

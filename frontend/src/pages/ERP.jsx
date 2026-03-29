@@ -542,6 +542,30 @@ export default function ERP() {
     }
   }
 
+  const handleRateProvider = async (erp, payload) => {
+    try {
+      const { data } = await api.post(`/erp/${erp.id}/rate_provider/`, payload)
+      const newRating = data?.rating
+      const updatedErp = data?.erp
+
+      if (newRating) {
+        setRatings((prev) => [...prev, newRating])
+      }
+
+      if (updatedErp) {
+        setErpItems((prev) => prev.map((item) => (item.id === updatedErp.id ? updatedErp : item)))
+      }
+
+      setMessage(data?.detail || 'Feedback submitted.')
+      return { ok: true, detail: data?.detail || '' }
+    } catch (error) {
+      console.error(error)
+      const detail = String(error?.response?.data?.detail || '').trim() || 'Failed to submit your feedback.'
+      setMessage(detail)
+      return { ok: false, detail }
+    }
+  }
+
   const handleGeneratePdf = async (erp) => {
     try {
       const { data } = await api.post(`/erp/${erp.id}/generate_pdf/`)
@@ -626,6 +650,8 @@ export default function ERP() {
               onLeaveAssignment={handleLeaveAssignment}
               onCompleteByReceiver={handleCompleteByReceiver}
               onRateParticipant={handleRateParticipant}
+              onRateProvider={handleRateProvider}
+              onRateProvider={handleRateProvider}
               onOpenOwner={(ownerId) => navigate(`/dashboard/${ownerId}`)}
               toMediaUrl={toMediaUrl}
             />

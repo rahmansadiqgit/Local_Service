@@ -574,6 +574,28 @@ class ERPViewSet(viewsets.ModelViewSet):
         erp.configuration_snapshot = snapshot
         erp.save(update_fields=["configuration_snapshot", "updated_at"])
 
+    def _get_provider_rated_user_ids(self, erp):
+        snapshot = erp.configuration_snapshot or {}
+        feedback = snapshot.get("feedback") or {}
+        rated_ids = set()
+        for raw_id in feedback.get("provider_rating_user_ids") or []:
+            try:
+                parsed = int(raw_id)
+            except (TypeError, ValueError):
+                continue
+            if parsed > 0:
+                rated_ids.add(parsed)
+        return rated_ids
+
+    def _mark_provider_rated(self, erp, user_id):
+        snapshot = erp.configuration_snapshot or {}
+        feedback = snapshot.get("feedback") or {}
+        rated_ids = self._get_provider_rated_user_ids(erp)
+        rated_ids.add(int(user_id))
+        feedback["provider_rating_user_ids"] = sorted(list(rated_ids))
+        snapshot["feedback"] = feedback
+        self._save_snapshot(erp, snapshot)
+
     def _get_accepted_connection_member_ids(self, user, role=None):
         if not user:
             return set()
@@ -959,6 +981,7 @@ class ERPViewSet(viewsets.ModelViewSet):
             rating_value=rating_value,
             review_text=comment,
         )
+        self._mark_provider_rated(erp, request.user.id)
 
         erp.stage = "Completed"
         erp.completion_comment = comment
@@ -1124,6 +1147,92 @@ class ERPViewSet(viewsets.ModelViewSet):
         return Response(
             {
                 "detail": "Participant rating submitted.",
+                "rating": RatingSerializer(rating_obj).data,
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
+    @action(detail=True, methods=["post"])
+    def rate_provider(self, request, pk=None):
+        erp = self.get_object()
+
+        if erp.stage != "Completed":
+            return Response(
+                {"detail": "Provider can be rated only after ERP is completed."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if not erp.provider_id:
+            return Response({"detail": "ERP provider is missing."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if int(request.user.id) == int(erp.provider_id):
+            raise PermissionDenied("Provider cannot rate themselves.")
+
+        allowed_ids = set()
+        if erp.receiver_id:
+            allowed_ids.add(int(erp.receiver_id))
+
+        snapshot_members = (erp.configuration_snapshot or {}).get("members") or {}
+        for role_key in self._allowed_member_roles():
+            for role_bucket in self._iter_role_buckets(snapshot_members, role_key):
+                for raw_id in role_bucket.get("assignee_ids") or []:
+                    try:
+                        parsed = int(raw_id)
+                    except (TypeError, ValueError):
+                        continue
+                    if parsed > 0:
+                        allowed_ids.add(parsed)
+
+        allowed_ids.update(int(uid) for uid in erp.assigned_workers.values_list("id", flat=True))
+
+        if int(request.user.id) not in allowed_ids:
+            raise PermissionDenied("Only receiver or assigned members can rate provider for this ERP.")
+
+        if int(request.user.id) in self._get_provider_rated_user_ids(erp):
+            return Response(
+                {"detail": "You already submitted your feedback for this provider in this ERP."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        rating_raw = request.data.get("rating")
+        comment = str(request.data.get("comment", "") or "").strip()
+
+        try:
+            rating_value = int(rating_raw)
+        except (TypeError, ValueError):
+            return Response({"detail": "Rating must be an integer from 1 to 5."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if rating_value < 1 or rating_value > 5:
+            return Response({"detail": "Rating must be between 1 and 5."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if not comment:
+            return Response({"detail": "Comment is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        rating_obj = Rating.objects.create(
+            post=erp.post,
+            provider=erp.provider,
+            customer=request.user,
+            rating_value=rating_value,
+            review_text=comment,
+        )
+
+        self._mark_provider_rated(erp, request.user.id)
+        erp.refresh_from_db()
+
+        actor_name = request.user.name or request.user.username or request.user.email or f"User #{request.user.id}"
+        Notification.objects.create(
+            user=erp.provider,
+            title="New Provider Feedback",
+            message=(
+                f"{actor_name} submitted feedback in ERP #{erp.id}: {rating_value}/5. "
+                f"Comment: {comment}"
+            ),
+        )
+
+        return Response(
+            {
+                "detail": "Your feedback has been submitted.",
+                "erp": self.get_serializer(erp).data,
                 "rating": RatingSerializer(rating_obj).data,
             },
             status=status.HTTP_201_CREATED,
