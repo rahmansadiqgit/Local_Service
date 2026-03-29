@@ -54,6 +54,7 @@ export default function ERPTaskCard({
   const [participantRatingError, setParticipantRatingError] = useState('')
   const [participantRatingSuccess, setParticipantRatingSuccess] = useState('')
   const [isSubmittingParticipantRating, setIsSubmittingParticipantRating] = useState(false)
+  const [isParticipantRatingOpen, setIsParticipantRatingOpen] = useState(false)
   const [isProviderFeedbackOpen, setIsProviderFeedbackOpen] = useState(false)
   const [providerFeedbackRating, setProviderFeedbackRating] = useState('')
   const [providerFeedbackComment, setProviderFeedbackComment] = useState('')
@@ -307,6 +308,15 @@ export default function ERPTaskCard({
       .map((item) => Number(item.provider)),
   )
 
+  const providerFeedbackForCurrentUser = (Array.isArray(ratings) ? ratings : [])
+    .filter(
+      (item) =>
+        Number(item?.post) === Number(erp.post)
+        && Number(item?.customer) === Number(erp.provider)
+        && Number(item?.provider) === Number(currentUserId),
+    )
+    .sort((left, right) => Number(right?.id || 0) - Number(left?.id || 0))[0] || null
+
   const providerRateCandidates = Array.from(
     new Map(
       [
@@ -322,6 +332,60 @@ export default function ERPTaskCard({
         .map((user) => [Number(user.id), user]),
     ).values(),
   )
+  const shouldShowProviderParticipantRatingButton =
+    isProvider && erp.stage === 'Completed' && providerRateCandidates.length > 0
+
+  const providerRateUniverseIds = new Set(
+    [
+      ...(erp.receiver ? [Number(erp.receiver)] : []),
+      ...associatedMembersByRole.flatMap((entry) => entry.members.map((member) => Number(member.id))),
+    ].filter((id) => Number.isFinite(id) && id > 0 && id !== Number(currentUserId)),
+  )
+
+  const roleLabelsByUserId = new Map()
+  if (erp.receiver && Number.isFinite(Number(erp.receiver))) {
+    roleLabelsByUserId.set(Number(erp.receiver), new Set(['Receiver']))
+  }
+  associatedMembersByRole.forEach((entry) => {
+    entry.members.forEach((member) => {
+      const memberId = Number(member.id)
+      if (!Number.isFinite(memberId) || memberId <= 0) return
+      if (!roleLabelsByUserId.has(memberId)) {
+        roleLabelsByUserId.set(memberId, new Set())
+      }
+      roleLabelsByUserId.get(memberId).add(entry.roleLabel)
+    })
+  })
+
+  const providerFeedbackByParticipant = new Map()
+  ;(Array.isArray(ratings) ? ratings : []).forEach((item) => {
+    const postId = Number(item?.post)
+    const customerId = Number(item?.customer)
+    const participantId = Number(item?.provider)
+    if (postId !== Number(erp.post)) return
+    if (customerId !== Number(currentUserId)) return
+    if (!providerRateUniverseIds.has(participantId)) return
+
+    const previous = providerFeedbackByParticipant.get(participantId)
+    if (!previous || Number(item?.id || 0) > Number(previous?.id || 0)) {
+      providerFeedbackByParticipant.set(participantId, item)
+    }
+  })
+
+  const providerSubmittedFeedbackEntries = Array.from(providerFeedbackByParticipant.entries())
+    .map(([participantId, item]) => {
+      const participant = users.find((user) => Number(user.id) === Number(participantId))
+      const roles = Array.from(roleLabelsByUserId.get(Number(participantId)) || [])
+      return {
+        participantId: Number(participantId),
+        participantName:
+          participant?.name || participant?.username || `User #${participantId}`,
+        roles,
+        ratingValue: Number(item?.rating_value || 0),
+        message: String(item?.review_text || '').trim(),
+      }
+    })
+    .sort((left, right) => left.participantName.localeCompare(right.participantName))
 
   useEffect(() => {
     if (!selectedParticipantId) return
@@ -332,6 +396,12 @@ export default function ERPTaskCard({
       setSelectedParticipantId('')
     }
   }, [selectedParticipantId, providerRateCandidates])
+
+  useEffect(() => {
+    if (providerRateCandidates.length === 0 && isParticipantRatingOpen) {
+      setIsParticipantRatingOpen(false)
+    }
+  }, [providerRateCandidates, isParticipantRatingOpen])
 
   const stageStyle =
     erp.stage === 'Completed'
@@ -709,6 +779,18 @@ export default function ERPTaskCard({
             >
               Completed
             </button>
+          ) : shouldShowProviderParticipantRatingButton ? (
+            <button
+              type="button"
+              onClick={() => {
+                setParticipantRatingError('')
+                setParticipantRatingSuccess('')
+                setIsParticipantRatingOpen((prev) => !prev)
+              }}
+              className="animate-bounce rounded-full border border-rose-300 bg-rose-100 px-4 py-2 text-sm font-semibold text-rose-700 transition hover:border-rose-400 hover:bg-rose-200"
+            >
+              Rating
+            </button>
           ) : shouldShowProviderCommentButton ? (
             <button
               type="button"
@@ -717,7 +799,7 @@ export default function ERPTaskCard({
                 setProviderFeedbackSuccess('')
                 setIsProviderFeedbackOpen((prev) => !prev)
               }}
-              className="rounded-full border border-brand-300 bg-brand-50 px-4 py-2 text-sm font-semibold text-brand-700 transition hover:border-brand-400 hover:bg-brand-100"
+              className="animate-bounce rounded-full border border-rose-300 bg-rose-100 px-4 py-2 text-sm font-semibold text-rose-700 transition hover:border-rose-400 hover:bg-rose-200"
             >
               Rating
             </button>
@@ -1397,6 +1479,18 @@ export default function ERPTaskCard({
         </div>
       ) : null}
 
+      {erp.stage === 'Completed' && !isProvider && providerFeedbackForCurrentUser ? (
+        <div className="rounded-xl border border-sky-200 bg-sky-50/50 p-3 text-xs text-slate-700">
+          <p className="font-semibold text-sky-800">Provider Feedback For You</p>
+          <p className="mt-1">
+            <span className="font-semibold">Rating:</span> {Number(providerFeedbackForCurrentUser.rating_value || 0).toFixed(1)} / 5
+          </p>
+          <p className="mt-1 whitespace-pre-wrap">
+            <span className="font-semibold">Message:</span> {providerFeedbackForCurrentUser.review_text || '-'}
+          </p>
+        </div>
+      ) : null}
+
       {erp.stage === 'Completed' && !isProvider && isProviderFeedbackOpen && !hasRatedProvider ? (
         <div className="space-y-2 rounded-xl border border-brand-200 bg-brand-50/50 p-3 text-xs text-slate-700">
           <p className="text-sm font-semibold text-brand-800">Rate and Comment Provider</p>
@@ -1478,7 +1572,7 @@ export default function ERPTaskCard({
         </div>
       ) : null}
 
-      {isProvider && erp.stage === 'Completed' ? (
+      {isProvider && erp.stage === 'Completed' && isParticipantRatingOpen ? (
         <div className="space-y-2 rounded-xl border border-sky-200 bg-sky-50/50 p-3 text-xs text-slate-700">
           <p className="text-sm font-semibold text-sky-800">Rate Receiver and Members</p>
           <p className="text-[11px] text-sky-700">
@@ -1548,6 +1642,28 @@ export default function ERPTaskCard({
           >
             {isSubmittingParticipantRating ? 'Submitting...' : 'Submit Participant Rating'}
           </button>
+        </div>
+      ) : null}
+
+      {isProvider && erp.stage === 'Completed' && providerSubmittedFeedbackEntries.length > 0 ? (
+        <div className="space-y-2 rounded-xl border border-violet-200 bg-violet-50/50 p-3 text-xs text-slate-700">
+          <p className="text-sm font-semibold text-violet-800">Given Ratings and Comments</p>
+          <div className="space-y-2">
+            {providerSubmittedFeedbackEntries.map((entry) => (
+              <div key={`provider-given-feedback-${erp.id}-${entry.participantId}`} className="rounded-md border border-violet-200 bg-white p-2">
+                <p className="font-semibold text-slate-800">{entry.participantName}</p>
+                {entry.roles.length ? (
+                  <p className="mt-0.5 text-[11px] text-slate-500">Role: {entry.roles.join(', ')}</p>
+                ) : null}
+                <p className="mt-1">
+                  <span className="font-semibold">Rating:</span> {entry.ratingValue.toFixed(1)} / 5
+                </p>
+                <p className="mt-1 whitespace-pre-wrap">
+                  <span className="font-semibold">Message:</span> {entry.message || '-'}
+                </p>
+              </div>
+            ))}
+          </div>
         </div>
       ) : null}
     </div>
