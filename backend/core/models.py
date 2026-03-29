@@ -166,6 +166,12 @@ class ConnectionStatus(models.TextChoices):
     REJECTED = "Rejected", "Rejected"
 
 
+class ConnectionRole(models.TextChoices):
+    EXPERTISE = "expertise", "Expertise"
+    SKILL_PROVIDER = "skill_provider", "Skill Provider"
+    SUPPLIER = "supplier", "Delivery Man"
+
+
 class Connection(models.Model):
     requester = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -181,6 +187,11 @@ class Connection(models.Model):
         max_length=20,
         choices=ConnectionStatus.choices,
         default=ConnectionStatus.PENDING,
+    )
+    requested_role = models.CharField(
+        max_length=30,
+        choices=ConnectionRole.choices,
+        default=ConnectionRole.SKILL_PROVIDER,
     )
     request_message = models.TextField(blank=True)
     accepted_at = models.DateTimeField(null=True, blank=True)

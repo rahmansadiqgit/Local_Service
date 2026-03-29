@@ -20,8 +20,10 @@ export default function Dashboard() {
   const [error, setError] = useState(null)
   const [deleteMessage, setDeleteMessage] = useState('')
   const [connectionRequestMessage, setConnectionRequestMessage] = useState('')
+  const [connectionRequestRole, setConnectionRequestRole] = useState('skill_provider')
   const [connectionNote, setConnectionNote] = useState('')
   const [isSendingConnectionRequest, setIsSendingConnectionRequest] = useState(false)
+  const [connectionsOverview, setConnectionsOverview] = useState(null)
 
   useEffect(() => {
     let active = true;
@@ -46,12 +48,13 @@ export default function Dashboard() {
           profileData = profileRes.data;
         }
         
-        const [postRes, ratingRes, skillRes, expertiseRes, productRes] = await Promise.all([
+        const [postRes, ratingRes, skillRes, expertiseRes, productRes, overviewRes] = await Promise.all([
           api.get('/posts/'),
           api.get('/ratings/'),
           api.get('/skills/'),
           api.get('/expertises/'),
           api.get('/products/'),
+          api.get('/connections/overview/'),
         ]);
         
         if (!active) return;
@@ -60,6 +63,7 @@ export default function Dashboard() {
         setSkills(skillRes.data);
         setExpertises(expertiseRes.data);
         setProducts(productRes.data);
+        setConnectionsOverview(overviewRes.data || null)
         setProfile(profileData);
       } catch (error) {
         console.error('Dashboard load error:', error);
@@ -269,6 +273,44 @@ export default function Dashboard() {
     return String(user.id) !== String(profile.id)
   }, [id, user?.id, profile?.id])
 
+  const connectionRelationship = useMemo(() => {
+    const targetId = Number(profile?.id)
+    if (!Number.isFinite(targetId) || targetId <= 0 || !connectionsOverview) {
+      return 'none'
+    }
+
+    const includesTarget = (items) =>
+      (Array.isArray(items) ? items : []).some((item) => Number(item?.id) === targetId)
+
+    const memberConnections = connectionsOverview.member_connections || {}
+    const allMemberItems = [
+      ...(Array.isArray(memberConnections.expertise) ? memberConnections.expertise : []),
+      ...(Array.isArray(memberConnections.skill_provider) ? memberConnections.skill_provider : []),
+      ...(Array.isArray(memberConnections.supplier) ? memberConnections.supplier : []),
+    ]
+
+    const isConnected =
+      includesTarget(connectionsOverview.hired_connections) ||
+      includesTarget(connectionsOverview.live_connections) ||
+      includesTarget(connectionsOverview.new_connections) ||
+      includesTarget(connectionsOverview.recent_connections) ||
+      includesTarget(allMemberItems)
+
+    if (isConnected) return 'connected'
+
+    const hasOutgoingPending = (Array.isArray(connectionsOverview.outgoing_requests)
+      ? connectionsOverview.outgoing_requests
+      : []).some((item) => Number(item?.addressee) === targetId)
+    if (hasOutgoingPending) return 'pending_outgoing'
+
+    const hasIncomingPending = (Array.isArray(connectionsOverview.incoming_requests)
+      ? connectionsOverview.incoming_requests
+      : []).some((item) => Number(item?.requester) === targetId)
+    if (hasIncomingPending) return 'pending_incoming'
+
+    return 'none'
+  }, [connectionsOverview, profile?.id])
+
   const handleDeletePost = async (postId) => {
     const confirmed = window.confirm('Are you sure you want to delete this post?')
     if (!confirmed) return
@@ -297,10 +339,13 @@ export default function Dashboard() {
     try {
       await api.post('/connections/request/', {
         addressee_id: profile.id,
+        requested_role: connectionRequestRole,
         request_message: connectionRequestMessage.trim(),
       })
       setConnectionRequestMessage('')
       setConnectionNote('Connection request sent.')
+      const { data } = await api.get('/connections/overview/')
+      setConnectionsOverview(data || null)
     } catch (requestError) {
       console.error(requestError)
       setConnectionNote(requestError?.response?.data?.detail || 'Failed to send connection request.')
@@ -482,24 +527,49 @@ export default function Dashboard() {
       {canSendConnectionRequest && (
         <div className="card border border-sky-200 bg-sky-50/80">
           <p className="text-sm font-semibold text-sky-900">Connection Request</p>
-          <p className="mt-1 text-xs text-sky-800">Send a request message to connect with this user.</p>
-          <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center">
-            <input
-              type="text"
-              value={connectionRequestMessage}
-              onChange={(event) => setConnectionRequestMessage(event.target.value)}
-              placeholder="Write a short request message"
-              className="w-full rounded-lg border border-sky-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-sky-400"
-            />
-            <button
-              type="button"
-              onClick={handleSendConnectionRequest}
-              disabled={isSendingConnectionRequest}
-              className="rounded-full border border-sky-300 bg-sky-600 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {isSendingConnectionRequest ? 'Sending...' : 'Connection Request'}
-            </button>
-          </div>
+          {connectionRelationship === 'connected' ? (
+            <p className="mt-2 inline-flex rounded-full border border-emerald-300 bg-emerald-100 px-3 py-1 text-sm font-semibold text-emerald-700">
+              Connected
+            </p>
+          ) : (
+            <>
+              <p className="mt-1 text-xs text-sky-800">Choose a connection role and send a request message.</p>
+              <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center">
+                <select
+                  value={connectionRequestRole}
+                  onChange={(event) => setConnectionRequestRole(event.target.value)}
+                  disabled={connectionRelationship !== 'none'}
+                  className="w-full rounded-lg border border-sky-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-sky-400 disabled:cursor-not-allowed disabled:opacity-60 sm:max-w-[210px]"
+                >
+                  <option value="expertise">Expertise</option>
+                  <option value="skill_provider">Skill provider</option>
+                  <option value="supplier">Delivery Man</option>
+                </select>
+                <input
+                  type="text"
+                  value={connectionRequestMessage}
+                  onChange={(event) => setConnectionRequestMessage(event.target.value)}
+                  placeholder="Write a short request message"
+                  disabled={connectionRelationship !== 'none'}
+                  className="w-full rounded-lg border border-sky-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-sky-400 disabled:cursor-not-allowed disabled:opacity-60"
+                />
+                <button
+                  type="button"
+                  onClick={handleSendConnectionRequest}
+                  disabled={isSendingConnectionRequest || connectionRelationship !== 'none'}
+                  className="rounded-full border border-sky-300 bg-sky-600 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {connectionRelationship === 'pending_outgoing'
+                    ? 'Request Pending'
+                    : connectionRelationship === 'pending_incoming'
+                      ? 'Respond in Connections'
+                      : isSendingConnectionRequest
+                        ? 'Sending...'
+                        : 'Connection Request'}
+                </button>
+              </div>
+            </>
+          )}
           {connectionNote ? <p className="mt-2 text-xs text-sky-800">{connectionNote}</p> : null}
         </div>
       )}

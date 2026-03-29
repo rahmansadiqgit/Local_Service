@@ -277,6 +277,7 @@ class ERPMessageSerializer(serializers.ModelSerializer):
 class ConnectionSerializer(serializers.ModelSerializer):
     requester_name = serializers.SerializerMethodField(read_only=True)
     addressee_name = serializers.SerializerMethodField(read_only=True)
+    requested_role_label = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = Connection
@@ -287,6 +288,8 @@ class ConnectionSerializer(serializers.ModelSerializer):
             "addressee",
             "addressee_name",
             "status",
+            "requested_role",
+            "requested_role_label",
             "request_message",
             "accepted_at",
             "created_at",
@@ -307,6 +310,9 @@ class ConnectionSerializer(serializers.ModelSerializer):
 
     def get_addressee_name(self, obj):
         return obj.addressee.name or obj.addressee.username or obj.addressee.email
+
+    def get_requested_role_label(self, obj):
+        return obj.get_requested_role_display()
 
 
 class RatingSerializer(serializers.ModelSerializer):

@@ -124,6 +124,6 @@ class ProblemReportAdmin(admin.ModelAdmin):
 
 @admin.register(Connection)
 class ConnectionAdmin(admin.ModelAdmin):
-    list_display = ("id", "requester", "addressee", "status", "accepted_at", "created_at")
-    list_filter = ("status", "created_at", "accepted_at")
+    list_display = ("id", "requester", "addressee", "requested_role", "status", "accepted_at", "created_at")
+    list_filter = ("requested_role", "status", "created_at", "accepted_at")
     search_fields = ("requester__username", "requester__email", "addressee__username", "addressee__email")
