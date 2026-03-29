@@ -74,19 +74,23 @@ export default function ERPTaskCard({
   const snapshotTotals = snapshot.totals || {}
   const supplierNote = String(snapshot?.notes?.supplier_note || snapshot?.supplier_note || '').trim()
 
-  const parsePostCategories = (value) =>
-    String(value || '')
-      .split(',')
-      .map((item) => String(item || '').trim().toLowerCase())
-      .filter(Boolean)
+  const hasRequiredRows = (rows) =>
+    Array.isArray(rows) &&
+    rows.some((row) => {
+      const qty = Number(row?.quantity ?? row?.qty ?? 0)
+      const lineTotal = Number(row?.line_total ?? row?.lineTotal ?? 0)
+      return qty > 0 || lineTotal > 0
+    })
 
-  const categories = parsePostCategories(post?.post_name || snapshotPost?.name || '')
-  const hasExpertiseCategory =
-    categories.includes('expertise') || snapshotExpertise.some((row) => Number(row.quantity || 0) > 0)
-  const hasServicesCategory =
-    categories.includes('service') || categories.includes('services') || snapshotServices.length > 0
-  const hasProductCategory =
-    categories.includes('product') || categories.includes('products') || snapshotProducts.length > 0
+  const hasExpertiseRows = hasRequiredRows(snapshotExpertise)
+  const hasServiceRows = hasRequiredRows(snapshotServices)
+  const hasProductRows = hasRequiredRows(snapshotProducts)
+  const hasExpertiseTotal = Number(snapshotTotals.expertise_total || snapshotTotals.expertise || 0) > 0
+  const hasServiceTotal = Number(snapshotTotals.services_total || snapshotTotals.services || 0) > 0
+  const hasProductTotal = Number(snapshotTotals.products_total || snapshotTotals.products || 0) > 0
+  const hasExpertiseCategory = hasExpertiseRows || hasExpertiseTotal
+  const hasServicesCategory = hasServiceRows || hasServiceTotal
+  const hasProductCategory = hasProductRows || hasProductTotal
 
   const memberMenuOptions = [
     hasExpertiseCategory ? 'Expertise' : null,
@@ -311,6 +315,15 @@ export default function ERPTaskCard({
 
   const roleLabel =
     viewerRole === 'Provider' ? 'Providing' : viewerRole === 'Receiver' ? 'Receiving' : erp.category
+
+  const requiredCategoryLabels = [
+    hasExpertiseCategory ? 'Expertise' : null,
+    hasServicesCategory ? 'Services' : null,
+    hasProductCategory ? 'Product' : null,
+  ].filter(Boolean)
+
+  const taskCategoryLabel =
+    requiredCategoryLabels.length > 0 ? requiredCategoryLabels.join(', ') : post?.post_name || `Task #${erp.id}`
 
   const providerUser = users.find((entry) => Number(entry.id) === Number(erp.provider))
   const providerDisplayName =
@@ -718,9 +731,9 @@ export default function ERPTaskCard({
         </p>
         <p
           className="px-2 text-center text-lg font-normal tracking-normal text-slate-500"
-          title={post?.post_name || `Task #${erp.id}`}
+          title={taskCategoryLabel}
         >
-          {post?.post_name || `Task #${erp.id}`}
+          {taskCategoryLabel}
         </p>
         <span className={`rounded-full px-4 py-1.5 text-base font-bold ${stageStyle}`}>{erp.stage}</span>
       </div>

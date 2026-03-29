@@ -738,7 +738,9 @@ export default function Dashboard() {
                     return (
                       <div key={`post-rating-${post.id}-${entry.id}`} className="rounded-lg border border-violet-200 bg-white p-2">
                         <p className="font-semibold text-slate-800">
-                          {reviewer?.name || reviewer?.username || `User #${reviewerId}`} -> {target?.name || target?.username || `User #${targetId}`}
+                          {reviewer?.name || reviewer?.username || `User #${reviewerId}`}
+                          {' -> '}
+                          {target?.name || target?.username || `User #${targetId}`}
                         </p>
                         {reviewerRoles.length ? (
                           <p className="mt-0.5 text-[11px] text-slate-500">Role: {reviewerRoles.join(', ')}</p>
