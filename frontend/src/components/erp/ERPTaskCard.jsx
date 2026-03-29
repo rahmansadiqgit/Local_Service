@@ -36,6 +36,7 @@ export default function ERPTaskCard({
   const [replyTargetId, setReplyTargetId] = useState(null)
   const [isLoadingMessages, setIsLoadingMessages] = useState(false)
   const [isSendingMessage, setIsSendingMessage] = useState(false)
+  const [messageError, setMessageError] = useState('')
   const [selfAssignMessageByRole, setSelfAssignMessageByRole] = useState({})
   const [isLeavingAssignment, setIsLeavingAssignment] = useState(false)
 
@@ -347,11 +348,14 @@ export default function ERPTaskCard({
   const loadMessages = useCallback(async () => {
     if (erp.stage !== 'On Process') return
     setIsLoadingMessages(true)
+    setMessageError('')
     try {
       const { data } = await api.get(`/erp/${erp.id}/messages/`)
       setMessages(Array.isArray(data) ? data : [])
     } catch (error) {
       console.error(error)
+      const detail = String(error?.response?.data?.detail || '').trim()
+      setMessageError(detail || 'Failed to load messages. Please refresh and try again.')
     } finally {
       setIsLoadingMessages(false)
     }
@@ -368,6 +372,7 @@ export default function ERPTaskCard({
     if (!messageText || erp.stage !== 'On Process') return
 
     setIsSendingMessage(true)
+    setMessageError('')
     try {
       const payload = {
         message: messageText,
@@ -382,6 +387,8 @@ export default function ERPTaskCard({
       setReplyTargetId(null)
     } catch (error) {
       console.error(error)
+      const detail = String(error?.response?.data?.detail || '').trim()
+      setMessageError(detail || 'Could not send the message. Please try again.')
     } finally {
       setIsSendingMessage(false)
     }
@@ -901,7 +908,12 @@ export default function ERPTaskCard({
             <input
               type="text"
               value={chatInput}
-              onChange={(event) => setChatInput(event.target.value)}
+              onChange={(event) => {
+                setChatInput(event.target.value)
+                if (messageError) {
+                  setMessageError('')
+                }
+              }}
               onKeyDown={(event) => {
                 if (event.key === 'Enter' && !event.shiftKey) {
                   event.preventDefault()
@@ -920,6 +932,8 @@ export default function ERPTaskCard({
               {isSendingMessage ? 'Sending...' : 'Send'}
             </button>
           </div>
+
+          {messageError ? <p className="text-[11px] text-rose-600">{messageError}</p> : null}
         </div>
       ) : null}
 

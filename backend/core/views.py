@@ -414,39 +414,41 @@ class ERPViewSet(viewsets.ModelViewSet):
             members = snapshot.get("members") or {}
 
             for role in self._allowed_member_roles():
-                role_bucket = members.get(role) or {}
+                for role_bucket in self._iter_role_buckets(members, role):
+                    # Always include ERP for explicitly assigned members.
+                    raw_assignees = role_bucket.get("assignee_ids") or []
+                    assignee_ids = set()
+                    for raw_id in raw_assignees:
+                        try:
+                            assignee_ids.add(int(raw_id))
+                        except (TypeError, ValueError):
+                            continue
 
-                # Always include ERP for explicitly assigned members.
-                raw_assignees = role_bucket.get("assignee_ids") or []
-                assignee_ids = set()
-                for raw_id in raw_assignees:
-                    try:
-                        assignee_ids.add(int(raw_id))
-                    except (TypeError, ValueError):
+                    if int(user.id) in assignee_ids:
+                        additional_ids.add(int(item.id))
+                        break
+
+                    if not bool(role_bucket.get("self_assign_enabled", False)):
                         continue
 
-                if int(user.id) in assignee_ids:
-                    additional_ids.add(int(item.id))
-                    break
+                    raw_targets = role_bucket.get("self_assign_target_ids", None)
+                    target_ids = set()
+                    for raw_id in (raw_targets or []):
+                        try:
+                            target_ids.add(int(raw_id))
+                        except (TypeError, ValueError):
+                            continue
 
-                if not bool(role_bucket.get("self_assign_enabled", False)):
-                    continue
+                    # Backward compatibility only when key is missing, not when explicitly empty.
+                    if raw_targets is None and not target_ids and item.provider:
+                        # Backward compatibility for snapshots created before target IDs were stored.
+                        target_ids = self._get_accepted_connection_member_ids(item.provider, role=role)
 
-                raw_targets = role_bucket.get("self_assign_target_ids", None)
-                target_ids = set()
-                for raw_id in (raw_targets or []):
-                    try:
-                        target_ids.add(int(raw_id))
-                    except (TypeError, ValueError):
-                        continue
+                    if int(user.id) in target_ids:
+                        additional_ids.add(int(item.id))
+                        break
 
-                # Backward compatibility only when key is missing, not when explicitly empty.
-                if raw_targets is None and not target_ids and item.provider:
-                    # Backward compatibility for snapshots created before target IDs were stored.
-                    target_ids = self._get_accepted_connection_member_ids(item.provider, role=role)
-
-                if int(user.id) in target_ids:
-                    additional_ids.add(int(item.id))
+                if int(item.id) in additional_ids:
                     break
 
         if not additional_ids:
@@ -509,11 +511,29 @@ class ERPViewSet(viewsets.ModelViewSet):
     def _allowed_member_roles(self):
         return {"expertise", "skill_provider", "supplier"}
 
+    def _member_role_aliases(self):
+        return {
+            "expertise": {"expertise"},
+            "skill_provider": {"skill_provider", "service_provider"},
+            "supplier": {"supplier", "delivery_man", "delivary_man", "delivery"},
+        }
+
+    def _iter_role_buckets(self, members, role):
+        aliases = self._member_role_aliases().get(role, {role})
+        for key in aliases:
+            bucket = members.get(key) or {}
+            if isinstance(bucket, dict):
+                yield bucket
+
     def _get_member_bucket(self, erp, role):
         snapshot = erp.configuration_snapshot or {}
         members = snapshot.get("members") or {}
 
-        role_bucket = members.get(role) or {}
+        merged_role_bucket = {}
+        for bucket in self._iter_role_buckets(members, role):
+            merged_role_bucket.update(bucket)
+
+        role_bucket = merged_role_bucket
         existing_ids = role_bucket.get("assignee_ids") or []
         assignee_ids = []
         for raw_id in existing_ids:
