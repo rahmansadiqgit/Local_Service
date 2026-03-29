@@ -417,15 +417,16 @@ class ERPViewSet(viewsets.ModelViewSet):
                 if not bool(role_bucket.get("self_assign_enabled", False)):
                     continue
 
-                raw_targets = role_bucket.get("self_assign_target_ids") or []
+                raw_targets = role_bucket.get("self_assign_target_ids", None)
                 target_ids = set()
-                for raw_id in raw_targets:
+                for raw_id in (raw_targets or []):
                     try:
                         target_ids.add(int(raw_id))
                     except (TypeError, ValueError):
                         continue
 
-                if not target_ids and item.provider:
+                # Backward compatibility only when key is missing, not when explicitly empty.
+                if raw_targets is None and not target_ids and item.provider:
                     # Backward compatibility for snapshots created before target IDs were stored.
                     target_ids = self._get_accepted_connection_member_ids(item.provider, role=role)
 
@@ -736,8 +737,9 @@ class ERPViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        allowed_member_ids = set(role_bucket.get("self_assign_target_ids") or [])
-        if not allowed_member_ids and erp.provider:
+        raw_targets = role_bucket.get("self_assign_target_ids", None)
+        allowed_member_ids = set(raw_targets or [])
+        if raw_targets is None and not allowed_member_ids and erp.provider:
             # Backward compatibility for old records published before role target IDs were saved.
             allowed_member_ids = self._get_accepted_connection_member_ids(erp.provider, role=role)
 
@@ -790,6 +792,23 @@ class ERPViewSet(viewsets.ModelViewSet):
                 changed = True
 
             role_bucket["assignee_ids"] = sorted(list(unique_ids))
+
+            # Also remove from self-assign target visibility so ERP card disappears after leave.
+            existing_targets = role_bucket.get("self_assign_target_ids", None)
+            if existing_targets is not None:
+                clean_targets = []
+                for raw_id in existing_targets:
+                    try:
+                        parsed_target = int(raw_id)
+                    except (TypeError, ValueError):
+                        continue
+                    if parsed_target > 0 and parsed_target != user_id:
+                        clean_targets.append(parsed_target)
+
+                if len(clean_targets) != len(list(existing_targets)):
+                    changed = True
+                role_bucket["self_assign_target_ids"] = sorted(list(set(clean_targets)))
+
             members[role_key] = role_bucket
 
         # Backward compatibility: some records may still track member assignment here.
