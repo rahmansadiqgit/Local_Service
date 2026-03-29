@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import api from '../api/client'
+import RatingRingAvatar from '../components/RatingRingAvatar'
 import useAuth from '../context/useAuth'
 
 export default function EditProfile() {
@@ -36,6 +37,8 @@ export default function EditProfile() {
   }
 
   const profilePhotoSrc = resolveMediaUrl(previewUrl || profile?.profile_photo || '')
+  const profileRatingValue =
+    Number(profile?.profile_rating ?? profile?.average_rating ?? profile?.rating)
 
   useEffect(() => {
     const load = async () => {
@@ -211,9 +214,15 @@ export default function EditProfile() {
 
         <div className="rounded-2xl border border-violet-200/80 p-4 shadow-sm backdrop-blur-md" style={{ backgroundColor: 'rgba(234, 226, 249, 0.56)' }}>
           <div className="flex flex-col items-center gap-3">
-            <div className="h-32 w-32 overflow-hidden rounded-full border-2 border-violet-200 bg-slate-100 shadow-sm">
+            <div className="h-32 w-32 grid place-items-center rounded-full bg-transparent shadow-sm">
               {profilePhotoSrc ? (
-                <img src={profilePhotoSrc} alt="Preview" className="h-full w-full object-cover" />
+                <RatingRingAvatar
+                  src={profilePhotoSrc}
+                  alt="Preview"
+                  rating={Number.isFinite(profileRatingValue) ? profileRatingValue : null}
+                  size={128}
+                  ringWidth={3}
+                />
               ) : (
                 <div className="flex h-full w-full items-center justify-center text-xs text-slate-400">No photo</div>
               )}

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 
 import api from '../../api/client'
 import defaultAvatar from '../../assets/default-avatar.svg'
+import RatingRingAvatar from '../RatingRingAvatar'
 
 export default function ERPTaskCard({
   erp,
@@ -265,6 +266,30 @@ export default function ERPTaskCard({
   const isReceiver = viewerRole === 'Receiver'
   const canUseMessenger = isProvider || isReceiver || currentUserRoleResponsibilities.length > 0
   const canCompleteAsReceiver = isReceiver && erp.stage === 'On Process'
+
+  const averageRatingByUser = (() => {
+    const totals = new Map()
+    const counts = new Map()
+    ;(Array.isArray(ratings) ? ratings : []).forEach((entry) => {
+      const providerId = Number(entry?.provider)
+      const value = Number(entry?.rating_value)
+      if (!Number.isFinite(providerId) || providerId <= 0 || !Number.isFinite(value)) return
+      totals.set(providerId, (totals.get(providerId) || 0) + value)
+      counts.set(providerId, (counts.get(providerId) || 0) + 1)
+    })
+
+    const averages = new Map()
+    totals.forEach((sum, userId) => {
+      const count = counts.get(userId) || 1
+      averages.set(userId, sum / count)
+    })
+    return averages
+  })()
+
+  const getUserRating = useCallback(
+    (userId) => averageRatingByUser.get(Number(userId)) ?? null,
+    [averageRatingByUser],
+  )
 
   const counterpartyUserId =
     viewerRole === 'Provider'
@@ -725,10 +750,12 @@ export default function ERPTaskCard({
             className="mt-1 inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-brand-300 hover:bg-brand-50/60"
           >
             <span className="text-slate-500">{counterpartyLabel}:</span>
-            <img
+            <RatingRingAvatar
               src={counterpartyPhoto}
               alt={counterpartyName}
-              className="h-7 w-7 rounded-full border border-slate-200 object-cover"
+              rating={getUserRating(counterpartyUserId)}
+              size={48}
+              ringWidth={2}
             />
             <span className="text-slate-800">{counterpartyName}</span>
             <p className="text-[11px] font-normal text-slate-500">{post?.location || 'Unknown location'}</p>
@@ -1186,10 +1213,12 @@ export default function ERPTaskCard({
                         onClick={() => onOpenOwner?.(Number(msg.sender))}
                         className="inline-flex items-center gap-1 rounded-md px-1 py-0.5 transition hover:bg-slate-100"
                       >
-                        <img
+                        <RatingRingAvatar
                           src={toMediaUrl(msg.sender_profile_photo) || defaultAvatar}
                           alt={msg.sender_name || 'Member'}
-                          className="h-4 w-4 rounded-full object-cover"
+                          rating={getUserRating(msg.sender)}
+                          size={24}
+                          ringWidth={2}
                         />
                         <span className="font-semibold text-slate-700 hover:underline">{msg.sender_name || `User #${msg.sender}`}</span>
                       </button>
@@ -1315,10 +1344,12 @@ export default function ERPTaskCard({
                             className="rounded-lg border border-slate-200 bg-slate-50 p-2 text-left transition hover:border-brand-300 hover:bg-brand-50/50"
                           >
                             <div className="flex items-center gap-2">
-                              <img
+                              <RatingRingAvatar
                                 src={toMediaUrl(member.profile_photo) || defaultAvatar}
                                 alt={member.name || member.username || `User #${member.id}`}
-                                className="h-8 w-8 rounded-full border border-slate-200 object-cover"
+                                rating={getUserRating(member.id)}
+                                size={48}
+                                ringWidth={2}
                               />
                               <div className="min-w-0">
                                 <p className="truncate text-xs font-semibold text-slate-800">

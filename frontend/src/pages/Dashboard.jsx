@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import api from '../api/client';
 import ExpertiseTable from '../components/ExpertiseTable';
 import ProductTable from '../components/ProductTable';
+import RatingRingAvatar from '../components/RatingRingAvatar';
 import ServiceTable from '../components/ServiceTable';
 import useAuth from '../context/useAuth';
 
@@ -163,6 +164,25 @@ export default function Dashboard() {
     })
     return map
   }, [users])
+
+  const averageRatingByUser = useMemo(() => {
+    const totals = new Map()
+    const counts = new Map()
+    ;(Array.isArray(ratings) ? ratings : []).forEach((entry) => {
+      const providerId = Number(entry?.provider)
+      const value = Number(entry?.rating_value)
+      if (!Number.isFinite(providerId) || providerId <= 0 || !Number.isFinite(value)) return
+      totals.set(providerId, (totals.get(providerId) || 0) + value)
+      counts.set(providerId, (counts.get(providerId) || 0) + 1)
+    })
+
+    const averages = new Map()
+    totals.forEach((sum, userId) => {
+      const count = counts.get(userId) || 1
+      averages.set(userId, sum / count)
+    })
+    return averages
+  }, [ratings])
 
   const roleLabelsByPostAndUser = useMemo(() => {
     const map = new Map()
@@ -971,10 +991,12 @@ export default function Dashboard() {
                         onClick={() => navigate(`/dashboard/${row.providerId}`)}
                         className="inline-flex items-center gap-2 rounded-lg px-1 py-1 text-left text-slate-800 transition hover:bg-sky-100"
                       >
-                        <img
+                        <RatingRingAvatar
                           src={toMediaUrl(row.providerPhoto) || '/images/default-avatar.svg'}
                           alt={row.providerName}
-                          className="h-7 w-7 rounded-full border border-sky-200 object-cover"
+                          rating={averageRatingByUser.get(Number(row.providerId)) ?? null}
+                          size={28}
+                          ringWidth={2}
                         />
                         <span className="font-semibold hover:underline">{row.providerName}</span>
                       </button>

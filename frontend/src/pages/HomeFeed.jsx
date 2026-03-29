@@ -233,6 +233,26 @@ export default function HomeFeed() {
     }, {})
   }, [ratings])
 
+  const averageRatingByUser = useMemo(() => {
+    const totals = {}
+    const counts = {}
+
+    ;(Array.isArray(ratings) ? ratings : []).forEach((entry) => {
+      const providerId = Number(entry?.provider)
+      const value = Number(entry?.rating_value)
+      if (!Number.isFinite(providerId) || providerId <= 0 || !Number.isFinite(value)) return
+      totals[providerId] = (totals[providerId] || 0) + value
+      counts[providerId] = (counts[providerId] || 0) + 1
+    })
+
+    const averages = {}
+    Object.keys(totals).forEach((providerId) => {
+      const count = counts[providerId] || 1
+      averages[providerId] = totals[providerId] / count
+    })
+    return averages
+  }, [ratings])
+
   const costSummaryByPost = useMemo(() => {
     const map = {}
 
@@ -747,36 +767,44 @@ export default function HomeFeed() {
           <div className="card">No posts match your filters.</div>
         ) : (
           <div className="grid grid-cols-1 items-stretch gap-6 md:grid-cols-2">
-            {filteredPosts.map(post => (
-              <PostCard
-                key={post.id}
-                post={post}
-                skills={skillsByPost[post.id] || []}
-                expertises={expertisesByPost[post.id] || []}
-                products={productsByPost[post.id] || []}
-                rating={ratingByPost[post.id]}
-                isOwnPost={
-                  Boolean(currentUserId) &&
-                  String(post.owner_id || post.owner) === String(currentUserId)
-                }
-                profile={{
-                  id: post.owner_id || post.owner || null,
-                  name:
-                    post.owner_name ||
-                    post.owner_username ||
-                    post.brand_company_name ||
-                    'Localix Member',
-                  supplyStatus: post.owner_supply_status || '',
-                  demandStatus: post.owner_demand_status || '',
-                  photo: post.owner_profile_photo || '',
-                }}
-                onAction={handleAction}
-                onAddToCart={handleAddToCart}
-                inCart={isInCart(post.id)}
-                isDetailsOpen={openDetailsPostId === post.id}
-                onToggleDetails={(shouldOpen) => handleToggleDetails(post.id, shouldOpen)}
-              />
-            ))}
+            {filteredPosts.map((post) => {
+              const ownerId = Number(post.owner_id || post.owner)
+              const profileRating =
+                averageRatingByUser[ownerId]
+                ?? Number(post.owner_profile_rating ?? post.owner_rating)
+
+              return (
+                <PostCard
+                  key={post.id}
+                  post={post}
+                  skills={skillsByPost[post.id] || []}
+                  expertises={expertisesByPost[post.id] || []}
+                  products={productsByPost[post.id] || []}
+                  rating={ratingByPost[post.id]}
+                  isOwnPost={
+                    Boolean(currentUserId) &&
+                    String(post.owner_id || post.owner) === String(currentUserId)
+                  }
+                  profile={{
+                    id: post.owner_id || post.owner || null,
+                    name:
+                      post.owner_name ||
+                      post.owner_username ||
+                      post.brand_company_name ||
+                      'Localix Member',
+                    supplyStatus: post.owner_supply_status || '',
+                    demandStatus: post.owner_demand_status || '',
+                    photo: post.owner_profile_photo || '',
+                    rating: Number.isFinite(profileRating) ? profileRating : null,
+                  }}
+                  onAction={handleAction}
+                  onAddToCart={handleAddToCart}
+                  inCart={isInCart(post.id)}
+                  isDetailsOpen={openDetailsPostId === post.id}
+                  onToggleDetails={(shouldOpen) => handleToggleDetails(post.id, shouldOpen)}
+                />
+              )
+            })}
           </div>
         )}
       </section>

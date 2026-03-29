@@ -1,9 +1,9 @@
 import { useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import defaultAvatar from '../assets/default-avatar.svg'
 import ExpertiseTable from './ExpertiseTable'
 import ProductTable from './ProductTable'
 import RatingCard from './RatingCard'
+import RatingRingAvatar from './RatingRingAvatar'
 import ServiceTable from './ServiceTable'
 
 export default function PostCard({
@@ -38,7 +38,8 @@ export default function PostCard({
     return `${backendOrigin}/${value}`
   }
 
-  const profilePhotoSrc = toMediaUrl(profile?.photo) || defaultAvatar
+  const profilePhotoSrc = toMediaUrl(profile?.photo)
+  const profileRatingValue = Number(profile?.rating ?? profile?.profile_rating ?? profile?.average_rating)
   const postImageSrc = toMediaUrl(post?.image)
 
   const statusLabels = useMemo(() => {
@@ -179,13 +180,15 @@ export default function PostCard({
           <button
             type="button"
             onClick={handleProfileNavigate}
-            className="h-12 w-12 shrink-0 overflow-hidden rounded-full border border-slate-200 bg-white transition-opacity hover:opacity-80 focus:outline-none focus:ring-2 focus:ring-violet-300"
+            className="shrink-0 rounded-full bg-white transition-opacity hover:opacity-80 focus:outline-none focus:ring-2 focus:ring-violet-300"
             aria-label={`Open ${profile?.name || 'Localix Member'} profile`}
           >
-            <img
+            <RatingRingAvatar
               src={profilePhotoSrc}
               alt={profile?.name || 'Profile'}
-              className="h-full w-full object-cover"
+              rating={Number.isFinite(profileRatingValue) ? profileRatingValue : null}
+              size={48}
+              ringWidth={2}
             />
           </button>
           <div className="min-w-0">
