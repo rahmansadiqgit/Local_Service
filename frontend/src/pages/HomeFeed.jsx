@@ -237,11 +237,38 @@ export default function HomeFeed() {
   }, [products])
 
   const ratingByPost = useMemo(() => {
-    return ratings.reduce((acc, rating) => {
-      acc[rating.post] = rating
+    const ownerByPostId = new Map(
+      (Array.isArray(posts) ? posts : []).map((post) => [
+        Number(post?.id),
+        Number(post?.owner_id ?? post?.owner),
+      ]),
+    )
+
+    return (Array.isArray(ratings) ? ratings : []).reduce((acc, entry) => {
+      const postId = Number(entry?.post)
+      const ownerId = ownerByPostId.get(postId)
+      const providerId = Number(entry?.provider)
+      const customerId = Number(entry?.customer)
+
+      if (!Number.isFinite(postId) || !Number.isFinite(ownerId) || ownerId <= 0) return acc
+
+      // HomeFeed should show receiver's review about the post owner, not owner-authored ratings.
+      const isReceiverReview =
+        Number.isFinite(customerId)
+        && customerId > 0
+        && customerId !== ownerId
+        && providerId === ownerId
+
+      if (!isReceiverReview) return acc
+
+      const prev = acc[postId]
+      if (!prev || Number(entry?.id || 0) > Number(prev?.id || 0)) {
+        acc[postId] = entry
+      }
+
       return acc
     }, {})
-  }, [ratings])
+  }, [ratings, posts])
 
   const averageRatingByUser = useMemo(() => {
     const totals = {}
