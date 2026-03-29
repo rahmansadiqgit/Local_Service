@@ -5,7 +5,7 @@ import RatingRingAvatar from '../components/RatingRingAvatar'
 const ROLE_ENTRIES = [
   { key: 'expertise', label: 'Expertise' },
   { key: 'skill_provider', label: 'Skill provider' },
-  { key: 'supplier', label: 'Supplier' },
+  { key: 'supplier', label: 'Delivary Man' },
 ]
 
 export default function Connections() {
@@ -141,6 +141,39 @@ export default function Connections() {
     : []
 
   const openSelfAssignPosts = useMemo(() => {
+    const getResponsibilityText = (erp, roleKey) => {
+      const snapshot = erp?.configuration_snapshot || {}
+      const expertiseRows = Array.isArray(snapshot.expertise) ? snapshot.expertise : []
+      const serviceRows = Array.isArray(snapshot.services) ? snapshot.services : []
+      const productRows = Array.isArray(snapshot.products) ? snapshot.products : []
+
+      const uniqueNames = (rows) =>
+        Array.from(
+          new Set(
+            rows
+              .map((row) => String(row?.name || '').trim())
+              .filter(Boolean),
+          ),
+        )
+
+      if (roleKey === 'expertise') {
+        const names = uniqueNames(expertiseRows)
+        return names.length ? `Work as: ${names.join(', ')}` : 'Work as listed in ERP details.'
+      }
+
+      if (roleKey === 'skill_provider') {
+        const names = uniqueNames(serviceRows)
+        return names.length ? `Provide service: ${names.join(', ')}` : 'Provide service as listed in ERP details.'
+      }
+
+      if (roleKey === 'supplier') {
+        const names = uniqueNames(productRows)
+        return names.length ? `Deliver product: ${names.join(', ')}` : 'Deliver product as listed in ERP details.'
+      }
+
+      return 'See ERP details for responsibility.'
+    }
+
     return (erpItems || []).flatMap((erp) => {
       if (String(erp?.stage || '').trim().toLowerCase() === 'on process') {
         return []
@@ -168,6 +201,7 @@ export default function Connections() {
           erp,
           role: key,
           roleLabel: label,
+          responsibilityText: getResponsibilityText(erp, key),
           assignedIds: Array.isArray(members[key]?.assignee_ids) ? members[key].assignee_ids : [],
           selfAssignMessage: String(members[key]?.self_assign_message || '').trim(),
           postLink: String(members[key]?.self_assign_post_link || '').trim(),
@@ -528,7 +562,7 @@ export default function Connections() {
             <p className="mt-1 text-xs text-slate-500">If provider generated assignment post, you can assign or remove yourself here.</p>
             <div className="mt-3 space-y-2">
               {openSelfAssignPosts.length ? (
-                openSelfAssignPosts.map(({ erp, role, roleLabel, assignedIds, selfAssignMessage, postTitle }) => {
+                openSelfAssignPosts.map(({ erp, role, roleLabel, responsibilityText, assignedIds, selfAssignMessage, postTitle }) => {
                   const isAssigned = assignedIds.map((id) => Number(id)).includes(Number(currentUserId))
                   const loadingKey = `${erp.id}-${role}`
                   const postRecord = posts.find((item) => Number(item.id) === Number(erp.post)) || null
@@ -549,6 +583,7 @@ export default function Connections() {
                       </div>
 
                       <p className="mt-1 text-xs text-slate-500">Requested by: {providerName}</p>
+                      <p className="mt-1 text-xs text-slate-600">Responsibility: {responsibilityText}</p>
                       <p className="mt-1 text-xs text-slate-600">
                         Message: {selfAssignMessage || 'No message from provider.'}
                       </p>
