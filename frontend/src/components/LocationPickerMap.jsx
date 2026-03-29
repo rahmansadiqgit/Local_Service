@@ -153,6 +153,11 @@ export default function LocationPickerMap({
     )
   }
 
+  const handleConfirmSelectedLocation = () => {
+    if (!selectedPosition) return
+    onPick(selectedPosition[0], selectedPosition[1])
+  }
+
   return (
     <div className={`flex flex-col items-center ${className}`}>
       <div
@@ -207,7 +212,16 @@ export default function LocationPickerMap({
             {selectedPosition && (
               <Marker position={selectedPosition} icon={GOOGLE_STYLE_MARKER_ICON}>
                 <Popup>
-                  <div className="text-xs font-semibold text-slate-700">{popupText}</div>
+                  <div className="space-y-2">
+                    <div className="text-xs font-semibold text-slate-700">{popupText}</div>
+                    <button
+                      type="button"
+                      onClick={handleConfirmSelectedLocation}
+                      className="rounded-md bg-violet-600 px-2.5 py-1 text-xs font-semibold text-white transition hover:bg-violet-700"
+                    >
+                      Confirm
+                    </button>
+                  </div>
                 </Popup>
               </Marker>
             )}
