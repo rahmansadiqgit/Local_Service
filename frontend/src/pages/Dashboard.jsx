@@ -329,6 +329,32 @@ export default function Dashboard() {
       .sort((left, right) => Number(right.id) - Number(left.id))
   }, [profile?.id, ratings, erpItems, posts, usersById])
 
+  const profileRatingStats = useMemo(() => {
+    const targetId = Number(profile?.id)
+    if (!Number.isFinite(targetId) || targetId <= 0) {
+      return { count: 0, average: 0 }
+    }
+
+    const ownedProviderRatings = (Array.isArray(posts) ? posts : []).flatMap((post) => {
+      const ownerId = Number(post?.owner_id ?? post?.owner)
+      if (ownerId !== targetId) return []
+      return (ratingsByPost[post.id] || []).filter((entry) => Number(entry?.provider) === ownerId)
+    })
+
+    const providerFeedbackRatings = providerGivenRatingsForProfile.map((item) => Number(item?.rating || 0))
+    const mergedValues = [
+      ...ownedProviderRatings.map((entry) => Number(entry?.rating_value || 0)),
+      ...providerFeedbackRatings,
+    ].filter((value) => Number.isFinite(value) && value > 0)
+
+    const total = mergedValues.reduce((sum, value) => sum + value, 0)
+    const count = mergedValues.length
+    return {
+      count,
+      average: count ? total / count : 0,
+    }
+  }, [profile?.id, posts, ratingsByPost, providerGivenRatingsForProfile])
+
   // Filter posts for the selected profile; support owner_id/owner and string/number IDs.
   const userPosts = useMemo(() => {
     const targetId = profile?.id
@@ -874,6 +900,13 @@ export default function Dashboard() {
             )}
           </div>
         </div>
+      </div>
+
+      <div className="card border border-violet-300/80 bg-gradient-to-br from-[#f4e9ff] via-[#ecd9ff] to-[#f7ecff] shadow-lg">
+        <p className="text-lg font-semibold text-violet-900">
+          Profile Rating : {profileRatingStats.average.toFixed(2)} / 5
+          <span className="ml-2 text-base font-normal text-violet-700">({profileRatingStats.count} reviews)</span>
+        </p>
       </div>
 
       <div className="card border border-violet-300/80 bg-gradient-to-br from-[#f4e9ff] via-[#ecd9ff] to-[#f7ecff] shadow-lg">
