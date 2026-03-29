@@ -134,6 +134,58 @@ export default function ERPTaskCard({
     : []
   const visibleMembers = isProvider ? providerMembersWithSelfFirst : assignedMembersForSelectedRole
 
+  const getResponsibilityItemsByRole = (roleKey) => {
+    if (roleKey === 'expertise') {
+      return snapshotExpertise
+        .map((item) => String(item?.name || '').trim())
+        .filter(Boolean)
+    }
+
+    if (roleKey === 'skill_provider') {
+      return snapshotServices
+        .map((item) => String(item?.name || '').trim())
+        .filter(Boolean)
+    }
+
+    if (roleKey === 'supplier') {
+      return snapshotProducts
+        .map((item) => String(item?.name || '').trim())
+        .filter(Boolean)
+    }
+
+    return []
+  }
+
+  const getResponsibilityTextByRole = (roleKey) => {
+    if (!roleKey) return ''
+    const items = Array.from(new Set(getResponsibilityItemsByRole(roleKey)))
+    if (!items.length) return 'Specific task details are not listed yet.'
+
+    const joined = items.join(', ')
+    if (roleKey === 'expertise') return `Work as: ${joined}`
+    if (roleKey === 'skill_provider') return `Provide service: ${joined}`
+    if (roleKey === 'supplier') return `Deliver product: ${joined}`
+    return joined
+  }
+
+  const selectedRoleResponsibilityText = getResponsibilityTextByRole(selectedMemberRole)
+  const currentUserNumericId = Number(currentUserId)
+  const hasCurrentUserId = Number.isFinite(currentUserNumericId) && currentUserNumericId > 0
+  const currentUserRoleResponsibilities = hasCurrentUserId
+    ? associatedMemberRoles
+        .filter((roleKey) => {
+          const assigneeIds = Array.isArray(membersState[roleKey]?.assignee_ids)
+            ? membersState[roleKey].assignee_ids
+            : []
+          return assigneeIds.map((id) => Number(id)).includes(currentUserNumericId)
+        })
+        .map((roleKey) => ({
+          roleKey,
+          roleLabel: roleKeyToLabel[roleKey] || roleKey,
+          responsibilityText: getResponsibilityTextByRole(roleKey),
+        }))
+    : []
+
   const counterpartyUserId =
     viewerRole === 'Provider'
       ? Number(erp.receiver)
@@ -168,7 +220,6 @@ export default function ERPTaskCard({
   const completedStageTasks = (phaseTasks.Completed || []).filter((task) => task.done)
   const completedTasks = [...donePendingTasks, ...completedStageTasks]
 
-  const openPendingTaskKeys = new Set(openPendingTasks.map((task) => String(task.key || '').trim()))
   const pendingMemberRoleByTaskKey = {
     member_expertise: 'expertise',
     member_skill_provider: 'skill_provider',
@@ -300,6 +351,19 @@ export default function ERPTaskCard({
       <h2 className="relative mx-auto mt-2 w-full max-w-3xl rounded-xl bg-white/80 px-3 py-2 text-center text-base font-bold text-slate-800 shadow-sm ring-1 ring-slate-200/80">
         <span className="font-semibold">Post Title:</span> {post?.post_title || snapshotPost?.title || '-'}
       </h2>
+
+      {currentUserRoleResponsibilities.length ? (
+        <div className="relative mx-auto mt-2 w-full max-w-3xl rounded-xl border border-brand-100 bg-brand-50/60 px-3 py-2 text-sm text-slate-700 shadow-sm">
+          <p className="text-xs font-semibold uppercase tracking-wide text-brand-700">Your Responsibility</p>
+          <div className="mt-1 space-y-1">
+            {currentUserRoleResponsibilities.map((entry) => (
+              <p key={`my-responsibility-${erp.id}-${entry.roleKey}`} className="leading-relaxed">
+                <span className="font-semibold text-slate-800">{entry.roleLabel}:</span> {entry.responsibilityText}
+              </p>
+            ))}
+          </div>
+        </div>
+      ) : null}
 
       <div className="relative space-y-1.5">
         {counterpartyUserId && (
@@ -548,6 +612,11 @@ export default function ERPTaskCard({
             Self-assign status: {selfAssignEnabled ? 'Open' : 'Closed'}
           </p>
 
+          <div className="rounded-md border border-brand-100 bg-brand-50/50 px-2 py-1.5 text-[11px] text-slate-700">
+            <p className="font-semibold text-brand-700">Responsibility in this ERP</p>
+            <p className="mt-0.5">{selectedRoleResponsibilityText}</p>
+          </div>
+
           {isProvider ? (
             <div className="space-y-1">
               <label className="text-[11px] font-semibold text-slate-600">
@@ -578,10 +647,15 @@ export default function ERPTaskCard({
                     key={`erp-member-${selectedMemberRole}-${user.id}`}
                     className={`flex items-center justify-between gap-2 rounded-md px-2 py-1 ${isProvider ? 'cursor-pointer hover:bg-white' : ''}`}
                   >
-                    <span className="truncate text-slate-700">
-                      {isCurrentUser
-                        ? 'Assign myself'
-                        : user.name || user.username || `User #${user.id}`}
+                    <span className="min-w-0">
+                      <span className="block truncate text-slate-700">
+                        {isCurrentUser
+                          ? 'Assign myself'
+                          : user.name || user.username || `User #${user.id}`}
+                      </span>
+                      <span className="block truncate text-[10px] text-slate-500">
+                        {selectedRoleResponsibilityText}
+                      </span>
                     </span>
                     {isProvider ? (
                       <input
