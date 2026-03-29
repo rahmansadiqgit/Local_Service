@@ -259,34 +259,37 @@ export default function ERP() {
     }
   }
 
-  const parsePostCategories = (value) =>
-    String(value || '')
-      .split(',')
-      .map((item) => String(item || '').trim().toLowerCase())
-      .filter(Boolean)
+  const hasRequiredRows = (rows) =>
+    Array.isArray(rows) &&
+    rows.some((row) => {
+      const qty = Number(row?.quantity ?? row?.qty ?? 0)
+      const lineTotal = Number(row?.line_total ?? row?.lineTotal ?? 0)
+      return qty > 0 || lineTotal > 0
+    })
 
   const getPhaseTasks = (erp) => {
     const isProvider = currentUserId && String(erp.provider) === String(currentUserId)
-    const post = postMap[erp.post] || {}
     const snapshot = erp.configuration_snapshot || {}
-    const snapshotPost = snapshot.post || {}
     const snapshotExpertise = Array.isArray(snapshot.expertise) ? snapshot.expertise : []
     const snapshotServices = Array.isArray(snapshot.services) ? snapshot.services : []
     const snapshotProducts = Array.isArray(snapshot.products) ? snapshot.products : []
+    const snapshotTotals = snapshot.totals || {}
     const memberAssignments = snapshot.members || {}
-    const categories = parsePostCategories(post.post_name || snapshotPost.name || '')
-
     const hasWorkers = Array.isArray(erp.assigned_workers) && erp.assigned_workers.length > 0
     const hasPdfSlip = Boolean(erp.pdf_slip)
     const hasTotalCost = Number(erp.total_cost || 0) > 0
     const hasLinkedPost = Boolean(erp.post)
 
-    const hasExpertiseCategory =
-      categories.includes('expertise') || snapshotExpertise.some((row) => Number(row.quantity || 0) > 0)
-    const hasServicesCategory =
-      categories.includes('services') || categories.includes('service') || snapshotServices.length > 0
-    const hasProductCategory =
-      categories.includes('product') || categories.includes('products') || snapshotProducts.some((row) => Number(row.quantity || 0) > 0)
+    const hasExpertiseRows = hasRequiredRows(snapshotExpertise)
+    const hasServiceRows = hasRequiredRows(snapshotServices)
+    const hasProductRows = hasRequiredRows(snapshotProducts)
+    const hasExpertiseTotal = Number(snapshotTotals.expertise_total || snapshotTotals.expertise || 0) > 0
+    const hasServiceTotal = Number(snapshotTotals.services_total || snapshotTotals.services || 0) > 0
+    const hasProductTotal = Number(snapshotTotals.products_total || snapshotTotals.products || 0) > 0
+
+    const hasExpertiseCategory = hasExpertiseRows || hasExpertiseTotal
+    const hasServicesCategory = hasServiceRows || hasServiceTotal
+    const hasProductCategory = hasProductRows || hasProductTotal
 
     const requiredExpertiseQty = snapshotExpertise.reduce(
       (sum, row) => sum + Math.max(0, Number(row.quantity || 0)),
@@ -388,7 +391,7 @@ export default function ERP() {
 
     setReadyProductStatusByErp((prev) => ({
       ...prev,
-      [erpId]: !Boolean(prev[erpId]),
+      [erpId]: !prev[erpId],
     }))
   }
 
@@ -650,7 +653,6 @@ export default function ERP() {
               onLeaveAssignment={handleLeaveAssignment}
               onCompleteByReceiver={handleCompleteByReceiver}
               onRateParticipant={handleRateParticipant}
-              onRateProvider={handleRateProvider}
               onRateProvider={handleRateProvider}
               onOpenOwner={(ownerId) => navigate(`/dashboard/${ownerId}`)}
               toMediaUrl={toMediaUrl}
