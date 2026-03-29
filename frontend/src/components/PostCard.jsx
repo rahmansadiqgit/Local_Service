@@ -12,6 +12,7 @@ export default function PostCard({
   expertises = [],
   products = [],
   rating,
+  ratingReviewer,
   profile,
   isOwnPost = false,
   onAction,
@@ -164,6 +165,12 @@ export default function PostCard({
   const handleProfileNavigate = () => {
     if (!profileId) return
     navigate(`/dashboard/${profileId}`)
+  }
+
+  const handleReviewerNavigate = (reviewerId) => {
+    const parsedReviewerId = Number(reviewerId)
+    if (!Number.isFinite(parsedReviewerId) || parsedReviewerId <= 0) return
+    navigate(`/dashboard/${parsedReviewerId}`)
   }
 
   if (!post) return null
@@ -385,7 +392,13 @@ export default function PostCard({
         </div>
       )}
 
-      <RatingCard rating={rating} />
+      <RatingCard
+        rating={rating}
+        reviewerId={ratingReviewer?.id}
+        reviewerName={ratingReviewer?.name || ''}
+        reviewerPhoto={toMediaUrl(ratingReviewer?.photo)}
+        onOpenReviewer={handleReviewerNavigate}
+      />
     </div>
   )
 }

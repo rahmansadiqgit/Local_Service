@@ -202,6 +202,16 @@ export default function HomeFeed() {
       .slice(0, 8)
   }, [allUsers, peopleSearch])
 
+  const usersById = useMemo(() => {
+    const map = new Map()
+    ;(Array.isArray(allUsers) ? allUsers : []).forEach((entry) => {
+      const parsedId = Number(entry?.id)
+      if (!Number.isFinite(parsedId) || parsedId <= 0) return
+      map.set(parsedId, entry)
+    })
+    return map
+  }, [allUsers])
+
   const skillsByPost = useMemo(() => {
     return skills.reduce((acc, skill) => {
       acc[skill.post] = acc[skill.post] || []
@@ -772,6 +782,9 @@ export default function HomeFeed() {
               const profileRating =
                 averageRatingByUser[ownerId]
                 ?? Number(post.owner_profile_rating ?? post.owner_rating)
+              const ratingEntry = ratingByPost[post.id]
+              const reviewerId = Number(ratingEntry?.customer)
+              const reviewerUser = usersById.get(reviewerId)
 
               return (
                 <PostCard
@@ -780,7 +793,16 @@ export default function HomeFeed() {
                   skills={skillsByPost[post.id] || []}
                   expertises={expertisesByPost[post.id] || []}
                   products={productsByPost[post.id] || []}
-                  rating={ratingByPost[post.id]}
+                  rating={ratingEntry}
+                  ratingReviewer={{
+                    id: reviewerId,
+                    name:
+                      reviewerUser?.name
+                      || reviewerUser?.username
+                      || ratingEntry?.customer_name
+                      || (Number.isFinite(reviewerId) && reviewerId > 0 ? `User #${reviewerId}` : 'Customer'),
+                    photo: reviewerUser?.profile_photo || ratingEntry?.customer_profile_photo || '',
+                  }}
                   isOwnPost={
                     Boolean(currentUserId) &&
                     String(post.owner_id || post.owner) === String(currentUserId)

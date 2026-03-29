@@ -509,7 +509,7 @@ export default function ERPTaskCard({
           className={`h-4 w-4 rounded-full border transition ${
             task.done
               ? 'border-emerald-600 bg-emerald-500'
-              : 'border-rose-400 bg-rose-200 hover:border-rose-500'
+              : 'border-slate-400 bg-white hover:border-slate-500'
           }`}
         />
       ) : (
