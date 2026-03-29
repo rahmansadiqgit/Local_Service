@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import api from '../api/client';
 import ExpertiseTable from '../components/ExpertiseTable';
 import ProductTable from '../components/ProductTable';
@@ -7,6 +7,7 @@ import ServiceTable from '../components/ServiceTable';
 import useAuth from '../context/useAuth';
 
 export default function Dashboard() {
+  const navigate = useNavigate();
   const { id } = useParams();
   const { user } = useAuth()
   const [profile, setProfile] = useState(null)
@@ -208,18 +209,28 @@ export default function Dashboard() {
     const targetId = Number(profile?.id)
     if (!Number.isFinite(targetId) || targetId <= 0) return []
 
-    const roleAliases = {
-      expertise: 'Expertise',
-      skill_provider: 'Skill provider',
-      service_provider: 'Skill provider',
-      supplier: 'Delivary Man',
-      delivery_man: 'Delivary Man',
-      delivary_man: 'Delivary Man',
-      delivery: 'Delivary Man',
-    }
+    const uniqueNames = (items, key) =>
+      Array.from(
+        new Set(
+          (Array.isArray(items) ? items : [])
+            .map((item) => String(item?.[key] || '').trim())
+            .filter(Boolean),
+        ),
+      )
+
+    const roleGroups = [
+      { keys: ['expertise'], label: 'Expertise' },
+      { keys: ['skill_provider', 'service_provider'], label: 'Skill provider' },
+      { keys: ['supplier', 'delivery_man', 'delivary_man', 'delivery'], label: 'Delivary Man' },
+    ]
 
     const collectRolesForUser = (erp, userId) => {
       const roles = new Set()
+      const snapshot = erp?.configuration_snapshot || {}
+      const expertiseNames = uniqueNames(snapshot?.expertise, 'name')
+      const serviceNames = uniqueNames(snapshot?.services, 'name')
+      const productNames = uniqueNames(snapshot?.products, 'name')
+
       if (Number(erp?.provider) === Number(userId)) {
         roles.add('Providing')
       }
@@ -228,16 +239,50 @@ export default function Dashboard() {
       }
 
       const snapshotMembers = erp?.configuration_snapshot?.members || {}
-      Object.entries(snapshotMembers).forEach(([key, bucket]) => {
-        const assigneeIds = Array.isArray(bucket?.assignee_ids) ? bucket.assignee_ids : []
-        if (assigneeIds.some((value) => Number(value) === Number(userId))) {
-          roles.add(roleAliases[key] || key)
+      roleGroups.forEach((group) => {
+        const isAssigned = group.keys.some((key) => {
+          const assigneeIds = Array.isArray(snapshotMembers?.[key]?.assignee_ids)
+            ? snapshotMembers[key].assignee_ids
+            : []
+          return assigneeIds.some((value) => Number(value) === Number(userId))
+        })
+
+        if (!isAssigned) return
+
+        if (group.label === 'Expertise') {
+          roles.add(
+            expertiseNames.length
+              ? `Expertise: Work as: ${expertiseNames.join(', ')}`
+              : 'Expertise',
+          )
+          return
+        }
+
+        if (group.label === 'Skill provider') {
+          roles.add(
+            serviceNames.length
+              ? `Skill provider: Provide service: ${serviceNames.join(', ')}`
+              : 'Skill provider',
+          )
+          return
+        }
+
+        if (group.label === 'Delivary Man') {
+          roles.add(
+            productNames.length
+              ? `Delivary Man: Deliver product: ${productNames.join(', ')}`
+              : 'Delivary Man',
+          )
         }
       })
 
       const assignedWorkers = Array.isArray(erp?.assigned_workers) ? erp.assigned_workers : []
       if (assignedWorkers.some((value) => Number(value) === Number(userId))) {
-        roles.add('Delivary Man')
+        roles.add(
+          productNames.length
+            ? `Delivary Man: Deliver product: ${productNames.join(', ')}`
+            : 'Delivary Man',
+        )
       }
 
       return Array.from(roles)
@@ -272,7 +317,9 @@ export default function Dashboard() {
           id: Number(entry?.id || 0),
           postId,
           postName: post?.post_title || post?.post_name || `Post #${postId}`,
+          providerId: reviewerId,
           providerName: reviewer?.name || reviewer?.username || `User #${reviewerId}`,
+          providerPhoto: reviewer?.profile_photo || '',
           responsibilities: Array.from(responsibilitySet),
           rating: Number(entry?.rating_value || 0),
           comment: String(entry?.review_text || '').trim(),
@@ -885,7 +932,20 @@ export default function Dashboard() {
                 providerGivenRatingsForProfile.map((row) => (
                   <tr key={`provider-feedback-${row.id}`} className="odd:bg-white/80 even:bg-sky-50/70">
                     <td className="border border-sky-300 px-4 py-2 font-medium">{row.postName}</td>
-                    <td className="border border-sky-300 px-4 py-2">{row.providerName}</td>
+                    <td className="border border-sky-300 px-4 py-2">
+                      <button
+                        type="button"
+                        onClick={() => navigate(`/dashboard/${row.providerId}`)}
+                        className="inline-flex items-center gap-2 rounded-lg px-1 py-1 text-left text-slate-800 transition hover:bg-sky-100"
+                      >
+                        <img
+                          src={toMediaUrl(row.providerPhoto) || '/images/default-avatar.svg'}
+                          alt={row.providerName}
+                          className="h-7 w-7 rounded-full border border-sky-200 object-cover"
+                        />
+                        <span className="font-semibold hover:underline">{row.providerName}</span>
+                      </button>
+                    </td>
                     <td className="border border-sky-300 px-4 py-2">{row.responsibilities.join(', ') || '-'}</td>
                     <td className="border border-sky-300 px-4 py-2">{row.rating.toFixed(1)} / 5</td>
                     <td className="border border-sky-300 px-4 py-2 whitespace-pre-wrap">{row.comment || '-'}</td>
