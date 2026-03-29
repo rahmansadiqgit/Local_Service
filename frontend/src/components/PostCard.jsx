@@ -1,9 +1,9 @@
 import { useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import defaultAvatar from '../assets/default-avatar.svg'
 import ExpertiseTable from './ExpertiseTable'
 import ProductTable from './ProductTable'
 import RatingCard from './RatingCard'
+import RatingRingAvatar from './RatingRingAvatar'
 import ServiceTable from './ServiceTable'
 
 export default function PostCard({
@@ -12,6 +12,8 @@ export default function PostCard({
   expertises = [],
   products = [],
   rating,
+  ratingReviewer,
+  ratingComments = [],
   profile,
   isOwnPost = false,
   onAction,
@@ -19,6 +21,8 @@ export default function PostCard({
   inCart = false,
   isDetailsOpen = false,
   onToggleDetails,
+  isCommentsOpen = false,
+  onToggleComments,
 }) {
   const navigate = useNavigate()
 
@@ -38,7 +42,8 @@ export default function PostCard({
     return `${backendOrigin}/${value}`
   }
 
-  const profilePhotoSrc = toMediaUrl(profile?.photo) || defaultAvatar
+  const profilePhotoSrc = toMediaUrl(profile?.photo)
+  const profileRatingValue = Number(profile?.rating ?? profile?.profile_rating ?? profile?.average_rating)
   const postImageSrc = toMediaUrl(post?.image)
 
   const statusLabels = useMemo(() => {
@@ -165,6 +170,12 @@ export default function PostCard({
     navigate(`/dashboard/${profileId}`)
   }
 
+  const handleReviewerNavigate = (reviewerId) => {
+    const parsedReviewerId = Number(reviewerId)
+    if (!Number.isFinite(parsedReviewerId) || parsedReviewerId <= 0) return
+    navigate(`/dashboard/${parsedReviewerId}`)
+  }
+
   if (!post) return null
 
   return (
@@ -179,13 +190,15 @@ export default function PostCard({
           <button
             type="button"
             onClick={handleProfileNavigate}
-            className="h-12 w-12 shrink-0 overflow-hidden rounded-full border border-slate-200 bg-white transition-opacity hover:opacity-80 focus:outline-none focus:ring-2 focus:ring-violet-300"
+            className="shrink-0 rounded-full bg-white transition-opacity hover:opacity-80 focus:outline-none focus:ring-2 focus:ring-violet-300"
             aria-label={`Open ${profile?.name || 'Localix Member'} profile`}
           >
-            <img
+            <RatingRingAvatar
               src={profilePhotoSrc}
               alt={profile?.name || 'Profile'}
-              className="h-full w-full object-cover"
+              rating={Number.isFinite(profileRatingValue) ? profileRatingValue : null}
+              size={48}
+              ringWidth={2}
             />
           </button>
           <div className="min-w-0">
@@ -292,6 +305,14 @@ export default function PostCard({
         >
           {isDetailsOpen ? 'Hide Details' : 'View Details'}
         </button>
+        <button
+          type="button"
+          onClick={() => onToggleComments?.(!isCommentsOpen)}
+          aria-expanded={isCommentsOpen}
+          className="rounded-full border border-violet-300 bg-violet-50 px-5 py-2 text-sm font-semibold text-violet-700 transition hover:bg-violet-100 focus:outline-none focus:ring-2 focus:ring-violet-200"
+        >
+          {isCommentsOpen ? 'Hide Comments and Rating' : 'Comments and Rating'}
+        </button>
         {post.website_link && (
           <a
             href={post.website_link}
@@ -375,7 +396,49 @@ export default function PostCard({
         </div>
       )}
 
-      <RatingCard rating={rating} />
+      {isCommentsOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-2 sm:p-4">
+          <div
+            className="flex flex-col w-full h-full max-w-3xl rounded-2xl border border-violet-200/80 shadow-2xl overflow-hidden"
+            style={{
+              background: 'linear-gradient(135deg, #c9b6ff 0%, #e6d7ff 60%, #f2eaff 100%)',
+              backgroundColor: 'rgba(236, 225, 255, 0.95)',
+              maxHeight: '90vh',
+            }}
+          >
+            <div className="flex items-center justify-between border-b border-violet-200/80 bg-gradient-to-r from-[#c9b6ff]/80 via-[#e6d7ff]/85 to-[#f2eaff]/80 px-4 py-4 sm:px-6 flex-shrink-0">
+              <p className="text-base sm:text-lg font-bold text-violet-900">Comments and Rating</p>
+              <button
+                type="button"
+                onClick={() => onToggleComments?.(false)}
+                className="rounded-full border border-violet-300 bg-white/80 px-4 py-2 text-sm font-semibold text-violet-800 transition hover:bg-white focus:outline-none focus:ring-2 focus:ring-violet-300"
+              >
+                ✕ Close
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-3">
+              {ratingComments.length ? (
+                ratingComments.map((entry) => (
+                  <RatingCard
+                    key={`post-comment-${post.id}-${entry.id}`}
+                    rating={entry.rating}
+                    reviewerId={entry.reviewer?.id}
+                    reviewerName={entry.reviewer?.name || ''}
+                    reviewerPhoto={toMediaUrl(entry.reviewer?.photo)}
+                    onOpenReviewer={handleReviewerNavigate}
+                  />
+                ))
+              ) : (
+                <div className="rounded-xl border border-violet-200 bg-white/70 px-4 py-3 text-sm text-slate-600">
+                  No comments and ratings yet for this post.
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   )
 }

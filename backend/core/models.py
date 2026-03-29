@@ -131,6 +131,20 @@ class ERP(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     is_configured = models.BooleanField(default=False)
     pdf_slip = models.FileField(upload_to="erp_slips/", blank=True, null=True)
+    completion_comment = models.TextField(blank=True)
+    completion_rating = models.PositiveSmallIntegerField(
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(1), MaxValueValidator(5)],
+    )
+    completed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="completed_erp_records",
+    )
+    completed_at = models.DateTimeField(null=True, blank=True)
 
     def __str__(self) -> str:
         return f"{self.post.post_name} - {self.category}"

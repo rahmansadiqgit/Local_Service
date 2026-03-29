@@ -60,6 +60,7 @@ export default function HomeFeed() {
   const [expertises, setExpertises] = useState([])
   const [products, setProducts] = useState([])
   const [ratings, setRatings] = useState([])
+  const [erpItems, setErpItems] = useState([])
   const [loading, setLoading] = useState(true)
   const [peopleSearch, setPeopleSearch] = useState('')
 
@@ -78,6 +79,7 @@ export default function HomeFeed() {
 
   const [actionMessage, setActionMessage] = useState('')
   const [openDetailsPostId, setOpenDetailsPostId] = useState(null)
+  const [openCommentsPostId, setOpenCommentsPostId] = useState(null)
   const currentUserId = user?.id
 
   useEffect(() => {
@@ -144,6 +146,7 @@ export default function HomeFeed() {
           api.get('/expertises/', publicRequestConfig),
           api.get('/products/', publicRequestConfig),
           api.get('/ratings/', publicRequestConfig),
+          api.get('/erp/', publicRequestConfig),
         ])
 
         if (!active) return
@@ -151,6 +154,7 @@ export default function HomeFeed() {
         setExpertises(detailResponses[1].status === 'fulfilled' ? detailResponses[1].value.data : [])
         setProducts(detailResponses[2].status === 'fulfilled' ? detailResponses[2].value.data : [])
         setRatings(detailResponses[3].status === 'fulfilled' ? detailResponses[3].value.data : [])
+        setErpItems(detailResponses[4].status === 'fulfilled' ? detailResponses[4].value.data : [])
 
         if (isAuthenticated) {
           const usersRes = await api.get('/users/')
@@ -202,6 +206,33 @@ export default function HomeFeed() {
       .slice(0, 8)
   }, [allUsers, peopleSearch])
 
+  const usersById = useMemo(() => {
+    const map = new Map()
+    ;(Array.isArray(allUsers) ? allUsers : []).forEach((entry) => {
+      const parsedId = Number(entry?.id)
+      if (!Number.isFinite(parsedId) || parsedId <= 0) return
+      map.set(parsedId, entry)
+    })
+    return map
+  }, [allUsers])
+
+  const receiverByPostId = useMemo(() => {
+    const map = new Map()
+    ;(Array.isArray(erpItems) ? erpItems : []).forEach((erp) => {
+      if (String(erp?.stage || '') !== 'Completed') return
+      const postId = Number(erp?.post)
+      const receiverId = Number(erp?.receiver)
+      const entryId = Number(erp?.id || 0)
+      if (!Number.isFinite(postId) || postId <= 0 || !Number.isFinite(receiverId) || receiverId <= 0) return
+
+      const prev = map.get(postId)
+      if (!prev || entryId > prev.erpId) {
+        map.set(postId, { receiverId, erpId: entryId })
+      }
+    })
+    return map
+  }, [erpItems])
+
   const skillsByPost = useMemo(() => {
     return skills.reduce((acc, skill) => {
       acc[skill.post] = acc[skill.post] || []
@@ -227,10 +258,101 @@ export default function HomeFeed() {
   }, [products])
 
   const ratingByPost = useMemo(() => {
-    return ratings.reduce((acc, rating) => {
-      acc[rating.post] = rating
+    const ownerByPostId = new Map(
+      (Array.isArray(posts) ? posts : []).map((post) => [
+        Number(post?.id),
+        Number(post?.owner_id ?? post?.owner),
+      ]),
+    )
+
+    return (Array.isArray(ratings) ? ratings : []).reduce((acc, entry) => {
+      const postId = Number(entry?.post)
+      const ownerId = ownerByPostId.get(postId)
+      const providerId = Number(entry?.provider)
+      const customerId = Number(entry?.customer)
+      const receiverEntry = receiverByPostId.get(postId)
+      const receiverId = Number(receiverEntry?.receiverId)
+
+      if (!Number.isFinite(postId) || !Number.isFinite(ownerId) || ownerId <= 0) return acc
+
+      // HomeFeed should show receiver's review about the post owner, not owner-authored ratings.
+      const isReceiverReview =
+        Number.isFinite(customerId)
+        && customerId > 0
+        && customerId !== ownerId
+        && providerId === ownerId
+
+      if (!isReceiverReview) return acc
+
+      // Prefer explicit receiver feedback when ERP receiver is known for this post.
+      if (Number.isFinite(receiverId) && receiverId > 0 && customerId !== receiverId) return acc
+
+      const prev = acc[postId]
+      if (!prev || Number(entry?.id || 0) > Number(prev?.id || 0)) {
+        acc[postId] = entry
+      }
+
       return acc
     }, {})
+  }, [ratings, posts, receiverByPostId])
+
+  const commentsByPost = useMemo(() => {
+    const ownerByPostId = new Map(
+      (Array.isArray(posts) ? posts : []).map((post) => [
+        Number(post?.id),
+        Number(post?.owner_id ?? post?.owner),
+      ]),
+    )
+
+    const result = {}
+    ;(Array.isArray(ratings) ? ratings : []).forEach((entry) => {
+      const postId = Number(entry?.post)
+      const ownerId = ownerByPostId.get(postId)
+      const providerId = Number(entry?.provider)
+      const customerId = Number(entry?.customer)
+      if (!Number.isFinite(postId) || !Number.isFinite(ownerId) || ownerId <= 0) return
+      if (providerId !== ownerId) return
+      if (!Number.isFinite(customerId) || customerId <= 0 || customerId === ownerId) return
+
+      const reviewer = usersById.get(customerId)
+      if (!result[postId]) result[postId] = []
+
+      result[postId].push({
+        id: Number(entry?.id || 0),
+        rating: entry,
+        reviewer: {
+          id: customerId,
+          name: reviewer?.name || reviewer?.username || entry?.customer_name || `User #${customerId}`,
+          photo: reviewer?.profile_photo || entry?.customer_profile_photo || '',
+        },
+      })
+    })
+
+    Object.keys(result).forEach((postId) => {
+      result[postId].sort((left, right) => Number(right?.id || 0) - Number(left?.id || 0))
+    })
+
+    return result
+  }, [ratings, posts, usersById])
+
+  const averageRatingByUser = useMemo(() => {
+    const totals = {}
+    const counts = {}
+
+    ;(Array.isArray(ratings) ? ratings : []).forEach((entry) => {
+      const providerId = Number(entry?.provider)
+      const value = Number(entry?.rating_value)
+      if (!Number.isFinite(providerId) || providerId <= 0 || !Number.isFinite(value)) return
+      totals[providerId] = (totals[providerId] || 0) + value
+      counts[providerId] = (counts[providerId] || 0) + 1
+    })
+
+    const averages = {}
+    Object.keys(totals).forEach((providerId) => {
+      const count = counts[providerId] || 1
+      averages[providerId] = totals[providerId] / count
+    })
+    return averages
   }, [ratings])
 
   const costSummaryByPost = useMemo(() => {
@@ -473,6 +595,13 @@ export default function HomeFeed() {
       if (!shouldOpen) {
         return prev === postId ? null : prev
       }
+      return postId
+    })
+  }
+
+  const handleToggleComments = (postId, shouldOpen) => {
+    setOpenCommentsPostId((prev) => {
+      if (!shouldOpen) return prev === postId ? null : prev
       return postId
     })
   }
@@ -752,36 +881,60 @@ export default function HomeFeed() {
           <div className="card">No posts match your filters.</div>
         ) : (
           <div className="grid grid-cols-1 items-stretch gap-6 md:grid-cols-2">
-            {filteredPosts.map(post => (
-              <PostCard
-                key={post.id}
-                post={post}
-                skills={skillsByPost[post.id] || []}
-                expertises={expertisesByPost[post.id] || []}
-                products={productsByPost[post.id] || []}
-                rating={ratingByPost[post.id]}
-                isOwnPost={
-                  Boolean(currentUserId) &&
-                  String(post.owner_id || post.owner) === String(currentUserId)
-                }
-                profile={{
-                  id: post.owner_id || post.owner || null,
-                  name:
-                    post.owner_name ||
-                    post.owner_username ||
-                    post.brand_company_name ||
-                    'Localix Member',
-                  supplyStatus: post.owner_supply_status || '',
-                  demandStatus: post.owner_demand_status || '',
-                  photo: post.owner_profile_photo || '',
-                }}
-                onAction={handleAction}
-                onAddToCart={handleAddToCart}
-                inCart={isInCart(post.id)}
-                isDetailsOpen={openDetailsPostId === post.id}
-                onToggleDetails={(shouldOpen) => handleToggleDetails(post.id, shouldOpen)}
-              />
-            ))}
+            {filteredPosts.map((post) => {
+              const ownerId = Number(post.owner_id || post.owner)
+              const profileRating =
+                averageRatingByUser[ownerId]
+                ?? Number(post.owner_profile_rating ?? post.owner_rating)
+              const ratingEntry = ratingByPost[post.id]
+              const reviewerId = Number(ratingEntry?.customer)
+              const reviewerUser = usersById.get(reviewerId)
+              const postComments = commentsByPost[post.id] || []
+
+              return (
+                <PostCard
+                  key={post.id}
+                  post={post}
+                  skills={skillsByPost[post.id] || []}
+                  expertises={expertisesByPost[post.id] || []}
+                  products={productsByPost[post.id] || []}
+                  rating={ratingEntry}
+                  ratingReviewer={{
+                    id: reviewerId,
+                    name:
+                      reviewerUser?.name
+                      || reviewerUser?.username
+                      || ratingEntry?.customer_name
+                      || (Number.isFinite(reviewerId) && reviewerId > 0 ? `User #${reviewerId}` : 'Customer'),
+                    photo: reviewerUser?.profile_photo || ratingEntry?.customer_profile_photo || '',
+                  }}
+                  isOwnPost={
+                    Boolean(currentUserId) &&
+                    String(post.owner_id || post.owner) === String(currentUserId)
+                  }
+                  profile={{
+                    id: post.owner_id || post.owner || null,
+                    name:
+                      post.owner_name ||
+                      post.owner_username ||
+                      post.brand_company_name ||
+                      'Localix Member',
+                    supplyStatus: post.owner_supply_status || '',
+                    demandStatus: post.owner_demand_status || '',
+                    photo: post.owner_profile_photo || '',
+                    rating: Number.isFinite(profileRating) ? profileRating : null,
+                  }}
+                  onAction={handleAction}
+                  onAddToCart={handleAddToCart}
+                  inCart={isInCart(post.id)}
+                  isDetailsOpen={openDetailsPostId === post.id}
+                  onToggleDetails={(shouldOpen) => handleToggleDetails(post.id, shouldOpen)}
+                  ratingComments={postComments}
+                  isCommentsOpen={openCommentsPostId === post.id}
+                  onToggleComments={(shouldOpen) => handleToggleComments(post.id, shouldOpen)}
+                />
+              )
+            })}
           </div>
         )}
       </section>

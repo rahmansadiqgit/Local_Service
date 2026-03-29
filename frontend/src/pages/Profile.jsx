@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import api from '../api/client';
+import RatingRingAvatar from '../components/RatingRingAvatar';
 
 export default function Profile() {
   const { id } = useParams();
@@ -21,6 +22,8 @@ export default function Profile() {
   }
 
   const profilePhotoSrc = resolveMediaUrl(profile?.profile_photo || '')
+  const profileRatingValue =
+    Number(profile?.profile_rating ?? profile?.average_rating ?? profile?.rating)
 
   useEffect(() => {
     const load = async () => {
@@ -186,12 +189,14 @@ export default function Profile() {
             <div className="flex flex-col items-center gap-4">
               <div className="relative">
                 <div className="absolute inset-0 rounded-full bg-gradient-to-br from-violet-300 to-fuchsia-300 blur-md opacity-70" />
-                <div className="relative h-36 w-36 overflow-hidden rounded-full border-4 border-white/85 bg-slate-100 shadow-lg ring-2 ring-violet-300/60">
+                <div className="relative h-36 w-36 grid place-items-center rounded-full bg-transparent shadow-lg ring-2 ring-violet-300/60">
                   {profilePhotoSrc ? (
-                    <img
+                    <RatingRingAvatar
                       src={profilePhotoSrc}
                       alt="Profile"
-                      className="h-full w-full object-cover"
+                      rating={Number.isFinite(profileRatingValue) ? profileRatingValue : null}
+                      size={144}
+                      ringWidth={4}
                     />
                   ) : (
                     <div className="flex h-full w-full items-center justify-center text-sm font-semibold text-slate-500">

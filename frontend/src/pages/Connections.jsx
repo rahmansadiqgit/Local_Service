@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import api from '../api/client'
-import defaultAvatar from '../assets/default-avatar.svg'
+import RatingRingAvatar from '../components/RatingRingAvatar'
 
 const ROLE_ENTRIES = [
   { key: 'expertise', label: 'Expertise' },
@@ -12,6 +12,7 @@ export default function Connections() {
   const [selected, setSelected] = useState(null)
   const [memberCategory, setMemberCategory] = useState('Expertise')
   const [posts, setPosts] = useState([])
+  const [ratings, setRatings] = useState([])
   const [users, setUsers] = useState([])
   const [erpItems, setErpItems] = useState([])
   const [currentUserId, setCurrentUserId] = useState(null)
@@ -63,8 +64,9 @@ export default function Connections() {
 
     const load = async () => {
       try {
-        const [postRes, userRes, erpRes, meRes, overviewRes] = await Promise.all([
+        const [postRes, ratingRes, userRes, erpRes, meRes, overviewRes] = await Promise.all([
           api.get('/posts/'),
+          api.get('/ratings/'),
           api.get('/users/'),
           api.get('/erp/'),
           api.get('/auth/me/'),
@@ -72,6 +74,7 @@ export default function Connections() {
         ])
         if (!active) return
         setPosts(postRes.data)
+        setRatings(Array.isArray(ratingRes.data) ? ratingRes.data : [])
         setUsers(Array.isArray(userRes.data) ? userRes.data : [])
         setErpItems(erpRes.data)
         setCurrentUserId(meRes.data?.id ?? null)
@@ -104,6 +107,27 @@ export default function Connections() {
     })
     return map
   }, [users])
+
+  const averageRatingByUser = useMemo(() => {
+    const totals = new Map()
+    const counts = new Map()
+
+    ;(Array.isArray(ratings) ? ratings : []).forEach((entry) => {
+      const providerId = Number(entry?.provider)
+      const value = Number(entry?.rating_value)
+      if (!Number.isFinite(providerId) || providerId <= 0 || !Number.isFinite(value)) return
+      totals.set(providerId, (totals.get(providerId) || 0) + value)
+      counts.set(providerId, (counts.get(providerId) || 0) + 1)
+    })
+
+    const averages = new Map()
+    totals.forEach((sum, userId) => {
+      const count = counts.get(userId) || 1
+      averages.set(userId, sum / count)
+    })
+
+    return averages
+  }, [ratings])
 
   const memberCategoryToRoleKey = {
     Expertise: 'expertise',
@@ -252,13 +276,17 @@ export default function Connections() {
       className={`${profileLikeBoxClass} text-left transition hover:border-violet-300`}
     >
       <div className="flex items-start gap-3">
-        <div className="h-12 w-12 shrink-0 overflow-hidden rounded-full border border-violet-200 bg-white">
-          <img
-            src={resolveMediaUrl(person.profile_photo) || defaultAvatar}
-            alt={person.name || person.username || 'User'}
-            className="h-full w-full object-cover"
-          />
-        </div>
+        <RatingRingAvatar
+          src={resolveMediaUrl(person.profile_photo)}
+          alt={person.name || person.username || 'User'}
+          rating={
+            averageRatingByUser.get(Number(person?.id))
+            ?? Number(person?.profile_rating ?? person?.average_rating ?? person?.rating)
+          }
+          size={48}
+          ringWidth={2}
+          className="shrink-0"
+        />
         <div className="min-w-0 flex-1">
           <p className="font-semibold">{person.name || person.username}</p>
           <div className="mt-2 space-y-1 text-xs text-slate-600">

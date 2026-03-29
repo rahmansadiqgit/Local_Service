@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react"
 import { Link, useLocation, useNavigate } from "react-router-dom"
 import api from "../api/client"
 import useAuth from "../context/useAuth"
+import RatingRingAvatar from "./RatingRingAvatar"
 
 export default function Header() {
   const { user, isAuthenticated, logout } = useAuth()
@@ -14,6 +15,7 @@ export default function Header() {
   const [notificationsError, setNotificationsError] = useState("")
   const [openNotificationMenuId, setOpenNotificationMenuId] = useState(null)
   const [actionNotificationId, setActionNotificationId] = useState(null)
+  const [headerProfileRating, setHeaderProfileRating] = useState(null)
 
   useEffect(() => {
     setOpenDropdown(null)
@@ -55,6 +57,81 @@ export default function Header() {
     if (!isAuthenticated) return
     fetchNotifications()
   }, [isAuthenticated, fetchNotifications])
+
+  useEffect(() => {
+    if (!isAuthenticated || !Number(user?.id)) {
+      setHeaderProfileRating(null)
+      return
+    }
+
+    let active = true
+    const loadHeaderProfileRating = async () => {
+      try {
+        const asArray = (value) => {
+          if (Array.isArray(value)) return value
+          if (Array.isArray(value?.results)) return value.results
+          return []
+        }
+
+        const [profileRes, ratingRes, postRes] = await Promise.all([
+          api.get('/users/profile/'),
+          api.get('/ratings/'),
+          api.get('/posts/'),
+        ])
+
+        const profileData = profileRes?.data || {}
+        const ratingRows = asArray(ratingRes?.data)
+        const posts = asArray(postRes?.data)
+        const myProviderId = Number(user.id)
+
+        const profileFieldRating = Number(
+          profileData?.profile_rating ?? profileData?.average_rating ?? profileData?.rating,
+        )
+
+        const ownedPostIds = new Set(
+          posts
+            .filter((post) => Number(post?.owner_id ?? post?.owner) === myProviderId)
+            .map((post) => Number(post?.id))
+            .filter((id) => Number.isFinite(id) && id > 0),
+        )
+
+        const receivedRatings = ratingRows.filter((entry) => {
+          const providerId = Number(entry?.provider)
+          const postId = Number(entry?.post)
+          return (
+            providerId === myProviderId
+            || (ownedPostIds.has(postId) && providerId === myProviderId)
+          )
+        })
+
+        if (!active) return
+
+        if (Number.isFinite(profileFieldRating) && profileFieldRating > 0) {
+          setHeaderProfileRating(profileFieldRating)
+          return
+        }
+
+        if (!receivedRatings.length) {
+          setHeaderProfileRating(0)
+          return
+        }
+
+        const total = receivedRatings.reduce(
+          (sum, entry) => sum + Number(entry?.rating_value || 0),
+          0,
+        )
+        setHeaderProfileRating(total / receivedRatings.length)
+      } catch (error) {
+        console.error('Failed to load header profile rating:', error)
+      }
+    }
+
+    loadHeaderProfileRating()
+
+    return () => {
+      active = false
+    }
+  }, [isAuthenticated, user?.id])
 
   useEffect(() => {
     if (openDropdown === "notif") {
@@ -259,12 +336,18 @@ export default function Header() {
   const avatarSrc = avatarUrl
     ? `${avatarUrl}${avatarUrl.includes("?") ? "&" : "?"}v=${user?._avatarVersion || 0}`
     : ""
+  const fallbackProfileRating = Number(user?.profile_rating ?? user?.average_rating ?? user?.rating)
+  const profileRatingValue = Number.isFinite(headerProfileRating)
+    ? headerProfileRating
+    : Number.isFinite(fallbackProfileRating)
+      ? fallbackProfileRating
+      : null
 
   const iconButtonClass =
     "rounded-full bg-white/90 p-2 shadow-md hover:bg-yellow-100 hover:scale-105 hover:shadow-lg transition-all duration-200"
 
   const avatarButtonClass =
-    "h-10 w-10 shrink-0 overflow-hidden rounded-full shadow-md hover:scale-105 hover:shadow-lg transition-all duration-200 flex items-center justify-center"
+    "h-10 w-10 shrink-0 rounded-full shadow-md hover:scale-105 hover:shadow-lg transition-all duration-200 flex items-center justify-center"
 
   const dropdownPanelClass =
     "absolute right-0 mt-3 rounded-2xl border border-white/60 bg-white/95 p-2 shadow-2xl backdrop-blur-sm"
@@ -423,10 +506,12 @@ export default function Header() {
                 className={`${avatarButtonClass} ${avatarSrc ? "" : "bg-white/90 hover:bg-yellow-100"}`}
               >
                 {avatarSrc ? (
-                  <img
+                  <RatingRingAvatar
                     src={avatarSrc}
                     alt="Profile"
-                    className="block h-full w-full rounded-full object-cover object-center"
+                    rating={Number.isFinite(profileRatingValue) ? profileRatingValue : null}
+                    size={40}
+                    ringWidth={2}
                   />
                 ) : (
                   <span className="text-lg leading-none">👤</span>
