@@ -662,7 +662,7 @@ export default function CreatePost() {
                 longitude={post.longitude}
                 onPick={handleMapLocationPick}
                 mapSizeInches={5}
-                selectedZoom={7}
+                selectedZoom={14}
                 popupText="Confirm this location?"
               />
             </div>

@@ -14,7 +14,6 @@ import markerIcon from 'leaflet/dist/images/marker-icon.png'
 import markerShadow from 'leaflet/dist/images/marker-shadow.png'
 
 const BANGLADESH_CENTER = [23.81, 90.41]
-const DEFAULT_ZOOM = 7
 const BANGLADESH_FIT_ZOOM = 7.3
 const BANGLADESH_BOUNDS = [
   [20.67, 88.03],
@@ -103,7 +102,7 @@ export default function LocationPickerMap({
   onPick,
   radiusKm,
   mapSizeInches = 5,
-  selectedZoom = 7,
+  selectedZoom = 14,
   hintText = '',
   showUseMyLocation = true,
   popupText = 'Confirm this location?',
