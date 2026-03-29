@@ -22,6 +22,7 @@ export default function ERPTaskCard({
   onUpdateMemberAssignment,
   onPublishMemberPost,
   onCloseMemberPost,
+  onLeaveAssignment,
   onOpenOwner,
   toMediaUrl,
 }) {
@@ -34,6 +35,7 @@ export default function ERPTaskCard({
   const [isLoadingMessages, setIsLoadingMessages] = useState(false)
   const [isSendingMessage, setIsSendingMessage] = useState(false)
   const [selfAssignMessageByRole, setSelfAssignMessageByRole] = useState({})
+  const [isLeavingAssignment, setIsLeavingAssignment] = useState(false)
 
   const phases = ['Pending', 'On Process', 'Completed']
   const activePhaseIndex = phases.indexOf(erp.stage)
@@ -234,6 +236,7 @@ export default function ERPTaskCard({
         }))
       })()
     : []
+  const canLeaveTask = currentUserRoleResponsibilities.length > 0
 
   const counterpartyUserId =
     viewerRole === 'Provider'
@@ -479,7 +482,29 @@ export default function ERPTaskCard({
         </div>
       </div>
 
-      <div className="relative flex justify-end" data-erp-actions-root>
+      <div className="relative flex items-center justify-between" data-erp-actions-root>
+        <div>
+          {canLeaveTask ? (
+            <button
+              type="button"
+              disabled={isLeavingAssignment}
+              onClick={async () => {
+                if (!onLeaveAssignment) return
+                setIsLeavingAssignment(true)
+                try {
+                  await onLeaveAssignment(erp)
+                } finally {
+                  setIsLeavingAssignment(false)
+                }
+              }}
+              className="rounded-full border border-rose-300 bg-rose-50 px-4 py-2 text-sm font-semibold text-rose-700 transition hover:border-rose-400 hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {isLeavingAssignment ? 'Leaving...' : 'Leave'}
+            </button>
+          ) : (
+            <span />
+          )}
+        </div>
         <button
           type="button"
           onClick={() => {

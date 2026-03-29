@@ -450,6 +450,21 @@ export default function ERP() {
     }
   }
 
+  const handleLeaveAssignment = async (erp) => {
+    const confirmed = window.confirm('Are you sure you want to leave this ERP task?')
+    if (!confirmed) return
+
+    try {
+      await api.post(`/erp/${erp.id}/leave_assignment/`)
+      const { data } = await api.get('/erp/')
+      setErpItems(Array.isArray(data) ? data : [])
+      setMessage('You left this ERP task.')
+    } catch (error) {
+      console.error(error)
+      setMessage(error?.response?.data?.detail || 'Failed to leave ERP task.')
+    }
+  }
+
   const handleTrackStage = async (erp) => {
     if (erp.stage === 'Completed') {
       setMessage(`Task ${erp.id} is already in Completed phase.`)
@@ -557,6 +572,7 @@ export default function ERP() {
               onUpdateMemberAssignment={handleUpdateMemberAssignment}
               onPublishMemberPost={handlePublishMemberPost}
               onCloseMemberPost={handleCloseMemberPost}
+              onLeaveAssignment={handleLeaveAssignment}
               onOpenOwner={(ownerId) => navigate(`/dashboard/${ownerId}`)}
               toMediaUrl={toMediaUrl}
             />

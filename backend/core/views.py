@@ -760,6 +760,55 @@ class ERPViewSet(viewsets.ModelViewSet):
 
         return Response(self.get_serializer(erp).data)
 
+    @action(detail=True, methods=["post"])
+    def leave_assignment(self, request, pk=None):
+        erp = self.get_object()
+        user_id = int(request.user.id)
+
+        snapshot = erp.configuration_snapshot or {}
+        members = snapshot.get("members") or {}
+        changed = False
+
+        # Remove user from all member role buckets (including legacy/custom keys).
+        for role_key, role_bucket in list(members.items()):
+            if not isinstance(role_bucket, dict):
+                continue
+
+            existing_ids = role_bucket.get("assignee_ids") or []
+            clean_ids = []
+            for raw_id in existing_ids:
+                try:
+                    parsed = int(raw_id)
+                except (TypeError, ValueError):
+                    continue
+                if parsed > 0:
+                    clean_ids.append(parsed)
+
+            unique_ids = set(clean_ids)
+            if user_id in unique_ids:
+                unique_ids.discard(user_id)
+                changed = True
+
+            role_bucket["assignee_ids"] = sorted(list(unique_ids))
+            members[role_key] = role_bucket
+
+        # Backward compatibility: some records may still track member assignment here.
+        if erp.assigned_workers.filter(id=user_id).exists():
+            erp.assigned_workers.remove(request.user)
+            changed = True
+
+        if not changed:
+            return Response(
+                {"detail": "You are not assigned to this ERP task."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        snapshot["members"] = members
+        erp.configuration_snapshot = snapshot
+        erp.save(update_fields=["configuration_snapshot", "updated_at"])
+
+        return Response(self.get_serializer(erp).data)
+
     @action(detail=True, methods=["patch"])
     def update_stage(self, request, pk=None):
         erp = self.get_object()
