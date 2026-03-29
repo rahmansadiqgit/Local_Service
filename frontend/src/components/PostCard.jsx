@@ -13,6 +13,7 @@ export default function PostCard({
   products = [],
   rating,
   ratingReviewer,
+  ratingComments = [],
   profile,
   isOwnPost = false,
   onAction,
@@ -20,6 +21,8 @@ export default function PostCard({
   inCart = false,
   isDetailsOpen = false,
   onToggleDetails,
+  isCommentsOpen = false,
+  onToggleComments,
 }) {
   const navigate = useNavigate()
 
@@ -302,6 +305,14 @@ export default function PostCard({
         >
           {isDetailsOpen ? 'Hide Details' : 'View Details'}
         </button>
+        <button
+          type="button"
+          onClick={() => onToggleComments?.(!isCommentsOpen)}
+          aria-expanded={isCommentsOpen}
+          className="rounded-full border border-violet-300 bg-violet-50 px-5 py-2 text-sm font-semibold text-violet-700 transition hover:bg-violet-100 focus:outline-none focus:ring-2 focus:ring-violet-200"
+        >
+          {isCommentsOpen ? 'Hide Comments and Rating' : 'Comments and Rating'}
+        </button>
         {post.website_link && (
           <a
             href={post.website_link}
@@ -392,13 +403,49 @@ export default function PostCard({
         </div>
       )}
 
-      <RatingCard
-        rating={rating}
-        reviewerId={ratingReviewer?.id}
-        reviewerName={ratingReviewer?.name || ''}
-        reviewerPhoto={toMediaUrl(ratingReviewer?.photo)}
-        onOpenReviewer={handleReviewerNavigate}
-      />
+      {isCommentsOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-2 sm:p-4">
+          <div
+            className="flex flex-col w-full h-full max-w-3xl rounded-2xl border border-violet-200/80 shadow-2xl overflow-hidden"
+            style={{
+              background: 'linear-gradient(135deg, #c9b6ff 0%, #e6d7ff 60%, #f2eaff 100%)',
+              backgroundColor: 'rgba(236, 225, 255, 0.95)',
+              maxHeight: '90vh',
+            }}
+          >
+            <div className="flex items-center justify-between border-b border-violet-200/80 bg-gradient-to-r from-[#c9b6ff]/80 via-[#e6d7ff]/85 to-[#f2eaff]/80 px-4 py-4 sm:px-6 flex-shrink-0">
+              <p className="text-base sm:text-lg font-bold text-violet-900">Comments and Rating</p>
+              <button
+                type="button"
+                onClick={() => onToggleComments?.(false)}
+                className="rounded-full border border-violet-300 bg-white/80 px-4 py-2 text-sm font-semibold text-violet-800 transition hover:bg-white focus:outline-none focus:ring-2 focus:ring-violet-300"
+              >
+                ✕ Close
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-3">
+              {ratingComments.length ? (
+                ratingComments.map((entry) => (
+                  <RatingCard
+                    key={`post-comment-${post.id}-${entry.id}`}
+                    rating={entry.rating}
+                    reviewerId={entry.reviewer?.id}
+                    reviewerName={entry.reviewer?.name || ''}
+                    reviewerPhoto={toMediaUrl(entry.reviewer?.photo)}
+                    onOpenReviewer={handleReviewerNavigate}
+                  />
+                ))
+              ) : (
+                <div className="rounded-xl border border-violet-200 bg-white/70 px-4 py-3 text-sm text-slate-600">
+                  No comments and ratings yet for this post.
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   )
 }

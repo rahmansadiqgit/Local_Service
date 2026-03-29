@@ -60,6 +60,7 @@ export default function HomeFeed() {
   const [expertises, setExpertises] = useState([])
   const [products, setProducts] = useState([])
   const [ratings, setRatings] = useState([])
+  const [erpItems, setErpItems] = useState([])
   const [loading, setLoading] = useState(true)
   const [peopleSearch, setPeopleSearch] = useState('')
 
@@ -78,6 +79,7 @@ export default function HomeFeed() {
 
   const [actionMessage, setActionMessage] = useState('')
   const [openDetailsPostId, setOpenDetailsPostId] = useState(null)
+  const [openCommentsPostId, setOpenCommentsPostId] = useState(null)
   const currentUserId = user?.id
 
   useEffect(() => {
@@ -144,6 +146,7 @@ export default function HomeFeed() {
           api.get('/expertises/', publicRequestConfig),
           api.get('/products/', publicRequestConfig),
           api.get('/ratings/', publicRequestConfig),
+          api.get('/erp/', publicRequestConfig),
         ])
 
         if (!active) return
@@ -151,6 +154,7 @@ export default function HomeFeed() {
         setExpertises(detailResponses[1].status === 'fulfilled' ? detailResponses[1].value.data : [])
         setProducts(detailResponses[2].status === 'fulfilled' ? detailResponses[2].value.data : [])
         setRatings(detailResponses[3].status === 'fulfilled' ? detailResponses[3].value.data : [])
+        setErpItems(detailResponses[4].status === 'fulfilled' ? detailResponses[4].value.data : [])
 
         if (isAuthenticated) {
           const usersRes = await api.get('/users/')
@@ -212,6 +216,23 @@ export default function HomeFeed() {
     return map
   }, [allUsers])
 
+  const receiverByPostId = useMemo(() => {
+    const map = new Map()
+    ;(Array.isArray(erpItems) ? erpItems : []).forEach((erp) => {
+      if (String(erp?.stage || '') !== 'Completed') return
+      const postId = Number(erp?.post)
+      const receiverId = Number(erp?.receiver)
+      const entryId = Number(erp?.id || 0)
+      if (!Number.isFinite(postId) || postId <= 0 || !Number.isFinite(receiverId) || receiverId <= 0) return
+
+      const prev = map.get(postId)
+      if (!prev || entryId > prev.erpId) {
+        map.set(postId, { receiverId, erpId: entryId })
+      }
+    })
+    return map
+  }, [erpItems])
+
   const skillsByPost = useMemo(() => {
     return skills.reduce((acc, skill) => {
       acc[skill.post] = acc[skill.post] || []
@@ -249,6 +270,8 @@ export default function HomeFeed() {
       const ownerId = ownerByPostId.get(postId)
       const providerId = Number(entry?.provider)
       const customerId = Number(entry?.customer)
+      const receiverEntry = receiverByPostId.get(postId)
+      const receiverId = Number(receiverEntry?.receiverId)
 
       if (!Number.isFinite(postId) || !Number.isFinite(ownerId) || ownerId <= 0) return acc
 
@@ -261,6 +284,9 @@ export default function HomeFeed() {
 
       if (!isReceiverReview) return acc
 
+      // Prefer explicit receiver feedback when ERP receiver is known for this post.
+      if (Number.isFinite(receiverId) && receiverId > 0 && customerId !== receiverId) return acc
+
       const prev = acc[postId]
       if (!prev || Number(entry?.id || 0) > Number(prev?.id || 0)) {
         acc[postId] = entry
@@ -268,7 +294,46 @@ export default function HomeFeed() {
 
       return acc
     }, {})
-  }, [ratings, posts])
+  }, [ratings, posts, receiverByPostId])
+
+  const commentsByPost = useMemo(() => {
+    const ownerByPostId = new Map(
+      (Array.isArray(posts) ? posts : []).map((post) => [
+        Number(post?.id),
+        Number(post?.owner_id ?? post?.owner),
+      ]),
+    )
+
+    const result = {}
+    ;(Array.isArray(ratings) ? ratings : []).forEach((entry) => {
+      const postId = Number(entry?.post)
+      const ownerId = ownerByPostId.get(postId)
+      const providerId = Number(entry?.provider)
+      const customerId = Number(entry?.customer)
+      if (!Number.isFinite(postId) || !Number.isFinite(ownerId) || ownerId <= 0) return
+      if (providerId !== ownerId) return
+      if (!Number.isFinite(customerId) || customerId <= 0 || customerId === ownerId) return
+
+      const reviewer = usersById.get(customerId)
+      if (!result[postId]) result[postId] = []
+
+      result[postId].push({
+        id: Number(entry?.id || 0),
+        rating: entry,
+        reviewer: {
+          id: customerId,
+          name: reviewer?.name || reviewer?.username || entry?.customer_name || `User #${customerId}`,
+          photo: reviewer?.profile_photo || entry?.customer_profile_photo || '',
+        },
+      })
+    })
+
+    Object.keys(result).forEach((postId) => {
+      result[postId].sort((left, right) => Number(right?.id || 0) - Number(left?.id || 0))
+    })
+
+    return result
+  }, [ratings, posts, usersById])
 
   const averageRatingByUser = useMemo(() => {
     const totals = {}
@@ -530,6 +595,13 @@ export default function HomeFeed() {
       if (!shouldOpen) {
         return prev === postId ? null : prev
       }
+      return postId
+    })
+  }
+
+  const handleToggleComments = (postId, shouldOpen) => {
+    setOpenCommentsPostId((prev) => {
+      if (!shouldOpen) return prev === postId ? null : prev
       return postId
     })
   }
@@ -812,6 +884,7 @@ export default function HomeFeed() {
               const ratingEntry = ratingByPost[post.id]
               const reviewerId = Number(ratingEntry?.customer)
               const reviewerUser = usersById.get(reviewerId)
+              const postComments = commentsByPost[post.id] || []
 
               return (
                 <PostCard
@@ -851,6 +924,9 @@ export default function HomeFeed() {
                   inCart={isInCart(post.id)}
                   isDetailsOpen={openDetailsPostId === post.id}
                   onToggleDetails={(shouldOpen) => handleToggleDetails(post.id, shouldOpen)}
+                  ratingComments={postComments}
+                  isCommentsOpen={openCommentsPostId === post.id}
+                  onToggleComments={(shouldOpen) => handleToggleComments(post.id, shouldOpen)}
                 />
               )
             })}
