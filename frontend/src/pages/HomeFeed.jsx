@@ -729,8 +729,9 @@ export default function HomeFeed() {
                   longitude={filters.longitude}
                   radiusKm={toCoordinateOrNull(filters.radiusKm)}
                   onPick={handleFilterLocationPick}
-                  mapSizeInches={5}
-                  selectedZoom={14}
+                  mapWidthInches={16}
+                  mapHeightInches={4}
+                  selectedZoom={10}
                   popupText="Confirm this search location?"
                 />
               </div>

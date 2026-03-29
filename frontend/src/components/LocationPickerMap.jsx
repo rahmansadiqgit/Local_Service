@@ -102,6 +102,8 @@ export default function LocationPickerMap({
   onPick,
   radiusKm,
   mapSizeInches = 5,
+  mapWidthInches,
+  mapHeightInches,
   selectedZoom = 14,
   hintText = '',
   showUseMyLocation = true,
@@ -122,7 +124,8 @@ export default function LocationPickerMap({
     return null
   }, [latitude, longitude])
 
-  const frameSize = `${mapSizeInches}in`
+  const frameWidth = `${mapWidthInches || mapSizeInches}in`
+  const frameHeight = `${mapHeightInches || mapSizeInches}in`
 
   const handleUseMyLocation = () => {
     if (!navigator.geolocation) {
@@ -152,27 +155,27 @@ export default function LocationPickerMap({
 
   return (
     <div className={`flex flex-col items-center ${className}`}>
-      {showUseMyLocation && (
-        <div className="mb-2 flex w-full justify-center">
-          <button
-            type="button"
-            onClick={handleUseMyLocation}
-            disabled={geoLoading}
-            className="inline-flex items-center rounded-lg bg-gradient-to-r from-violet-600 to-fuchsia-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:from-violet-700 hover:to-fuchsia-700 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {geoLoading ? 'Detecting location...' : 'Use My Current Location'}
-          </button>
-        </div>
-      )}
-
       <div
-        className="relative z-0 rounded-xl border border-amber-200 bg-amber-50 p-2"
+        className="relative z-0 flex flex-col gap-1 rounded-xl border border-amber-200 bg-amber-50 px-2 py-1"
         style={{
-          width: `min(100%, ${frameSize})`,
-          aspectRatio: '1 / 1',
+          width: `min(100%, ${frameWidth})`,
+          height: frameHeight,
         }}
       >
-        <div className="relative h-full w-full overflow-hidden rounded-lg">
+        {showUseMyLocation && (
+          <div className="z-[650] self-start">
+            <button
+              type="button"
+              onClick={handleUseMyLocation}
+              disabled={geoLoading}
+              className="inline-flex items-center rounded-lg bg-gradient-to-r from-violet-600 to-fuchsia-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:from-violet-700 hover:to-fuchsia-700 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {geoLoading ? 'Detecting location...' : 'Use My Current Location'}
+            </button>
+          </div>
+        )}
+
+        <div className="relative min-h-0 w-full flex-1 overflow-hidden rounded-lg">
           {hintText ? (
             <div className="pointer-events-none absolute left-2 top-2 z-[500] rounded-md bg-black/45 px-2 py-1 text-[11px] font-medium text-white">
               {hintText}
