@@ -12,9 +12,11 @@ export default function Dashboard() {
   const [profile, setProfile] = useState(null)
   const [posts, setPosts] = useState([])
   const [ratings, setRatings] = useState([])
+  const [users, setUsers] = useState([])
   const [skills, setSkills] = useState([])
   const [expertises, setExpertises] = useState([])
   const [products, setProducts] = useState([])
+  const [erpItems, setErpItems] = useState([])
   const [expandedPostId, setExpandedPostId] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -48,21 +50,25 @@ export default function Dashboard() {
           profileData = profileRes.data;
         }
         
-        const [postRes, ratingRes, skillRes, expertiseRes, productRes, overviewRes] = await Promise.all([
+        const [postRes, ratingRes, skillRes, expertiseRes, productRes, overviewRes, userRes, erpRes] = await Promise.all([
           api.get('/posts/'),
           api.get('/ratings/'),
           api.get('/skills/'),
           api.get('/expertises/'),
           api.get('/products/'),
           api.get('/connections/overview/'),
+          api.get('/users/'),
+          api.get('/erp/'),
         ]);
         
         if (!active) return;
         setPosts(postRes.data);
         setRatings(ratingRes.data);
+        setUsers(userRes.data || []);
         setSkills(skillRes.data);
         setExpertises(expertiseRes.data);
         setProducts(productRes.data);
+        setErpItems(erpRes.data || []);
         setConnectionsOverview(overviewRes.data || null)
         setProfile(profileData);
       } catch (error) {
@@ -96,18 +102,31 @@ export default function Dashboard() {
   }, [ratingsByPost])
 
   const ratingsSummary = useMemo(() => {
-    const map = {}
-    ratings.forEach((rating) => {
-      const key = rating.provider
-      if (!key) return
-      map[key] = map[key] || []
-      map[key].push(Number(rating.rating_value || 0))
+    const targetId = profile?.id
+    if (targetId == null) return []
+
+    const ownedPosts = posts.filter((post) => {
+      const ownerId = post.owner_id ?? post.owner
+      return String(ownerId) === String(targetId)
     })
-    return Object.entries(map).map(([providerId, values]) => {
-      const avg = values.reduce((sum, value) => sum + value, 0) / values.length
-      return { providerId, average: avg.toFixed(2), count: values.length }
-    })
-  }, [ratings])
+
+    return ownedPosts
+      .map((post) => {
+        const ownerId = Number(post.owner_id ?? post.owner)
+        const items = (ratingsByPost[post.id] || []).filter(
+          (entry) => Number(entry?.provider) === ownerId,
+        )
+        const total = items.reduce((sum, item) => sum + Number(item.rating_value || 0), 0)
+        const average = items.length ? total / items.length : 0
+        return {
+          postId: post.id,
+          postName: post.post_title || post.post_name || `Post #${post.id}`,
+          average: average.toFixed(2),
+          count: items.length,
+        }
+      })
+      .sort((left, right) => Number(right.average) - Number(left.average))
+  }, [profile?.id, posts, ratingsByPost])
 
   const skillsByPost = useMemo(() => {
     return skills.reduce((acc, skill) => {
@@ -132,6 +151,58 @@ export default function Dashboard() {
       return acc
     }, {})
   }, [expertises])
+
+  const usersById = useMemo(() => {
+    const map = new Map()
+    ;(Array.isArray(users) ? users : []).forEach((entry) => {
+      const idValue = Number(entry?.id)
+      if (Number.isFinite(idValue) && idValue > 0) {
+        map.set(idValue, entry)
+      }
+    })
+    return map
+  }, [users])
+
+  const roleLabelsByPostAndUser = useMemo(() => {
+    const map = new Map()
+    ;(Array.isArray(erpItems) ? erpItems : []).forEach((item) => {
+      if (String(item?.stage || '') !== 'Completed') return
+      const postId = Number(item?.post)
+      if (!Number.isFinite(postId) || postId <= 0) return
+
+      if (!map.has(postId)) {
+        map.set(postId, new Map())
+      }
+      const perPost = map.get(postId)
+
+      const addRole = (userId, roleLabel) => {
+        const parsedUserId = Number(userId)
+        if (!Number.isFinite(parsedUserId) || parsedUserId <= 0) return
+        if (!perPost.has(parsedUserId)) {
+          perPost.set(parsedUserId, new Set())
+        }
+        perPost.get(parsedUserId).add(roleLabel)
+      }
+
+      addRole(item?.provider, 'Provider')
+      addRole(item?.receiver, 'Receiver')
+
+      const members = item?.configuration_snapshot?.members || {}
+      const roleGroups = [
+        { keys: ['expertise'], label: 'Expertise' },
+        { keys: ['skill_provider', 'service_provider'], label: 'Skill provider' },
+        { keys: ['supplier', 'delivery_man', 'delivary_man', 'delivery'], label: 'Delivary Man' },
+      ]
+
+      roleGroups.forEach((group) => {
+        group.keys.forEach((key) => {
+          const assigneeIds = Array.isArray(members?.[key]?.assignee_ids) ? members[key].assignee_ids : []
+          assigneeIds.forEach((idValue) => addRole(idValue, group.label))
+        })
+      })
+    })
+    return map
+  }, [erpItems])
 
   // Filter posts for the selected profile; support owner_id/owner and string/number IDs.
   const userPosts = useMemo(() => {
@@ -361,6 +432,12 @@ export default function Dashboard() {
     const { hasExpertise, hasServices, hasProduct, expertiseRows, serviceRows, productRows, showServiceDescription, showProductDescription } =
       buildCategoryRows(post)
     const isExpanded = expandedPostId === post.id
+    const postOwnerId = Number(post.owner_id ?? post.owner)
+    const postRatings = (ratingsByPost[post.id] || [])
+      .filter((entry) => Number(entry?.provider) === postOwnerId)
+      .slice()
+      .sort((left, right) => Number(right?.id || 0) - Number(left?.id || 0))
+    const perPostRoleMap = roleLabelsByPostAndUser.get(Number(post.id)) || new Map()
 
     return (
       <article
@@ -475,6 +552,40 @@ export default function Dashboard() {
             {!hasExpertise && !hasServices && !hasProduct && (
               <p className="text-sm text-slate-400">No detail listed.</p>
             )}
+
+            <div className="space-y-2 rounded-xl border border-violet-200 bg-violet-50/50 p-3">
+              <p className="text-sm font-semibold text-violet-800">Ratings and Comments</p>
+              {postRatings.length ? (
+                <div className="space-y-2">
+                  {postRatings.map((entry) => {
+                    const reviewerId = Number(entry?.customer)
+                    const targetId = Number(entry?.provider)
+                    const reviewer = usersById.get(reviewerId)
+                    const target = usersById.get(targetId)
+                    const reviewerRoles = Array.from(perPostRoleMap.get(reviewerId) || [])
+
+                    return (
+                      <div key={`post-rating-${post.id}-${entry.id}`} className="rounded-lg border border-violet-200 bg-white p-2">
+                        <p className="font-semibold text-slate-800">
+                          {reviewer?.name || reviewer?.username || `User #${reviewerId}`} -> {target?.name || target?.username || `User #${targetId}`}
+                        </p>
+                        {reviewerRoles.length ? (
+                          <p className="mt-0.5 text-[11px] text-slate-500">Role: {reviewerRoles.join(', ')}</p>
+                        ) : null}
+                        <p className="mt-1 text-sm text-slate-700">
+                          <span className="font-semibold">Rating:</span> {Number(entry?.rating_value || 0).toFixed(1)} / 5
+                        </p>
+                        <p className="mt-1 text-sm text-slate-700 whitespace-pre-wrap">
+                          <span className="font-semibold">Comment:</span> {entry?.review_text || '-'}
+                        </p>
+                      </div>
+                    )
+                  })}
+                </div>
+              ) : (
+                <p className="text-sm text-slate-500">No ratings/comments yet for this post.</p>
+              )}
+            </div>
           </div>
         )}
       </article>
@@ -646,7 +757,7 @@ export default function Dashboard() {
           <table className="w-full border-collapse text-left text-sm">
             <thead className="bg-violet-200/70 text-violet-900">
               <tr>
-                <th className="border border-violet-300 px-4 py-2">Provider ID</th>
+                <th className="border border-violet-300 px-4 py-2">Post Name</th>
                 <th className="border border-violet-300 px-4 py-2">Average Rating</th>
                 <th className="border border-violet-300 px-4 py-2">Total Reviews</th>
               </tr>
@@ -660,8 +771,8 @@ export default function Dashboard() {
                 </tr>
               ) : (
                 ratingsSummary.map((row) => (
-                  <tr key={row.providerId} className="odd:bg-white/70 even:bg-violet-50/70">
-                    <td className="border border-violet-300 px-4 py-2 font-medium">{row.providerId}</td>
+                  <tr key={row.postId} className="odd:bg-white/70 even:bg-violet-50/70">
+                    <td className="border border-violet-300 px-4 py-2 font-medium">{row.postName}</td>
                     <td className="border border-violet-300 px-4 py-2">{row.average}</td>
                     <td className="border border-violet-300 px-4 py-2">{row.count}</td>
                   </tr>
