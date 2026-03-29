@@ -490,9 +490,56 @@ export default function ERP() {
       return
     }
 
-    const nextStage = erp.stage === 'Pending' ? 'On Process' : 'Completed'
+    const nextStage = erp.stage === 'Pending' ? 'On Process' : erp.stage
+    if (nextStage === erp.stage) {
+      setMessage('Receiver must complete this ERP from the new Completed button with rating and comment.')
+      return
+    }
     await handleStageChange(erp, nextStage)
     setMessage(`Task ${erp.id} moved to ${nextStage}.`)
+  }
+
+  const handleCompleteByReceiver = async (erp, payload) => {
+    try {
+      const { data } = await api.post(`/erp/${erp.id}/complete_by_receiver/`, payload)
+      const updatedErp = data?.erp
+      const newRating = data?.rating
+
+      if (updatedErp) {
+        setErpItems((prev) => prev.map((item) => (item.id === updatedErp.id ? updatedErp : item)))
+      }
+
+      if (newRating) {
+        setRatings((prev) => [...prev, newRating])
+      }
+
+      setMessage(data?.detail || `Task ${erp.id} marked as completed.`)
+      return { ok: true, detail: data?.detail || '' }
+    } catch (error) {
+      console.error(error)
+      const detail =
+        String(error?.response?.data?.detail || '').trim() ||
+        'Failed to complete ERP. Please provide rating and comment.'
+      setMessage(detail)
+      return { ok: false, detail }
+    }
+  }
+
+  const handleRateParticipant = async (erp, payload) => {
+    try {
+      const { data } = await api.post(`/erp/${erp.id}/rate_participant/`, payload)
+      const newRating = data?.rating
+      if (newRating) {
+        setRatings((prev) => [...prev, newRating])
+      }
+      setMessage(data?.detail || 'Participant rating submitted.')
+      return { ok: true, detail: data?.detail || '' }
+    } catch (error) {
+      console.error(error)
+      const detail = String(error?.response?.data?.detail || '').trim() || 'Failed to submit participant rating.'
+      setMessage(detail)
+      return { ok: false, detail }
+    }
   }
 
   const handleGeneratePdf = async (erp) => {
@@ -576,6 +623,8 @@ export default function ERP() {
               onPublishMemberPost={handlePublishMemberPost}
               onCloseMemberPost={handleCloseMemberPost}
               onLeaveAssignment={handleLeaveAssignment}
+              onCompleteByReceiver={handleCompleteByReceiver}
+              onRateParticipant={handleRateParticipant}
               onOpenOwner={(ownerId) => navigate(`/dashboard/${ownerId}`)}
               toMediaUrl={toMediaUrl}
             />

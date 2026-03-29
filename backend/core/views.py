@@ -902,9 +902,232 @@ class ERPViewSet(viewsets.ModelViewSet):
         stage = request.data.get("stage")
         if not stage:
             return Response({"detail": "Stage is required."}, status=400)
+
+        if stage == "Completed":
+            return Response(
+                {"detail": "Use complete_by_receiver with rating and comment to finish this ERP."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if stage == "Pending" and (not erp.provider or erp.provider.id != request.user.id):
+            raise PermissionDenied("Only provider can move task back to Pending.")
+
+        if stage == "On Process" and (not erp.provider or erp.provider.id != request.user.id):
+            raise PermissionDenied("Only provider can move task to On Process.")
+
         erp.stage = stage
-        erp.save()
+        erp.save(update_fields=["stage", "updated_at"])
         return Response(self.get_serializer(erp).data)
+
+    @action(detail=True, methods=["post"])
+    def complete_by_receiver(self, request, pk=None):
+        erp = self.get_object()
+
+        if erp.stage != "On Process":
+            return Response(
+                {"detail": "ERP can be completed only from On Process state."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if not erp.receiver or erp.receiver.id != request.user.id:
+            raise PermissionDenied("Only receiver can complete this ERP task.")
+
+        comment = str(request.data.get("comment", "") or "").strip()
+        rating_raw = request.data.get("rating")
+
+        if not comment:
+            return Response({"detail": "Completion comment is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            rating_value = int(rating_raw)
+        except (TypeError, ValueError):
+            return Response({"detail": "Rating must be an integer from 1 to 5."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if rating_value < 1 or rating_value > 5:
+            return Response({"detail": "Rating must be between 1 and 5."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if not erp.post_id or not erp.provider_id:
+            return Response(
+                {"detail": "ERP is missing post/provider links required for completion rating."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        provider_rating = Rating.objects.create(
+            post=erp.post,
+            provider=erp.provider,
+            customer=request.user,
+            rating_value=rating_value,
+            review_text=comment,
+        )
+
+        erp.stage = "Completed"
+        erp.completion_comment = comment
+        erp.completion_rating = rating_value
+        erp.completed_by = request.user
+        erp.completed_at = timezone.now()
+        erp.save(
+            update_fields=[
+                "stage",
+                "completion_comment",
+                "completion_rating",
+                "completed_by",
+                "completed_at",
+                "updated_at",
+            ]
+        )
+
+        receiver_name = request.user.name or request.user.username or request.user.email or f"User #{request.user.id}"
+        post_title = (
+            (erp.configuration_snapshot or {}).get("post", {}).get("title")
+            or getattr(erp.post, "post_title", "")
+            or getattr(erp.post, "post_name", "")
+            or f"ERP #{erp.id}"
+        )
+
+        Notification.objects.create(
+            user=erp.provider,
+            title="ERP Completed by Receiver",
+            message=(
+                f"{receiver_name} marked '{post_title}' (ERP #{erp.id}) as completed with rating "
+                f"{rating_value}/5. Comment: {comment}"
+            ),
+        )
+
+        snapshot_members = (erp.configuration_snapshot or {}).get("members") or {}
+        participant_ids = set()
+        for role_key in self._allowed_member_roles():
+            for role_bucket in self._iter_role_buckets(snapshot_members, role_key):
+                for raw_id in role_bucket.get("assignee_ids") or []:
+                    try:
+                        parsed = int(raw_id)
+                    except (TypeError, ValueError):
+                        continue
+                    if parsed > 0 and parsed not in {request.user.id, erp.provider_id}:
+                        participant_ids.add(parsed)
+
+        participants = User.objects.filter(id__in=list(participant_ids))
+        if participants:
+            Notification.objects.bulk_create(
+                [
+                    Notification(
+                        user=participant,
+                        title="ERP Completed",
+                        message=(
+                            f"ERP #{erp.id} for '{post_title}' has been completed by {receiver_name}. "
+                            "The provider can now rate participants."
+                        ),
+                    )
+                    for participant in participants
+                ]
+            )
+
+        Notification.objects.create(
+            user=request.user,
+            title="ERP Completion Submitted",
+            message=f"You completed ERP #{erp.id} and submitted rating for provider.",
+        )
+
+        return Response(
+            {
+                "detail": "ERP completed successfully.",
+                "erp": self.get_serializer(erp).data,
+                "rating": RatingSerializer(provider_rating).data,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+    @action(detail=True, methods=["post"])
+    def rate_participant(self, request, pk=None):
+        erp = self.get_object()
+
+        if not erp.provider or erp.provider.id != request.user.id:
+            raise PermissionDenied("Only provider can rate participants for this ERP.")
+
+        if erp.stage != "Completed":
+            return Response(
+                {"detail": "Participants can be rated only after ERP is completed."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        participant_id_raw = request.data.get("participant_id")
+        rating_raw = request.data.get("rating")
+        comment = str(request.data.get("comment", "") or "").strip()
+
+        try:
+            participant_id = int(participant_id_raw)
+        except (TypeError, ValueError):
+            return Response({"detail": "Valid participant_id is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            rating_value = int(rating_raw)
+        except (TypeError, ValueError):
+            return Response({"detail": "Rating must be an integer from 1 to 5."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if rating_value < 1 or rating_value > 5:
+            return Response({"detail": "Rating must be between 1 and 5."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if not comment:
+            return Response({"detail": "Rating comment is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        candidate_ids = set()
+        if erp.receiver_id:
+            candidate_ids.add(int(erp.receiver_id))
+
+        snapshot_members = (erp.configuration_snapshot or {}).get("members") or {}
+        for role_key in self._allowed_member_roles():
+            for role_bucket in self._iter_role_buckets(snapshot_members, role_key):
+                for raw_id in role_bucket.get("assignee_ids") or []:
+                    try:
+                        parsed = int(raw_id)
+                    except (TypeError, ValueError):
+                        continue
+                    if parsed > 0:
+                        candidate_ids.add(parsed)
+
+        candidate_ids.update(
+            int(uid) for uid in erp.assigned_workers.values_list("id", flat=True)
+        )
+
+        candidate_ids.discard(int(request.user.id))
+
+        if participant_id not in candidate_ids:
+            return Response(
+                {"detail": "Selected participant is not part of this ERP."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        participant = User.objects.filter(id=participant_id).first()
+        if not participant:
+            return Response({"detail": "Participant not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        if not erp.post_id:
+            return Response({"detail": "ERP post is required for participant rating."}, status=status.HTTP_400_BAD_REQUEST)
+
+        rating_obj = Rating.objects.create(
+            post=erp.post,
+            provider=participant,
+            customer=request.user,
+            rating_value=rating_value,
+            review_text=comment,
+        )
+
+        provider_name = request.user.name or request.user.username or request.user.email or f"User #{request.user.id}"
+        Notification.objects.create(
+            user=participant,
+            title="You Received a New ERP Rating",
+            message=(
+                f"{provider_name} rated your work in ERP #{erp.id}: {rating_value}/5. "
+                f"Comment: {comment}"
+            ),
+        )
+
+        return Response(
+            {
+                "detail": "Participant rating submitted.",
+                "rating": RatingSerializer(rating_obj).data,
+            },
+            status=status.HTTP_201_CREATED,
+        )
 
     @action(detail=True, methods=["post"])
     def assign_workers(self, request, pk=None):
