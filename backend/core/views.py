@@ -384,6 +384,21 @@ class ERPViewSet(viewsets.ModelViewSet):
             message=f"{actor_name} confirmed booking for '{post_title}'. Check ERP for task details.",
         )
 
+    def _notify_provider_member_activity(self, erp, actor, title, message):
+        provider = getattr(erp, "provider", None)
+        actor_id = getattr(actor, "id", None)
+        provider_id = getattr(provider, "id", None)
+
+        # Notify only for actions done by non-provider members.
+        if not provider or not actor_id or provider_id == actor_id:
+            return
+
+        Notification.objects.create(
+            user=provider,
+            title=title,
+            message=message,
+        )
+
     def get_queryset(self):
         user = self.request.user
         base_queryset = ERP.objects.filter(
@@ -760,6 +775,22 @@ class ERPViewSet(viewsets.ModelViewSet):
         snapshot["members"] = members
         self._save_snapshot(erp, snapshot)
 
+        actor_name = request.user.name or request.user.username or request.user.email or f"User #{request.user.id}"
+        role_label = role.replace("_", " ").title()
+        post_title = (
+            (erp.configuration_snapshot or {}).get("post", {}).get("title")
+            or getattr(erp.post, "post_title", "")
+            or getattr(erp.post, "post_name", "")
+            or f"ERP #{erp.id}"
+        )
+        action_text = "assigned themselves" if should_assign else "removed themselves"
+        self._notify_provider_member_activity(
+            erp,
+            request.user,
+            "ERP Member Assignment Updated",
+            f"{actor_name} {action_text} as {role_label} in '{post_title}' (ERP #{erp.id}).",
+        )
+
         return Response(self.get_serializer(erp).data)
 
     @action(detail=True, methods=["post"])
@@ -770,6 +801,7 @@ class ERPViewSet(viewsets.ModelViewSet):
         snapshot = erp.configuration_snapshot or {}
         members = snapshot.get("members") or {}
         changed = False
+        left_roles = []
 
         # Remove user from all member role buckets (including legacy/custom keys).
         for role_key, role_bucket in list(members.items()):
@@ -790,6 +822,7 @@ class ERPViewSet(viewsets.ModelViewSet):
             if user_id in unique_ids:
                 unique_ids.discard(user_id)
                 changed = True
+                left_roles.append(str(role_key))
 
             role_bucket["assignee_ids"] = sorted(list(unique_ids))
 
@@ -825,6 +858,21 @@ class ERPViewSet(viewsets.ModelViewSet):
         snapshot["members"] = members
         erp.configuration_snapshot = snapshot
         erp.save(update_fields=["configuration_snapshot", "updated_at"])
+
+        actor_name = request.user.name or request.user.username or request.user.email or f"User #{request.user.id}"
+        post_title = (
+            (erp.configuration_snapshot or {}).get("post", {}).get("title")
+            or getattr(erp.post, "post_title", "")
+            or getattr(erp.post, "post_name", "")
+            or f"ERP #{erp.id}"
+        )
+        left_roles_text = ", ".join(sorted(set(left_roles))) if left_roles else "assigned roles"
+        self._notify_provider_member_activity(
+            erp,
+            request.user,
+            "ERP Member Left Task",
+            f"{actor_name} left ERP #{erp.id} from {left_roles_text} in '{post_title}'.",
+        )
 
         return Response(self.get_serializer(erp).data)
 
@@ -1147,6 +1195,22 @@ class ERPViewSet(viewsets.ModelViewSet):
             message=message_text,
             parent=parent,
         )
+
+        actor_name = request.user.name or request.user.username or request.user.email or f"User #{request.user.id}"
+        post_title = (
+            (erp.configuration_snapshot or {}).get("post", {}).get("title")
+            or getattr(erp.post, "post_title", "")
+            or getattr(erp.post, "post_name", "")
+            or f"ERP #{erp.id}"
+        )
+        snippet = message_text[:80]
+        self._notify_provider_member_activity(
+            erp,
+            request.user,
+            "ERP Task Message",
+            f"{actor_name} sent a message in '{post_title}' (ERP #{erp.id}): {snippet}",
+        )
+
         serializer = ERPMessageSerializer(instance)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
