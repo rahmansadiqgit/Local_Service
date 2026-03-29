@@ -294,7 +294,16 @@ export default function ERPTaskCard({
       .map((id) => Number(id))
       .filter((id) => Number.isFinite(id) && id > 0),
   )
-  const hasRatedProvider = providerRatedUserIds.has(Number(currentUserId))
+  const hasRatedProviderFromSnapshot = providerRatedUserIds.has(Number(currentUserId))
+
+  const hasRatedProviderFromRatings = (Array.isArray(ratings) ? ratings : []).some(
+    (entry) =>
+      Number(entry?.post) === Number(erp.post)
+      && Number(entry?.customer) === Number(currentUserId)
+      && Number(entry?.provider) === Number(erp.provider),
+  )
+
+  const hasRatedProvider = hasRatedProviderFromSnapshot || hasRatedProviderFromRatings
   const shouldShowProviderCommentButton = erp.stage === 'Completed' && !isProvider && !hasRatedProvider
 
   const alreadyRatedParticipantIds = new Set(
