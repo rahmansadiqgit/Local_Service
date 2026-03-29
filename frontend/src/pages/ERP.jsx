@@ -27,6 +27,7 @@ export default function ERP() {
   const [ratings, setRatings] = useState([])
   const [expandedId, setExpandedId] = useState(null)
   const [trackOpenId, setTrackOpenId] = useState(null)
+  const [messageOpenId, setMessageOpenId] = useState(null)
   const [readyProductStatusByErp, setReadyProductStatusByErp] = useState({})
   const [workerPool, setWorkerPool] = useState('')
   const [filters, setFilters] = useState({
@@ -560,9 +561,11 @@ export default function ERP() {
               currentUserId={currentUserId}
               expandedId={expandedId}
               trackOpenId={trackOpenId}
+              messageOpenId={messageOpenId}
               phaseTasks={getPhaseTasks(erp)}
               onSetPending={(item) => handleStageChange(item, 'Pending')}
               onToggleTrack={(id) => setTrackOpenId((prev) => (prev === id ? null : id))}
+              onToggleMessage={(id) => setMessageOpenId((prev) => (prev === id ? null : id))}
               onGeneratePdf={handleGeneratePdf}
               onToggleDetails={(id) => setExpandedId((prev) => (prev === id ? null : id))}
               onTrackNext={handleTrackStage}
