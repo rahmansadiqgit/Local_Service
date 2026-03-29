@@ -53,6 +53,34 @@ export default function ManagePost() {
     return normalized.charAt(0).toUpperCase() + normalized.slice(1)
   }
 
+  const getDurationLabel = (unit) => {
+    const normalized = String(unit || '').trim().toLowerCase()
+    if (normalized === 'hourly') return 'Duration (hours)'
+    if (normalized === 'daily') return 'Duration (days)'
+    if (normalized === 'monthly') return 'Duration (months)'
+    return 'Duration'
+  }
+
+  const getDurationHelperText = (unit) => {
+    const normalized = String(unit || '').trim().toLowerCase()
+    if (normalized === 'hourly') return 'Total hours needed'
+    if (normalized === 'daily') return 'Total days needed'
+    if (normalized === 'monthly') return 'Total months needed'
+    return 'Total duration needed'
+  }
+
+  const getQuantityLabel = (unit) => {
+    const normalized = String(unit || '').trim().toLowerCase()
+    if (normalized.includes('bag')) return 'Quantity (bags)'
+    if (normalized.includes('box')) return 'Quantity (boxes)'
+    if (normalized.includes('pack')) return 'Quantity (packs)'
+    if (normalized.includes('bottle') || normalized.includes('liter')) return 'Quantity (bottles)'
+    if (normalized.includes('kg') || normalized.includes('kilogram')) return 'Quantity (kg)'
+    if (normalized.includes('piece') || normalized.includes('unit')) return 'Quantity (pieces)'
+    if (!normalized) return 'Quantity'
+    return `Quantity (${normalized})`
+  }
+
   const resolveMediaUrl = (value) => {
     if (!value) return ''
     if (/^https?:\/\//i.test(value) || value.startsWith('data:') || value.startsWith('blob:')) {
@@ -858,8 +886,8 @@ export default function ManagePost() {
                                       value={duration}
                                       onChange={(val) => setExpertiseDurations((prev) => ({ ...prev, [`expertise-${expertise.id}-duration`]: val }))}
                                       max={durationMax}
-                                      label={post.post_type === 'Demand' ? 'Needed hire unit' : 'Duration (hours)'}
-                                      helperText={post.post_type === 'Demand' ? `${Number(expertise.needed_budget_unit || 0)} required in post details` : 'Total hours needed'}
+                                      label={post.post_type === 'Demand' ? 'Needed hire unit' : getDurationLabel(expertise.unit)}
+                                      helperText={post.post_type === 'Demand' ? `${Number(expertise.needed_budget_unit || 0)} required in post details` : getDurationHelperText(expertise.unit)}
                                     />
 
                                     <div className="flex items-center justify-between border-t border-white/15 pt-2">
@@ -903,9 +931,11 @@ export default function ManagePost() {
 
                                 {enabled && (
                                   <div className="mt-4 space-y-3 border-t border-white/15 pt-3">
-                                    <p className="rounded-lg border border-emerald-400/30 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-100">
-                                      Included: Yes (binary selection)
-                                    </p>
+                                    <div className="rounded-lg border border-blue-400/30 bg-blue-500/10 px-3 py-2">
+                                      <p className="text-xs text-blue-100">
+                                        ✓ This service is included in your booking
+                                      </p>
+                                    </div>
 
                                     <div className="flex items-center justify-between border-t border-white/15 pt-2">
                                       <span className="text-xs text-slate-300">Service subtotal</span>
@@ -959,7 +989,7 @@ export default function ManagePost() {
                                       value={units}
                                       onChange={(val) => setProductUnits((prev) => ({ ...prev, [`product-${product.id}`]: val }))}
                                       max={unitsMax}
-                                      label="Quantity (bags)"
+                                      label={getQuantityLabel(product.unit)}
                                       helperText={post.post_type === 'Demand' ? `${availableUnits} required in post details (cannot exceed)` : `Maximum ${availableUnits} available`}
                                     />
 
