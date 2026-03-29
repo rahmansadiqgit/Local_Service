@@ -384,6 +384,61 @@ class ERPViewSet(viewsets.ModelViewSet):
             message=f"{actor_name} confirmed booking for '{post_title}'. Check ERP for task details.",
         )
 
+    @action(detail=True, methods=["post"], url_path="submit_application", url_name="submit_application")
+    def submit_application(self, request, pk=None):
+        erp = self.get_object()
+        actor = request.user
+
+        post = getattr(erp, "post", None)
+        post_owner = getattr(post, "owner", None)
+        is_participant = actor in [getattr(erp, "provider", None), getattr(erp, "receiver", None), post_owner]
+        if not is_participant:
+            raise PermissionDenied("You are not allowed to submit this application.")
+
+        snapshot = erp.configuration_snapshot or {}
+        submission = snapshot.get("application_submission") or {}
+        submission["submitted_by"] = int(actor.id)
+        submission["submitted_at"] = timezone.now().isoformat()
+        submission["status"] = "submitted"
+        snapshot["application_submission"] = submission
+
+        note = str(request.data.get("note") or "").strip()
+        notes = snapshot.get("notes") or {}
+        if note:
+            notes["requester_note"] = note
+        snapshot["notes"] = notes
+
+        erp.configuration_snapshot = snapshot
+        erp.save(update_fields=["configuration_snapshot", "updated_at"])
+
+        post_title = (
+            snapshot.get("post", {}).get("title")
+            or getattr(post, "post_title", "")
+            or getattr(post, "post_name", "")
+            or "this post"
+        )
+        actor_name = getattr(actor, "name", "") or getattr(actor, "username", "") or "A user"
+
+        notifications = [
+            Notification(
+                user=actor,
+                title="Application Submitted",
+                message=f"Your application was submitted successfully. Please wait for acceptance. (Post: '{post_title}')",
+            )
+        ]
+
+        if post_owner and int(post_owner.id) != int(actor.id):
+            notifications.append(
+                Notification(
+                    user=post_owner,
+                    title="Someone applied to your post - review now",
+                    message=f"{actor_name} submitted an application for '{post_title}'. Open your dashboard to review and accept/reject. Post link: /dashboard",
+                )
+            )
+
+        Notification.objects.bulk_create(notifications)
+        return Response(self.get_serializer(erp).data, status=status.HTTP_200_OK)
+
     def _notify_provider_member_activity(self, erp, actor, title, message):
         provider = getattr(erp, "provider", None)
         actor_id = getattr(actor, "id", None)
