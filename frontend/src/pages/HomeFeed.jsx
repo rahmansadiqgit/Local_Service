@@ -565,7 +565,7 @@ export default function HomeFeed() {
 
       setActionMessage('Action sent. Navigating to manage post...')
       setTimeout(() => {
-        navigate(`/manage-post/${post.id}`)
+        navigate(`/manage-post/${post.id}`, { state: { actionType } })
       }, 800)
     } catch (error) {
       console.error(error)

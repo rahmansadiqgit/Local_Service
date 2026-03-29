@@ -137,7 +137,9 @@ export default function YourCart() {
 
       setActionMessage('Action sent. Navigating to manage post...')
       setTimeout(() => {
-        navigate(`/manage-post/${post.id}`)
+        navigate(`/manage-post/${post.id}`, {
+          state: { actionType: post.post_type === 'Demand' ? 'apply' : 'book' },
+        })
       }, 800)
     } catch (error) {
       console.error(error)

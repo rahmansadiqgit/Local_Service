@@ -52,7 +52,7 @@ export default function Dashboard() {
           profileData = profileRes.data;
         }
         
-        const [postRes, ratingRes, skillRes, expertiseRes, productRes, overviewRes, userRes, erpRes] = await Promise.all([
+  const results = await Promise.allSettled([
           api.get('/posts/'),
           api.get('/ratings/'),
           api.get('/skills/'),
@@ -62,16 +62,22 @@ export default function Dashboard() {
           api.get('/users/'),
           api.get('/erp/'),
         ]);
-        
+
         if (!active) return;
-        setPosts(postRes.data);
-        setRatings(ratingRes.data);
-        setUsers(userRes.data || []);
-        setSkills(skillRes.data);
-        setExpertises(expertiseRes.data);
-        setProducts(productRes.data);
-        setErpItems(erpRes.data || []);
-        setConnectionsOverview(overviewRes.data || null)
+  const [postRes, ratingRes, skillRes, expertiseRes, productRes, overviewRes, userRes, erpRes] = results
+
+  if (postRes.status === 'rejected') {
+    throw postRes.reason
+  }
+
+  setPosts(Array.isArray(postRes.value?.data) ? postRes.value.data : []);
+  setRatings(ratingRes.status === 'fulfilled' && Array.isArray(ratingRes.value?.data) ? ratingRes.value.data : []);
+  setUsers(userRes.status === 'fulfilled' && Array.isArray(userRes.value?.data) ? userRes.value.data : []);
+  setSkills(skillRes.status === 'fulfilled' && Array.isArray(skillRes.value?.data) ? skillRes.value.data : []);
+  setExpertises(expertiseRes.status === 'fulfilled' && Array.isArray(expertiseRes.value?.data) ? expertiseRes.value.data : []);
+  setProducts(productRes.status === 'fulfilled' && Array.isArray(productRes.value?.data) ? productRes.value.data : []);
+  setErpItems(erpRes.status === 'fulfilled' && Array.isArray(erpRes.value?.data) ? erpRes.value.data : []);
+  setConnectionsOverview(overviewRes.status === 'fulfilled' ? (overviewRes.value?.data || null) : null)
         setProfile(profileData);
       } catch (error) {
         console.error('Dashboard load error:', error);
