@@ -7,6 +7,7 @@ export default function ERPTaskCard({
   erp,
   post,
   rating,
+  ratings = [],
   currentUserId,
   expandedId,
   trackOpenId,
@@ -278,16 +279,42 @@ export default function ERPTaskCard({
   const roleLabel =
     viewerRole === 'Provider' ? 'Providing' : viewerRole === 'Receiver' ? 'Receiving' : erp.category
 
+  const alreadyRatedParticipantIds = new Set(
+    (Array.isArray(ratings) ? ratings : [])
+      .filter(
+        (item) =>
+          Number(item?.post) === Number(erp.post)
+          && Number(item?.customer) === Number(currentUserId)
+          && Number(item?.provider) > 0,
+      )
+      .map((item) => Number(item.provider)),
+  )
+
   const providerRateCandidates = Array.from(
     new Map(
       [
         ...(erp.receiver ? users.filter((user) => Number(user.id) === Number(erp.receiver)) : []),
         ...associatedMembersByRole.flatMap((entry) => entry.members),
       ]
-        .filter((user) => Number(user.id) && Number(user.id) !== Number(currentUserId))
+        .filter(
+          (user) =>
+            Number(user.id)
+            && Number(user.id) !== Number(currentUserId)
+            && !alreadyRatedParticipantIds.has(Number(user.id)),
+        )
         .map((user) => [Number(user.id), user]),
     ).values(),
   )
+
+  useEffect(() => {
+    if (!selectedParticipantId) return
+    const stillAvailable = providerRateCandidates.some(
+      (user) => Number(user.id) === Number(selectedParticipantId),
+    )
+    if (!stillAvailable) {
+      setSelectedParticipantId('')
+    }
+  }, [selectedParticipantId, providerRateCandidates])
 
   const stageStyle =
     erp.stage === 'Completed'

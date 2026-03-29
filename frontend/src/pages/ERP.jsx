@@ -605,6 +605,7 @@ export default function ERP() {
               erp={erp}
               post={postMap[erp.post]}
               rating={averageRatingByPost[erp.post] || 0}
+              ratings={ratings}
               currentUserId={currentUserId}
               expandedId={expandedId}
               trackOpenId={trackOpenId}
