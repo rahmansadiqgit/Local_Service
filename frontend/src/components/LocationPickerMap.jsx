@@ -152,6 +152,19 @@ export default function LocationPickerMap({
 
   return (
     <div className={`flex flex-col items-center ${className}`}>
+      {showUseMyLocation && (
+        <div className="mb-2 flex w-full justify-center">
+          <button
+            type="button"
+            onClick={handleUseMyLocation}
+            disabled={geoLoading}
+            className="inline-flex items-center rounded-lg bg-gradient-to-r from-violet-600 to-fuchsia-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:from-violet-700 hover:to-fuchsia-700 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {geoLoading ? 'Detecting location...' : 'Use My Current Location'}
+          </button>
+        </div>
+      )}
+
       <div
         className="relative z-0 rounded-xl border border-amber-200 bg-amber-50 p-2"
         style={{
@@ -205,19 +218,6 @@ export default function LocationPickerMap({
           </MapContainer>
         </div>
       </div>
-
-      {showUseMyLocation && (
-        <div className="mt-2 flex justify-center">
-          <button
-            type="button"
-            onClick={handleUseMyLocation}
-            disabled={geoLoading}
-            className="inline-flex items-center rounded-lg bg-gradient-to-r from-violet-600 to-fuchsia-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:from-violet-700 hover:to-fuchsia-700 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {geoLoading ? 'Detecting location...' : 'Use My Current Location'}
-          </button>
-        </div>
-      )}
 
       {geoError && <p className="mt-2 text-center text-[11px] text-rose-600">{geoError}</p>}
     </div>

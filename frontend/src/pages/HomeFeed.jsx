@@ -570,6 +570,71 @@ export default function HomeFeed() {
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.45),transparent_52%)]" />
           <div className="absolute -left-10 -top-10 h-24 w-24 rounded-full bg-white/35 blur-2xl" />
           <div className="absolute -right-10 -bottom-10 h-24 w-24 rounded-full bg-orange-200/45 blur-2xl" />
+          <div className="relative mb-4">
+            <div className="mb-3 flex items-center justify-between gap-3 border-b border-white/45 pb-3">
+              <p className="text-sm font-extrabold tracking-wide text-orange-900">Find Peoples & Skills</p>
+              <p className="text-xs text-slate-600">Search members by Name or Education & Skills</p>
+            </div>
+
+            <div className="mt-1.5 flex flex-wrap items-center gap-2">
+              <input
+                type="text"
+                value={peopleSearch}
+                onChange={(event) => setPeopleSearch(event.target.value)}
+                placeholder="Find someone or find skills"
+                className="h-11 min-w-[240px] flex-1 rounded-xl border border-white/50 bg-white/45 px-3 text-sm text-slate-800 shadow-sm placeholder:text-slate-500 focus:border-orange-300 focus:outline-none focus:ring-2 focus:ring-orange-200/80"
+              />
+              <button
+                type="button"
+                onClick={() => setPeopleSearch((prev) => String(prev || '').trim())}
+                className="inline-flex h-11 items-center justify-center rounded-lg bg-gradient-to-r from-violet-600 to-fuchsia-600 px-4 text-sm font-semibold text-white shadow-sm transition hover:from-violet-700 hover:to-fuchsia-700"
+              >
+                Search
+              </button>
+            </div>
+
+            <div className="mt-2">
+              {!isAuthenticated ? (
+                <p className="text-sm text-slate-600">
+                  Login to search all users, including members who have not posted yet.
+                </p>
+              ) : String(peopleSearch || '').trim() ? (
+                searchedUsers.length ? (
+                  <div className="grid gap-2 md:grid-cols-2">
+                    {searchedUsers.map((person) => (
+                      <div
+                        key={`user-search-${person.id}`}
+                        className="flex items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2"
+                      >
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-semibold text-slate-800">
+                            {person.name || person.username || `User #${person.id}`}
+                          </p>
+                          <p className="truncate text-xs text-slate-500">
+                            {person.education_skills || 'No education/skills added yet'}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => navigate(`/dashboard/${person.id}`)}
+                          className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-700 transition hover:border-orange-300 hover:text-orange-700"
+                        >
+                          View
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-slate-600">No matching user found.</p>
+                )
+              ) : (
+                <p className="text-sm text-slate-600">Type a Name like "Partho Chandra" or a Skill like "Software Engineer"</p>
+              )}
+            </div>
+          </div>
+
+          <div className="h-4" />
+
           <div className="relative mb-4 flex items-center justify-between gap-3 border-b border-white/45 pb-3">
             <p className="text-sm font-extrabold tracking-wide text-orange-900">Search & Filters</p>
             <p className="text-xs text-slate-600">Use filters to quickly narrow service posts</p>
@@ -671,70 +736,6 @@ export default function HomeFeed() {
               </div>
             </div>
 
-            <div className="lg:col-span-6">
-              <div className="rounded-2xl border border-white/60 bg-white/35 p-3 sm:p-4">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <h3 className="text-sm font-extrabold tracking-wide text-orange-900">Find People & Skills</h3>
-                  <p className="text-xs text-slate-600">Search members by name or Education & Skills</p>
-                </div>
-
-                <div className="mt-2 flex flex-wrap items-center gap-2">
-                  <input
-                    type="text"
-                    value={peopleSearch}
-                    onChange={(event) => setPeopleSearch(event.target.value)}
-                    placeholder="Find someone or find skills"
-                    className="h-11 min-w-[240px] flex-1 rounded-xl border border-white/70 bg-white/60 px-3 text-sm text-slate-800 shadow-sm placeholder:text-slate-400 focus:border-orange-300 focus:outline-none focus:ring-2 focus:ring-orange-200/80"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setPeopleSearch((prev) => String(prev || '').trim())}
-                    className="inline-flex h-11 items-center justify-center rounded-xl bg-orange-600 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-orange-700"
-                  >
-                    Search
-                  </button>
-                </div>
-
-                <div className="mt-2">
-                  {!isAuthenticated ? (
-                    <p className="text-sm text-slate-600">
-                      Login to search all users, including members who have not posted yet.
-                    </p>
-                  ) : String(peopleSearch || '').trim() ? (
-                    searchedUsers.length ? (
-                      <div className="grid gap-2 md:grid-cols-2">
-                        {searchedUsers.map((person) => (
-                          <div
-                            key={`user-search-${person.id}`}
-                            className="flex items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2"
-                          >
-                            <div className="min-w-0">
-                              <p className="truncate text-sm font-semibold text-slate-800">
-                                {person.name || person.username || `User #${person.id}`}
-                              </p>
-                              <p className="truncate text-xs text-slate-500">
-                                {person.education_skills || 'No education/skills added yet'}
-                              </p>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => navigate(`/dashboard/${person.id}`)}
-                              className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-700 transition hover:border-orange-300 hover:text-orange-700"
-                            >
-                              View
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="text-sm text-slate-600">No matching user found.</p>
-                    )
-                  ) : (
-                    <p className="text-sm text-slate-600">Type a name like "Prithibi" or a skill like "Electrician".</p>
-                  )}
-                </div>
-              </div>
-            </div>
           </div>
         </div>
 
