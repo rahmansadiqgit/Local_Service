@@ -554,6 +554,7 @@ export default function Header() {
               <Link
                 to="/register"
                 className="header-auth-btn rounded-full border border-yellow-300 bg-yellow-400 px-5 py-2 text-sm font-bold text-white shadow-lg transition-all duration-200 hover:-translate-y-0.5 hover:bg-yellow-500 hover:shadow-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-yellow-200 focus-visible:ring-offset-2 focus-visible:ring-offset-indigo-500"
+                style={{ color: '#ffffff' }}
               >
                 Register
               </Link>
