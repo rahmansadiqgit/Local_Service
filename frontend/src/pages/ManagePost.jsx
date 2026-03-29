@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import api from '../api/client'
 
 export default function ManagePost() {
   const { id } = useParams()
+  const location = useLocation()
   const navigate = useNavigate()
   const [posts, setPosts] = useState([])
   const [ownPostIds, setOwnPostIds] = useState(new Set())
@@ -17,9 +18,15 @@ export default function ManagePost() {
   const [productUnits, setProductUnits] = useState({})
   const [itemToggles, setItemToggles] = useState({})
   const [supplierNotesByPost, setSupplierNotesByPost] = useState({})
+  const [applicationValues, setApplicationValues] = useState({})
+  const [applicationServiceNotes, setApplicationServiceNotes] = useState({})
+  const [applicationNotesByPost, setApplicationNotesByPost] = useState({})
+  const [submittingApplicationPostId, setSubmittingApplicationPostId] = useState(null)
   const [loading, setLoading] = useState(true)
   const [message, setMessage] = useState('')
   const [messageType, setMessageType] = useState('info')
+
+  const forcedActionType = String(location.state?.actionType || '').trim().toLowerCase()
 
   const stripCategoryPrefix = (value) =>
     String(value || '')
@@ -79,6 +86,38 @@ export default function ManagePost() {
     if (normalized.includes('piece') || normalized.includes('unit')) return 'Quantity (pieces)'
     if (!normalized) return 'Quantity'
     return `Quantity (${normalized})`
+  }
+
+  const getActionModeForPost = (post) => {
+    if (forcedActionType === 'apply' || forcedActionType === 'book') {
+      return forcedActionType
+    }
+    return String(post?.post_type || '').toLowerCase() === 'demand' ? 'apply' : 'book'
+  }
+
+  const getApplicationValue = (key, fallback = 0) => {
+    if (Object.prototype.hasOwnProperty.call(applicationValues, key)) {
+      return Number(applicationValues[key] || 0)
+    }
+    return Number(fallback || 0)
+  }
+
+  const setApplicationValue = (key, nextValue, maxValue) => {
+    const max = Number.isFinite(Number(maxValue)) ? Number(maxValue) : Number.MAX_SAFE_INTEGER
+    const safe = Math.max(0, Math.min(max, Number(nextValue || 0)))
+    setApplicationValues((prev) => ({ ...prev, [key]: safe }))
+  }
+
+  const getNegotiationBadge = (offered, requested) => {
+    const offeredValue = Number(offered || 0)
+    const requestedValue = Number(requested || 0)
+    if (offeredValue < requestedValue) {
+      return { text: 'LOWER', icon: '↓', className: 'border-emerald-300 bg-emerald-500/15 text-emerald-100' }
+    }
+    if (offeredValue > requestedValue) {
+      return { text: 'HIGHER', icon: '↑', className: 'border-rose-300 bg-rose-500/15 text-rose-100' }
+    }
+    return { text: 'BUDGET', icon: '=', className: 'border-amber-300 bg-amber-500/15 text-amber-100' }
   }
 
   const resolveMediaUrl = (value) => {
@@ -365,6 +404,331 @@ export default function ManagePost() {
     )
   }
 
+  const getApplicationNoteForPost = (postId) => {
+    if (Object.prototype.hasOwnProperty.call(applicationNotesByPost, postId)) {
+      return applicationNotesByPost[postId]
+    }
+    const existingSnapshot = erpByPost[postId]?.configuration_snapshot || {}
+    return existingSnapshot?.notes?.requester_note || existingSnapshot?.requester_note || ''
+  }
+
+  const getApplicationServiceNote = (postId, serviceId) => {
+    const key = `${postId}-service-${serviceId}`
+    return String(applicationServiceNotes[key] || '')
+  }
+
+  const getApplicationBreakdownForPost = (postId) => {
+    const post = posts.find((item) => item.id === postId)
+    const postType = post?.post_type || ''
+    const skillExpertiseRows = skillBreakdownByPost[postId]?.expertise || []
+    const serviceRows = skillBreakdownByPost[postId]?.services || []
+    const newExpertiseRows = expertisesByPost[postId] || []
+    const productRows = productsByPost[postId] || []
+
+    const lineItems = []
+    const validationErrors = []
+    let expertiseTotal = 0
+    let serviceTotal = 0
+    let productTotal = 0
+
+    skillExpertiseRows.forEach((row) => {
+      const enabled = isItemEnabled(postId, 'skill', row.id)
+      const peopleMax = Math.max(Number(row.available_workers || 0), 0)
+      const people = getApplicationValue(`apply-skill-${row.id}-people`, peopleMax)
+      const hoursMax = Math.max(Number(row.needed_budget_unit || 0), 0)
+      const hours = getApplicationValue(`apply-skill-${row.id}-hours`, 0)
+      const requestedRate = Number(row.cost_per_unit || 0)
+      const offeredRate = getApplicationValue(`apply-skill-${row.id}-rate`, requestedRate)
+      const lineTotal = enabled ? people * hours * offeredRate : 0
+      if (enabled) expertiseTotal += lineTotal
+
+      if (enabled && people > 0 && hours > 0 && offeredRate <= 0) {
+        validationErrors.push(`${row.skill_name}: add your hourly offer rate.`)
+      }
+
+      lineItems.push({
+        key: `apply-skill-${row.id}`,
+        title: row.skill_name,
+        detail: `(${people} person x ${hours} hr)` ,
+        amount: lineTotal,
+        included: enabled,
+      })
+    })
+
+    newExpertiseRows.forEach((row) => {
+      const enabled = isItemEnabled(postId, 'expertise', row.id)
+      const peopleMax = Math.max(Number(row.available_person || 0), 0)
+      const people = getApplicationValue(`apply-expertise-${row.id}-people`, peopleMax)
+      const hoursMax = Math.max(Number(row.needed_budget_unit || 0), 0)
+      const hours = getApplicationValue(`apply-expertise-${row.id}-hours`, hoursMax)
+      const requestedRate = Number(row.cost || 0)
+      const offeredRate = getApplicationValue(`apply-expertise-${row.id}-rate`, requestedRate)
+      const lineTotal = enabled ? people * hours * offeredRate : 0
+      if (enabled) expertiseTotal += lineTotal
+
+      if (enabled && people > 0 && hours > 0 && offeredRate <= 0) {
+        validationErrors.push(`${row.name}: add your hourly offer rate.`)
+      }
+
+      lineItems.push({
+        key: `apply-expertise-${row.id}`,
+        title: row.name,
+        detail: `(${people} person x ${hours} hr)`,
+        amount: lineTotal,
+        included: enabled,
+      })
+    })
+
+    serviceRows.forEach((row) => {
+      const enabled = isItemEnabled(postId, 'service', row.id)
+      const lineTotal = enabled ? Number(row.cost_per_unit || 0) : 0
+      const note = getApplicationServiceNote(postId, row.id)
+      if (enabled) serviceTotal += lineTotal
+      if (enabled && !String(note || '').trim()) {
+        validationErrors.push(`${row.service_name}: delivery description is required.`)
+      }
+
+      lineItems.push({
+        key: `apply-service-${row.id}`,
+        title: row.service_name,
+        detail: enabled ? '(willing to provide)' : '(not offering)',
+        amount: lineTotal,
+        included: enabled,
+      })
+    })
+
+    productRows.forEach((row) => {
+      const enabled = isItemEnabled(postId, 'product', row.id)
+      const quantityMax = Math.max(Number(row.available_units || 0), 0)
+      const quantity = getApplicationValue(`apply-product-${row.id}-quantity`, quantityMax)
+      const requestedRate = Number(row.cost_per_unit || 0)
+      const offeredRate = getApplicationValue(`apply-product-${row.id}-rate`, requestedRate)
+      const lineTotal = enabled ? quantity * offeredRate : 0
+      if (enabled) productTotal += lineTotal
+      if (enabled && quantity > 0 && offeredRate <= 0) {
+        validationErrors.push(`${row.product_name}: add your unit offer rate.`)
+      }
+
+      lineItems.push({
+        key: `apply-product-${row.id}`,
+        title: row.product_name,
+        detail: `(${quantity} ${row.unit || 'unit'})`,
+        amount: lineTotal,
+        included: enabled,
+      })
+    })
+
+    const subtotal = expertiseTotal + serviceTotal + productTotal
+    const includedCount = lineItems.filter((item) => item.included).length
+
+    return {
+      expertiseTotal,
+      serviceTotal,
+      productTotal,
+      grandTotal: subtotal,
+      lineItems,
+      itemCount: includedCount,
+      hasSelection: includedCount > 0,
+      validationErrors,
+      expertiseIncluded:
+        skillExpertiseRows.some((row) => isItemEnabled(postId, 'skill', row.id)) ||
+        newExpertiseRows.some((row) => isItemEnabled(postId, 'expertise', row.id)),
+      servicesIncluded: serviceRows.some((row) => isItemEnabled(postId, 'service', row.id)),
+      productsIncluded: productRows.some((row) => isItemEnabled(postId, 'product', row.id)),
+      postType,
+    }
+  }
+
+  const buildApplicationSnapshot = (post) => {
+    const postId = post.id
+    const skillExpertiseRows = skillBreakdownByPost[postId]?.expertise || []
+    const serviceRows = skillBreakdownByPost[postId]?.services || []
+    const newExpertiseRows = expertisesByPost[postId] || []
+    const productRows = productsByPost[postId] || []
+
+    const expertise = [
+      ...skillExpertiseRows.map((row) => {
+        const peopleMax = Math.max(Number(row.available_workers || 0), 0)
+        const hoursMax = Math.max(Number(row.needed_budget_unit || 0), 0)
+        const requestedRate = Number(row.cost_per_unit || 0)
+        const quantity = getApplicationValue(`apply-skill-${row.id}-people`, peopleMax)
+        const duration = getApplicationValue(`apply-skill-${row.id}-hours`, 0)
+        const offeredRate = getApplicationValue(`apply-skill-${row.id}-rate`, requestedRate)
+        const enabled = isItemEnabled(postId, 'skill', row.id)
+
+        return {
+          id: row.id,
+          source: 'skill',
+          name: row.skill_name,
+          unit: row.unit,
+          included: enabled,
+          requested_people: peopleMax,
+          requested_hours: hoursMax,
+          requested_rate: requestedRate,
+          offered_people: quantity,
+          offered_hours: duration,
+          offered_rate: offeredRate,
+          line_total: enabled ? quantity * duration * offeredRate : 0,
+        }
+      }),
+      ...newExpertiseRows.map((row) => {
+        const peopleMax = Math.max(Number(row.available_person || 0), 0)
+        const hoursMax = Math.max(Number(row.needed_budget_unit || 0), 0)
+        const requestedRate = Number(row.cost || 0)
+        const quantity = getApplicationValue(`apply-expertise-${row.id}-people`, peopleMax)
+        const duration = getApplicationValue(`apply-expertise-${row.id}-hours`, hoursMax)
+        const offeredRate = getApplicationValue(`apply-expertise-${row.id}-rate`, requestedRate)
+        const enabled = isItemEnabled(postId, 'expertise', row.id)
+
+        return {
+          id: row.id,
+          source: 'expertise',
+          name: row.name,
+          unit: row.unit,
+          included: enabled,
+          requested_people: peopleMax,
+          requested_hours: hoursMax,
+          requested_rate: requestedRate,
+          offered_people: quantity,
+          offered_hours: duration,
+          offered_rate: offeredRate,
+          line_total: enabled ? quantity * duration * offeredRate : 0,
+        }
+      }),
+    ]
+
+    const services = serviceRows.map((row) => {
+      const requestedRate = Number(row.cost_per_unit || 0)
+      const enabled = isItemEnabled(postId, 'service', row.id)
+      return {
+        id: row.id,
+        name: row.service_name,
+        included: enabled,
+        requested_rate: requestedRate,
+        line_total: enabled ? requestedRate : 0,
+        delivery_description: getApplicationServiceNote(postId, row.id),
+      }
+    })
+
+    const products = productRows.map((row) => {
+      const quantityMax = Math.max(Number(row.available_units || 0), 0)
+      const requestedRate = Number(row.cost_per_unit || 0)
+      const quantity = getApplicationValue(`apply-product-${row.id}-quantity`, quantityMax)
+      const offeredRate = getApplicationValue(`apply-product-${row.id}-rate`, requestedRate)
+      const enabled = isItemEnabled(postId, 'product', row.id)
+      return {
+        id: row.id,
+        name: row.product_name,
+        unit: row.unit,
+        included: enabled,
+        requested_quantity: quantityMax,
+        requested_rate: requestedRate,
+        offered_quantity: quantity,
+        offered_rate: offeredRate,
+        line_total: enabled ? quantity * offeredRate : 0,
+      }
+    })
+
+    const breakdown = getApplicationBreakdownForPost(postId)
+    const requester_note = String(getApplicationNoteForPost(postId) || '').trim()
+
+    return {
+      generated_at: new Date().toISOString(),
+      proposal_mode: 'application',
+      post: {
+        id: post.id,
+        title: post.post_title || '',
+        name: post.post_name || '',
+        type: post.post_type || '',
+        owner_id: post.owner_id || null,
+      },
+      expertise,
+      services,
+      products,
+      requester_note,
+      notes: {
+        requester_note,
+      },
+      totals: {
+        expertise: breakdown.expertiseTotal,
+        services: breakdown.serviceTotal,
+        products: breakdown.productTotal,
+        grand: breakdown.grandTotal,
+      },
+      application_submission: {
+        submitted_by: null,
+        submitted_at: null,
+        status: 'draft',
+      },
+    }
+  }
+
+  const handleSubmitApplication = async (post) => {
+    const breakdown = getApplicationBreakdownForPost(post.id)
+    if (!breakdown.hasSelection) {
+      showMessage('Select at least one item before submitting your application.', 'error')
+      return
+    }
+    if (breakdown.validationErrors.length > 0) {
+      showMessage(breakdown.validationErrors[0], 'error')
+      return
+    }
+
+    const snapshot = buildApplicationSnapshot(post)
+    setSubmittingApplicationPostId(post.id)
+
+    try {
+      const existing = erpByPost[post.id]
+      let erpRecord = existing
+
+      if (existing) {
+        const { data } = await api.patch(`/erp/${existing.id}/`, {
+          total_cost: Number(snapshot.totals?.grand || 0),
+          configuration_snapshot: snapshot,
+          is_configured: false,
+        })
+        erpRecord = data
+        setErpItems((prev) => prev.map((item) => (item.id === data.id ? data : item)))
+      } else {
+        const payload = {
+          post: post.id,
+          total_cost: Number(snapshot.totals?.grand || 0),
+          configuration_snapshot: snapshot,
+          is_configured: false,
+        }
+        const { data } = await api.post('/erp/', payload)
+        erpRecord = data
+        setErpItems((prev) => [...prev, data])
+      }
+
+      await api.post(`/erp/${erpRecord.id}/submit_application/`, {
+        note: getApplicationNoteForPost(post.id),
+      })
+
+      window.dispatchEvent(new Event('localix:notifications-refresh'))
+      showMessage('Your application was submitted successfully. Please wait for acceptance.', 'success')
+      setTimeout(() => {
+        navigate('/feed')
+      }, 500)
+    } catch (error) {
+      console.error(error)
+      const statusCode = error?.response?.status
+      const detail = error?.response?.data
+      if (statusCode === 404) {
+        showMessage('Failed submission: application submit endpoint not found. Please restart backend.', 'error')
+      } else if (statusCode === 403) {
+        showMessage('Failed submission: you are not allowed to submit this application.', 'error')
+      } else if (statusCode === 400 && detail) {
+        const text = typeof detail === 'string' ? detail : JSON.stringify(detail)
+        showMessage(`Failed submission: ${text}`, 'error')
+      } else {
+        showMessage('Failed submission due to a server/network error. Please try again.', 'error')
+      }
+    } finally {
+      setSubmittingApplicationPostId(null)
+    }
+  }
+
   const buildConfigurationSnapshot = (post) => {
     const postId = post.id
     const skillExpertiseRows = skillBreakdownByPost[postId]?.expertise || []
@@ -557,7 +921,40 @@ export default function ManagePost() {
     )
   }
 
-  const InclusionPill = ({ checked }) => (
+  const OfferRateInput = ({ value, onChange, requestedRate, label, helperText, unitLabel = 'hr' }) => {
+    const badge = getNegotiationBadge(value, requestedRate)
+
+    return (
+      <div className="rounded-xl border border-white/20 bg-white/5 p-3">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <p className="text-sm font-semibold text-white">{label}</p>
+            <p className="text-xs text-slate-300">{helperText}</p>
+          </div>
+          <span className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-semibold ${badge.className}`}>
+            <span>{badge.icon}</span>
+            <span>{badge.text}</span>
+          </span>
+        </div>
+
+        <div className="mt-2 flex items-center gap-2 rounded-lg border border-white/25 bg-white/10 px-3 py-2">
+          <span className="text-sm font-semibold text-white">৳</span>
+          <input
+            type="number"
+            min="0"
+            step="1"
+            value={value}
+            onChange={(event) => onChange(Number(event.target.value || 0))}
+            className="w-full bg-transparent text-sm font-semibold text-white outline-none placeholder:text-slate-300"
+            placeholder="0"
+          />
+          <span className="text-xs text-slate-300">/{unitLabel}</span>
+        </div>
+      </div>
+    )
+  }
+
+  const InclusionPill = ({ checked, mode = 'book' }) => (
     <span
       className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold ${
         checked
@@ -565,7 +962,7 @@ export default function ManagePost() {
           : 'border-slate-300 bg-slate-100 text-slate-600'
       }`}
     >
-      {checked ? 'Included in booking' : 'Not included'}
+      {mode === 'apply' ? (checked ? 'Included in application' : 'Not offering') : (checked ? 'Included in booking' : 'Not included')}
     </span>
   )
 
@@ -713,7 +1110,8 @@ export default function ManagePost() {
           {!loading && visiblePosts.length > 0 && (
             <div className="space-y-8">
               {visiblePosts.map((post) => {
-                const breakdown = getBookingBreakdownForPost(post.id)
+                const isApplyMode = getActionModeForPost(post) === 'apply'
+                const breakdown = isApplyMode ? getApplicationBreakdownForPost(post.id) : getBookingBreakdownForPost(post.id)
                 const postImageSrc = resolveMediaUrl(post.image || post.post_image || '')
                 const hasExpertiseRows = (skillBreakdownByPost[post.id]?.expertise || []).length > 0 || (expertisesByPost[post.id] || []).length > 0
                 const hasServiceRows = (skillBreakdownByPost[post.id]?.services || []).length > 0
@@ -782,14 +1180,16 @@ export default function ManagePost() {
                   <div className="grid grid-cols-1 gap-0 lg:grid-cols-[minmax(0,960px)_320px] lg:justify-center lg:gap-5">
                     <div className="w-full space-y-5 p-5 sm:p-6">
                       <div className="rounded-xl border border-blue-200 bg-gradient-to-r from-blue-50 to-violet-50 px-4 py-2.5 text-sm font-semibold text-blue-900">
-                        ℹ️ Check only what you need - uncheck anything you want to skip.
+                        {isApplyMode
+                          ? 'Select the categories you can fulfill and submit your offer details.'
+                          : 'Check only what you need - uncheck anything you want to skip.'}
                       </div>
 
                       {hasExpertiseRows && (
                         <section className="space-y-3">
                           <div className="flex items-center justify-between">
                             <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-600">Expertise</p>
-                            <InclusionPill checked={breakdown.expertiseIncluded} />
+                            <InclusionPill checked={breakdown.expertiseIncluded} mode={isApplyMode ? 'apply' : 'book'} />
                           </div>
 
                           {(skillBreakdownByPost[post.id]?.expertise || []).map((skill) => {
@@ -798,7 +1198,17 @@ export default function ManagePost() {
                               ? Math.max(Number(skill.available_workers || 0), 0)
                               : Math.max(Number(skill.available_workers || 0), 1)
                             const enabled = isItemEnabled(post.id, 'skill', skill.id)
-                            const subtotal = enabled ? workers * Number(skill.cost_per_unit || 0) : 0
+                            const requestedRate = Number(skill.cost_per_unit || 0)
+                            const applyPeopleKey = `apply-skill-${skill.id}-people`
+                            const applyHoursKey = `apply-skill-${skill.id}-hours`
+                            const applyRateKey = `apply-skill-${skill.id}-rate`
+                            const applyHoursMax = Math.max(Number(skill.needed_budget_unit || 0), 0)
+                            const applyPeople = getApplicationValue(applyPeopleKey, workersMax)
+                            const applyHours = getApplicationValue(applyHoursKey, applyHoursMax)
+                            const applyRate = getApplicationValue(applyRateKey, requestedRate)
+                            const subtotal = isApplyMode
+                              ? (enabled ? applyPeople * applyHours * applyRate : 0)
+                              : (enabled ? workers * Number(skill.cost_per_unit || 0) : 0)
                             return (
                               <div
                                 key={`skill-${skill.id}`}
@@ -822,13 +1232,40 @@ export default function ManagePost() {
 
                                 {enabled && (
                                   <div className="mt-4 space-y-3 border-t border-white/15 pt-3">
-                                    <CounterControl
-                                      value={workers}
-                                      onChange={(val) => setSkillWorkers((prev) => ({ ...prev, [`skill-${skill.id}`]: val }))}
-                                      max={workersMax}
-                                      label="People required"
-                                      helperText={post.post_type === 'Demand' ? `${Number(skill.available_workers || 0)} required in post details` : `${Number(skill.available_workers || 0)} professionals available`}
-                                    />
+                                    {isApplyMode ? (
+                                      <>
+                                        <CounterControl
+                                          value={applyPeople}
+                                          onChange={(val) => setApplicationValue(applyPeopleKey, val, workersMax)}
+                                          max={workersMax}
+                                          label="People you'll provide"
+                                          helperText={`Max ${workersMax} person (as requested)`}
+                                        />
+                                        <CounterControl
+                                          value={applyHours}
+                                          onChange={(val) => setApplicationValue(applyHoursKey, val, applyHoursMax)}
+                                          max={applyHoursMax}
+                                          label="Hours you'll work"
+                                          helperText={`Max ${applyHoursMax} hrs (as requested)`}
+                                        />
+                                        <OfferRateInput
+                                          value={applyRate}
+                                          onChange={(val) => setApplicationValue(applyRateKey, val)}
+                                          requestedRate={requestedRate}
+                                          label="Your rate per hour"
+                                          helperText={`Requester budget: ৳${requestedRate.toFixed(0)}/hr`}
+                                          unitLabel="hr"
+                                        />
+                                      </>
+                                    ) : (
+                                      <CounterControl
+                                        value={workers}
+                                        onChange={(val) => setSkillWorkers((prev) => ({ ...prev, [`skill-${skill.id}`]: val }))}
+                                        max={workersMax}
+                                        label="People required"
+                                        helperText={post.post_type === 'Demand' ? `${Number(skill.available_workers || 0)} required in post details` : `${Number(skill.available_workers || 0)} professionals available`}
+                                      />
+                                    )}
 
                                     <div className="flex items-center justify-between border-t border-white/15 pt-2">
                                       <span className="text-xs text-slate-300">Expertise subtotal</span>
@@ -850,7 +1287,16 @@ export default function ManagePost() {
                               ? Math.max(Number(expertise.needed_budget_unit || 0), 0)
                               : 365
                             const enabled = isItemEnabled(post.id, 'expertise', expertise.id)
-                            const subtotal = enabled ? persons * duration * Number(expertise.cost || 0) : 0
+                            const requestedRate = Number(expertise.cost || 0)
+                            const applyPeopleKey = `apply-expertise-${expertise.id}-people`
+                            const applyHoursKey = `apply-expertise-${expertise.id}-hours`
+                            const applyRateKey = `apply-expertise-${expertise.id}-rate`
+                            const applyPeople = getApplicationValue(applyPeopleKey, personsMax)
+                            const applyHours = getApplicationValue(applyHoursKey, durationMax)
+                            const applyRate = getApplicationValue(applyRateKey, requestedRate)
+                            const subtotal = isApplyMode
+                              ? (enabled ? applyPeople * applyHours * applyRate : 0)
+                              : (enabled ? persons * duration * Number(expertise.cost || 0) : 0)
                             return (
                               <div
                                 key={`expertise-${expertise.id}`}
@@ -875,20 +1321,49 @@ export default function ManagePost() {
 
                                 {enabled && (
                                   <div className="mt-4 space-y-3 border-t border-white/15 pt-3">
-                                    <CounterControl
-                                      value={persons}
-                                      onChange={(val) => setExpertisePersons((prev) => ({ ...prev, [`expertise-${expertise.id}`]: val }))}
-                                      max={personsMax}
-                                      label="People required"
-                                      helperText={post.post_type === 'Demand' ? `${Number(expertise.available_person || 0)} required in post details` : `${Number(expertise.available_person || 0)} professionals available`}
-                                    />
-                                    <CounterControl
-                                      value={duration}
-                                      onChange={(val) => setExpertiseDurations((prev) => ({ ...prev, [`expertise-${expertise.id}-duration`]: val }))}
-                                      max={durationMax}
-                                      label={post.post_type === 'Demand' ? 'Needed hire unit' : getDurationLabel(expertise.unit)}
-                                      helperText={post.post_type === 'Demand' ? `${Number(expertise.needed_budget_unit || 0)} required in post details` : getDurationHelperText(expertise.unit)}
-                                    />
+                                    {isApplyMode ? (
+                                      <>
+                                        <CounterControl
+                                          value={applyPeople}
+                                          onChange={(val) => setApplicationValue(applyPeopleKey, val, personsMax)}
+                                          max={personsMax}
+                                          label="People you'll provide"
+                                          helperText={`Max ${personsMax} person (as requested)`}
+                                        />
+                                        <CounterControl
+                                          value={applyHours}
+                                          onChange={(val) => setApplicationValue(applyHoursKey, val, durationMax)}
+                                          max={durationMax}
+                                          label="Hours you'll work"
+                                          helperText={`Max ${durationMax} hrs (as requested)`}
+                                        />
+                                        <OfferRateInput
+                                          value={applyRate}
+                                          onChange={(val) => setApplicationValue(applyRateKey, val)}
+                                          requestedRate={requestedRate}
+                                          label="Your rate per hour"
+                                          helperText={`Requester budget: ৳${requestedRate.toFixed(0)}/hr`}
+                                          unitLabel="hr"
+                                        />
+                                      </>
+                                    ) : (
+                                      <>
+                                        <CounterControl
+                                          value={persons}
+                                          onChange={(val) => setExpertisePersons((prev) => ({ ...prev, [`expertise-${expertise.id}`]: val }))}
+                                          max={personsMax}
+                                          label="People required"
+                                          helperText={post.post_type === 'Demand' ? `${Number(expertise.available_person || 0)} required in post details` : `${Number(expertise.available_person || 0)} professionals available`}
+                                        />
+                                        <CounterControl
+                                          value={duration}
+                                          onChange={(val) => setExpertiseDurations((prev) => ({ ...prev, [`expertise-${expertise.id}-duration`]: val }))}
+                                          max={durationMax}
+                                          label={post.post_type === 'Demand' ? 'Needed hire unit' : getDurationLabel(expertise.unit)}
+                                          helperText={post.post_type === 'Demand' ? `${Number(expertise.needed_budget_unit || 0)} required in post details` : getDurationHelperText(expertise.unit)}
+                                        />
+                                      </>
+                                    )}
 
                                     <div className="flex items-center justify-between border-t border-white/15 pt-2">
                                       <span className="text-xs text-slate-300">Expertise subtotal</span>
@@ -906,7 +1381,7 @@ export default function ManagePost() {
                         <section className="space-y-3">
                           <div className="flex items-center justify-between">
                             <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-600">Service</p>
-                            <InclusionPill checked={breakdown.servicesIncluded} />
+                            <InclusionPill checked={breakdown.servicesIncluded} mode={isApplyMode ? 'apply' : 'book'} />
                           </div>
 
                           {(skillBreakdownByPost[post.id]?.services || []).map((service) => {
@@ -929,13 +1404,43 @@ export default function ManagePost() {
                                   onToggle={() => toggleItemEnabled(post.id, 'service', service.id)}
                                 />
 
+                                {isApplyMode && !enabled && (
+                                  <div className="mt-4 rounded-lg border border-rose-400/35 bg-rose-500/10 px-3 py-2 text-xs text-rose-100">
+                                    ✕ You are not offering this service in this application
+                                  </div>
+                                )}
+
                                 {enabled && (
                                   <div className="mt-4 space-y-3 border-t border-white/15 pt-3">
-                                    <div className="rounded-lg border border-blue-400/30 bg-blue-500/10 px-3 py-2">
-                                      <p className="text-xs text-blue-100">
-                                        ✓ This service is included in your booking
-                                      </p>
-                                    </div>
+                                    {isApplyMode ? (
+                                      <>
+                                        <div className="rounded-lg border border-emerald-400/30 bg-emerald-500/10 px-3 py-2">
+                                          <p className="text-xs text-emerald-100">✓ You are willing to provide this service</p>
+                                        </div>
+                                        <div>
+                                          <p className="mb-1 text-xs font-semibold text-slate-200">Delivery description</p>
+                                          <textarea
+                                            rows={3}
+                                            value={getApplicationServiceNote(post.id, service.id)}
+                                            onChange={(event) => {
+                                              const key = `${post.id}-service-${service.id}`
+                                              setApplicationServiceNotes((prev) => ({
+                                                ...prev,
+                                                [key]: event.target.value,
+                                              }))
+                                            }}
+                                            placeholder="Describe process, tools, timeline, and delivery details..."
+                                            className="w-full resize-none rounded-lg border border-white/20 bg-white/10 px-3 py-2 text-sm text-white outline-none placeholder:text-slate-300 focus:border-violet-300 focus:ring-1 focus:ring-violet-300"
+                                          />
+                                        </div>
+                                      </>
+                                    ) : (
+                                      <div className="rounded-lg border border-blue-400/30 bg-blue-500/10 px-3 py-2">
+                                        <p className="text-xs text-blue-100">
+                                          ✓ This service is included in your booking
+                                        </p>
+                                      </div>
+                                    )}
 
                                     <div className="flex items-center justify-between border-t border-white/15 pt-2">
                                       <span className="text-xs text-slate-300">Service subtotal</span>
@@ -953,7 +1458,7 @@ export default function ManagePost() {
                         <section className="space-y-3">
                           <div className="flex items-center justify-between">
                             <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-600">Product</p>
-                            <InclusionPill checked={breakdown.productsIncluded} />
+                            <InclusionPill checked={breakdown.productsIncluded} mode={isApplyMode ? 'apply' : 'book'} />
                           </div>
 
                           {(productsByPost[post.id] || []).map((product) => {
@@ -961,7 +1466,14 @@ export default function ManagePost() {
                             const availableUnits = Math.max(Number(product.available_units || 0), 0)
                             const unitsMax = post.post_type === 'Demand' ? availableUnits : availableUnits
                             const enabled = isItemEnabled(post.id, 'product', product.id)
-                            const subtotal = enabled ? units * Number(product.cost_per_unit || 0) : 0
+                            const requestedRate = Number(product.cost_per_unit || 0)
+                            const applyQuantityKey = `apply-product-${product.id}-quantity`
+                            const applyRateKey = `apply-product-${product.id}-rate`
+                            const applyQuantity = getApplicationValue(applyQuantityKey, unitsMax)
+                            const applyRate = getApplicationValue(applyRateKey, requestedRate)
+                            const subtotal = isApplyMode
+                              ? (enabled ? applyQuantity * applyRate : 0)
+                              : (enabled ? units * Number(product.cost_per_unit || 0) : 0)
                             return (
                               <div
                                 key={`product-${product.id}`}
@@ -985,13 +1497,33 @@ export default function ManagePost() {
 
                                 {enabled && (
                                   <div className="mt-4 space-y-3 border-t border-white/15 pt-3">
-                                    <CounterControl
-                                      value={units}
-                                      onChange={(val) => setProductUnits((prev) => ({ ...prev, [`product-${product.id}`]: val }))}
-                                      max={unitsMax}
-                                      label={getQuantityLabel(product.unit)}
-                                      helperText={post.post_type === 'Demand' ? `${availableUnits} required in post details (cannot exceed)` : `Maximum ${availableUnits} available`}
-                                    />
+                                    {isApplyMode ? (
+                                      <>
+                                        <CounterControl
+                                          value={applyQuantity}
+                                          onChange={(val) => setApplicationValue(applyQuantityKey, val, unitsMax)}
+                                          max={unitsMax}
+                                          label="Quantity you can supply"
+                                          helperText={`Max ${availableUnits} unit (as requested)`}
+                                        />
+                                        <OfferRateInput
+                                          value={applyRate}
+                                          onChange={(val) => setApplicationValue(applyRateKey, val)}
+                                          requestedRate={requestedRate}
+                                          label="Your price per unit"
+                                          helperText={`Requester budget: ৳${requestedRate.toFixed(0)}/${String(product.unit || 'unit').toLowerCase()}`}
+                                          unitLabel={String(product.unit || 'unit').toLowerCase()}
+                                        />
+                                      </>
+                                    ) : (
+                                      <CounterControl
+                                        value={units}
+                                        onChange={(val) => setProductUnits((prev) => ({ ...prev, [`product-${product.id}`]: val }))}
+                                        max={unitsMax}
+                                        label={getQuantityLabel(product.unit)}
+                                        helperText={post.post_type === 'Demand' ? `${availableUnits} required in post details (cannot exceed)` : `Maximum ${availableUnits} available`}
+                                      />
+                                    )}
 
                                     <div className="flex items-center justify-between border-t border-white/15 pt-2">
                                       <span className="text-xs text-slate-300">Product subtotal</span>
@@ -1006,16 +1538,23 @@ export default function ManagePost() {
                       )}
 
                       <div className="rounded-xl border border-slate-300 bg-white/80 p-4">
-                        <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-700">Notes for supplier</p>
+                        <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-700">
+                          {isApplyMode ? 'Notes for requester' : 'Notes for supplier'}
+                        </p>
                         <textarea
                           rows={3}
-                          placeholder="Any special requirements, access instructions, or preferred working hours..."
-                          value={getSupplierNoteForPost(post.id)}
+                          placeholder={isApplyMode ? 'Add any questions, delivery assumptions, or extra details for the requester...' : 'Any special requirements, access instructions, or preferred working hours...'}
+                          value={isApplyMode ? getApplicationNoteForPost(post.id) : getSupplierNoteForPost(post.id)}
                           onChange={(event) =>
-                            setSupplierNotesByPost((prev) => ({
-                              ...prev,
-                              [post.id]: event.target.value,
-                            }))
+                            isApplyMode
+                              ? setApplicationNotesByPost((prev) => ({
+                                  ...prev,
+                                  [post.id]: event.target.value,
+                                }))
+                              : setSupplierNotesByPost((prev) => ({
+                                  ...prev,
+                                  [post.id]: event.target.value,
+                                }))
                           }
                           className="mt-2 w-full resize-none rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-violet-400 focus:ring-1 focus:ring-violet-300"
                         />
@@ -1025,7 +1564,7 @@ export default function ManagePost() {
                     <div className="w-full border-t border-slate-200 p-5 sm:p-6 lg:sticky lg:top-6 lg:h-fit lg:self-start lg:border-l lg:border-t-0">
                       <div className="w-full rounded-xl border border-slate-300/70 bg-transparent p-4 shadow-sm backdrop-blur-sm">
                         <div className="flex items-center justify-between gap-2">
-                          <h4 className="whitespace-nowrap text-lg font-bold text-slate-800">Booking Summary</h4>
+                          <h4 className="whitespace-nowrap text-lg font-bold text-slate-800">{isApplyMode ? 'Application Summary' : 'Booking Summary'}</h4>
                           <span className="rounded-full bg-violet-100 px-2.5 py-1 text-xs font-semibold text-violet-700">
                             {breakdown.itemCount} items
                           </span>
@@ -1041,10 +1580,10 @@ export default function ManagePost() {
                             breakdown.lineItems.map((item) => (
                               <div key={item.key} className="flex items-start justify-between gap-3 text-sm">
                                 <div>
-                                  <p className="text-slate-700">{item.title}</p>
+                                  <p className={isApplyMode && item.included === false ? 'text-slate-500 line-through' : 'text-slate-700'}>{item.title}</p>
                                   {item.detail ? <p className="text-xs text-slate-500">{item.detail}</p> : null}
                                 </div>
-                                <span className="font-semibold text-slate-800">৳ {Number(item.amount || 0).toFixed(0)}</span>
+                                <span className={isApplyMode && item.included === false ? 'font-semibold text-slate-400 line-through' : 'font-semibold text-slate-800'}>৳ {Number(item.amount || 0).toFixed(0)}</span>
                               </div>
                             ))
                           )}
@@ -1055,24 +1594,39 @@ export default function ManagePost() {
                             <span className="text-base font-bold text-slate-900">Total</span>
                             <span className="text-2xl font-extrabold text-violet-700">৳ {breakdown.grandTotal.toFixed(0)}</span>
                           </div>
-                          <p className="mt-2 text-xs text-slate-500">Booking confirmed once supplier accepts. No charge until then.</p>
+                          <p className="mt-2 text-xs text-slate-500">
+                            {isApplyMode
+                              ? 'Your application is sent to the requester for review and acceptance.'
+                              : 'Booking confirmed once supplier accepts. No charge until then.'}
+                          </p>
                         </div>
 
                         <button
-                          onClick={() => handleCreateOrUpdateErp(post)}
-                          disabled={breakdown.grandTotal <= 0}
+                          onClick={() => (isApplyMode ? handleSubmitApplication(post) : handleCreateOrUpdateErp(post))}
+                          disabled={isApplyMode ? breakdown.itemCount <= 0 || submittingApplicationPostId === post.id : breakdown.grandTotal <= 0}
                           className={`mt-4 w-full rounded-lg px-4 py-2.5 text-sm font-semibold transition ${
-                            breakdown.grandTotal > 0
+                            (isApplyMode ? breakdown.itemCount > 0 : breakdown.grandTotal > 0)
                               ? 'bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white hover:from-violet-700 hover:to-fuchsia-700'
                               : 'cursor-not-allowed bg-slate-300 text-slate-500'
                           }`}
                         >
-                          Request booking ↗
+                          {isApplyMode
+                            ? (submittingApplicationPostId === post.id ? 'Submitting application...' : 'Submit application ↗')
+                            : 'Request booking ↗'}
                         </button>
 
                         <div className="mt-4 space-y-1.5 border-t border-slate-200 pt-3 text-xs text-slate-600">
-                          <p>• Secure booking</p>
-                          <p>• No charge until accepted</p>
+                          {isApplyMode ? (
+                            <>
+                              <p>• Requester reviews and accepts</p>
+                              <p>• Notifications are sent to both sides</p>
+                            </>
+                          ) : (
+                            <>
+                              <p>• Secure booking</p>
+                              <p>• No charge until accepted</p>
+                            </>
+                          )}
                         </div>
                       </div>
                     </div>
