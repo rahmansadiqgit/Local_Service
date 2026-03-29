@@ -305,43 +305,40 @@ export default function PostCard({
       </div>
 
       {isDetailsOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-2 sm:p-4">
+        <div className="absolute inset-x-3 bottom-3 z-20 sm:inset-x-4 sm:bottom-4">
           <div
-            className="flex flex-col w-full h-full max-w-4xl rounded-2xl border border-violet-200/80 shadow-2xl overflow-hidden"
+            className="flex flex-col overflow-hidden rounded-2xl border border-violet-200/80 shadow-xl backdrop-blur-md"
             style={{
+              maxHeight: 'calc(100% - 7.5rem)',
               background: 'linear-gradient(135deg, #c9b6ff 0%, #e6d7ff 60%, #f2eaff 100%)',
-              backgroundColor: 'rgba(236, 225, 255, 0.95)',
-              maxHeight: '90vh',
+              backgroundColor: 'rgba(236, 225, 255, 0.82)',
+              boxShadow: '0 8px 32px 0 rgba(31, 38, 135, 0.12)',
+              border: '1.5px solid #e0d7fa',
             }}
           >
-            <div className="flex items-center justify-between border-b border-violet-200/80 bg-gradient-to-r from-[#c9b6ff]/80 via-[#e6d7ff]/85 to-[#f2eaff]/80 px-4 py-4 sm:px-6 flex-shrink-0">
-              <p className="text-base sm:text-lg font-bold text-violet-900">Post Details</p>
+            <div className="flex items-center justify-between border-b border-violet-200/80 bg-gradient-to-r from-[#c9b6ff]/80 via-[#e6d7ff]/85 to-[#f2eaff]/80 px-4 py-3">
+              <p className="text-sm font-semibold text-violet-900">Post details</p>
               <button
                 type="button"
                 onClick={() => onToggleDetails?.(false)}
-                className="rounded-full border border-violet-300 bg-white/80 px-4 py-2 text-sm font-semibold text-violet-800 transition hover:bg-white focus:outline-none focus:ring-2 focus:ring-violet-300"
+                className="rounded-full border border-violet-300 bg-white/65 px-3 py-1 text-xs font-semibold text-violet-800 transition hover:bg-violet-50 focus:outline-none focus:ring-2 focus:ring-violet-200"
               >
-                ✕ Close
+                Close
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4">
-              {post.description && (
-                <div className="space-y-2 rounded-2xl border border-violet-200/80 bg-white/70 p-4 shadow-sm backdrop-blur-md">
-                  <p className="text-sm font-bold text-violet-900">Description</p>
-                  <div className="text-sm leading-relaxed text-slate-700 max-h-60 overflow-y-auto">
-                    <p className="break-words whitespace-pre-wrap">{post.description}</p>
-                  </div>
-                </div>
-              )}
-
+            <div
+              className="space-y-3 overflow-y-auto p-3"
+              style={{
+                backgroundColor: 'rgba(234, 226, 249, 0.56)',
+                backgroundImage: 'linear-gradient(145deg, rgba(225, 205, 255, 0.28), rgba(244, 230, 255, 0.24))',
+              }}
+            >
               {hasExpertiseCategory && (
-                <div className="space-y-2 rounded-2xl border border-violet-200/80 bg-white/70 p-4 shadow-sm backdrop-blur-md">
-                  <p className="text-sm font-bold text-violet-900">Expertise</p>
+                <div className="space-y-2 rounded-2xl border border-violet-200/80 bg-white/55 p-2.5 shadow-sm backdrop-blur-md">
+                  <p className="text-sm font-semibold text-violet-900">Expertise</p>
                   {expertiseRows.length ? (
-                    <div className="overflow-x-auto">
-                      <ExpertiseTable expertises={expertiseRows} postType={post.post_type} tone="profile" />
-                    </div>
+                    <ExpertiseTable expertises={expertiseRows} postType={post.post_type} tone="profile" />
                   ) : (
                     <p className="text-sm text-violet-700/80">No expertise detail listed.</p>
                   )}
@@ -349,12 +346,10 @@ export default function PostCard({
               )}
 
               {hasServicesCategory && (
-                <div className="space-y-2 rounded-2xl border border-violet-200/80 bg-white/70 p-4 shadow-sm backdrop-blur-md">
-                  <p className="text-sm font-bold text-violet-900">Services</p>
+                <div className="space-y-2 rounded-2xl border border-violet-200/80 bg-white/55 p-2.5 shadow-sm backdrop-blur-md">
+                  <p className="text-sm font-semibold text-violet-900">Services</p>
                   {serviceRows.length ? (
-                    <div className="overflow-x-auto">
-                      <ServiceTable services={serviceRows} postType={post.post_type} showDescription={showServiceDescription} tone="profile" />
-                    </div>
+                    <ServiceTable services={serviceRows} postType={post.post_type} showDescription={showServiceDescription} tone="profile" />
                   ) : (
                     <p className="text-sm text-violet-700/80">No services detail listed.</p>
                   )}
@@ -362,12 +357,10 @@ export default function PostCard({
               )}
 
               {hasProductCategory && (
-                <div className="space-y-2 rounded-2xl border border-violet-200/80 bg-white/70 p-4 shadow-sm backdrop-blur-md">
-                  <p className="text-sm font-bold text-violet-900">Products</p>
+                <div className="space-y-2 rounded-2xl border border-violet-200/80 bg-white/55 p-2.5 shadow-sm backdrop-blur-md">
+                  <p className="text-sm font-semibold text-violet-900">Products</p>
                   {productRows.length ? (
-                    <div className="overflow-x-auto">
-                      <ProductTable products={productRows} postType={post.post_type} showDescription={showProductDescription} tone="profile" />
-                    </div>
+                    <ProductTable products={productRows} postType={post.post_type} showDescription={showProductDescription} tone="profile" />
                   ) : (
                     <p className="text-sm text-violet-700/80">No product detail listed.</p>
                   )}

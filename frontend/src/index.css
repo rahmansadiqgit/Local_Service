@@ -90,3 +90,7 @@ button:not(.header-auth-btn):not(.settings-gear-btn):not(.post-owner-name-btn):n
 .leaflet-container img {
   max-width: none !important;
 }
+
+.leaflet-container {
+  background: transparent !important;
+}
