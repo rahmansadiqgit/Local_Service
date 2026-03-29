@@ -193,9 +193,16 @@ export default function Connections() {
             .map((id) => Number(id))
             .filter((id) => Number.isFinite(id) && id > 0)
 
-          // Backward compatibility: if no targets were stored, keep role visible.
-          if (!targetIds.length) return true
-          return targetIds.includes(Number(currentUserId))
+          const rawAssignedIds = Array.isArray(members[key]?.assignee_ids)
+            ? members[key].assignee_ids
+            : []
+          const assignedIds = rawAssignedIds
+            .map((id) => Number(id))
+            .filter((id) => Number.isFinite(id) && id > 0)
+
+          // Show only to explicitly targeted users, or users already assigned in this role.
+          const currentId = Number(currentUserId)
+          return targetIds.includes(currentId) || assignedIds.includes(currentId)
         })
         .map(({ key, label }) => ({
           erp,

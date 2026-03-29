@@ -1740,24 +1740,58 @@ class ConnectionViewSet(viewsets.GenericViewSet):
         if not addressee:
             return Response({"detail": "Target user not found."}, status=status.HTTP_404_NOT_FOUND)
 
-        existing = Connection.objects.filter(
-            Q(requester=request.user, addressee=addressee)
-            | Q(requester=addressee, addressee=request.user)
-        ).order_by("-updated_at", "-id").first()
-
-        if existing and existing.status == ConnectionStatus.ACCEPTED:
-            return Response({"detail": "You are already connected."}, status=status.HTTP_400_BAD_REQUEST)
-
-        if existing and existing.status == ConnectionStatus.PENDING:
-            return Response({"detail": "A pending request already exists between both users."}, status=status.HTTP_400_BAD_REQUEST)
-
-        connection = Connection.objects.create(
+        direct = Connection.objects.filter(
             requester=request.user,
             addressee=addressee,
-            status=ConnectionStatus.PENDING,
-            requested_role=requested_role,
-            request_message=message,
+        ).order_by("-updated_at", "-id").first()
+        reverse = Connection.objects.filter(
+            requester=addressee,
+            addressee=request.user,
+        ).order_by("-updated_at", "-id").first()
+
+        existing_any = Connection.objects.filter(
+            Q(requester=request.user, addressee=addressee)
+            | Q(requester=addressee, addressee=request.user)
         )
+
+        if existing_any.filter(status=ConnectionStatus.ACCEPTED).exists():
+            return Response({"detail": "You are already connected."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if existing_any.filter(status=ConnectionStatus.PENDING).exists():
+            return Response({"detail": "A pending request already exists between both users."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Re-open rejected requests instead of creating a new row, which can violate
+        # unique_connection_direction when a historical row already exists.
+        connection = direct
+        if not connection and reverse and reverse.status == ConnectionStatus.REJECTED:
+            connection = reverse
+
+        if connection and connection.status == ConnectionStatus.REJECTED:
+            connection.requester = request.user
+            connection.addressee = addressee
+            connection.status = ConnectionStatus.PENDING
+            connection.requested_role = requested_role
+            connection.request_message = message
+            connection.accepted_at = None
+            connection.save(
+                update_fields=[
+                    "requester",
+                    "addressee",
+                    "status",
+                    "requested_role",
+                    "request_message",
+                    "accepted_at",
+                    "updated_at",
+                ]
+            )
+        else:
+            connection = Connection.objects.create(
+                requester=request.user,
+                addressee=addressee,
+                status=ConnectionStatus.PENDING,
+                requested_role=requested_role,
+                request_message=message,
+            )
 
         sender_name = request.user.name or request.user.username or request.user.email
         role_label = connection.get_requested_role_display()
