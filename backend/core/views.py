@@ -384,6 +384,21 @@ class ERPViewSet(viewsets.ModelViewSet):
             message=f"{actor_name} confirmed booking for '{post_title}'. Check ERP for task details.",
         )
 
+    def _notify_provider_member_activity(self, erp, actor, title, message):
+        provider = getattr(erp, "provider", None)
+        actor_id = getattr(actor, "id", None)
+        provider_id = getattr(provider, "id", None)
+
+        # Notify only for actions done by non-provider members.
+        if not provider or not actor_id or provider_id == actor_id:
+            return
+
+        Notification.objects.create(
+            user=provider,
+            title=title,
+            message=message,
+        )
+
     def get_queryset(self):
         user = self.request.user
         base_queryset = ERP.objects.filter(
@@ -400,18 +415,33 @@ class ERPViewSet(viewsets.ModelViewSet):
 
             for role in self._allowed_member_roles():
                 role_bucket = members.get(role) or {}
+
+                # Always include ERP for explicitly assigned members.
+                raw_assignees = role_bucket.get("assignee_ids") or []
+                assignee_ids = set()
+                for raw_id in raw_assignees:
+                    try:
+                        assignee_ids.add(int(raw_id))
+                    except (TypeError, ValueError):
+                        continue
+
+                if int(user.id) in assignee_ids:
+                    additional_ids.add(int(item.id))
+                    break
+
                 if not bool(role_bucket.get("self_assign_enabled", False)):
                     continue
 
-                raw_targets = role_bucket.get("self_assign_target_ids") or []
+                raw_targets = role_bucket.get("self_assign_target_ids", None)
                 target_ids = set()
-                for raw_id in raw_targets:
+                for raw_id in (raw_targets or []):
                     try:
                         target_ids.add(int(raw_id))
                     except (TypeError, ValueError):
                         continue
 
-                if not target_ids and item.provider:
+                # Backward compatibility only when key is missing, not when explicitly empty.
+                if raw_targets is None and not target_ids and item.provider:
                     # Backward compatibility for snapshots created before target IDs were stored.
                     target_ids = self._get_accepted_connection_member_ids(item.provider, role=role)
 
@@ -722,8 +752,9 @@ class ERPViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        allowed_member_ids = set(role_bucket.get("self_assign_target_ids") or [])
-        if not allowed_member_ids and erp.provider:
+        raw_targets = role_bucket.get("self_assign_target_ids", None)
+        allowed_member_ids = set(raw_targets or [])
+        if raw_targets is None and not allowed_member_ids and erp.provider:
             # Backward compatibility for old records published before role target IDs were saved.
             allowed_member_ids = self._get_accepted_connection_member_ids(erp.provider, role=role)
 
@@ -743,6 +774,105 @@ class ERPViewSet(viewsets.ModelViewSet):
         members[role] = role_bucket
         snapshot["members"] = members
         self._save_snapshot(erp, snapshot)
+
+        actor_name = request.user.name or request.user.username or request.user.email or f"User #{request.user.id}"
+        role_label = role.replace("_", " ").title()
+        post_title = (
+            (erp.configuration_snapshot or {}).get("post", {}).get("title")
+            or getattr(erp.post, "post_title", "")
+            or getattr(erp.post, "post_name", "")
+            or f"ERP #{erp.id}"
+        )
+        action_text = "assigned themselves" if should_assign else "removed themselves"
+        self._notify_provider_member_activity(
+            erp,
+            request.user,
+            "ERP Member Assignment Updated",
+            f"{actor_name} {action_text} as {role_label} in '{post_title}' (ERP #{erp.id}).",
+        )
+
+        return Response(self.get_serializer(erp).data)
+
+    @action(detail=True, methods=["post"])
+    def leave_assignment(self, request, pk=None):
+        erp = self.get_object()
+        user_id = int(request.user.id)
+
+        snapshot = erp.configuration_snapshot or {}
+        members = snapshot.get("members") or {}
+        changed = False
+        left_roles = []
+
+        # Remove user from all member role buckets (including legacy/custom keys).
+        for role_key, role_bucket in list(members.items()):
+            if not isinstance(role_bucket, dict):
+                continue
+
+            existing_ids = role_bucket.get("assignee_ids") or []
+            clean_ids = []
+            for raw_id in existing_ids:
+                try:
+                    parsed = int(raw_id)
+                except (TypeError, ValueError):
+                    continue
+                if parsed > 0:
+                    clean_ids.append(parsed)
+
+            unique_ids = set(clean_ids)
+            if user_id in unique_ids:
+                unique_ids.discard(user_id)
+                changed = True
+                left_roles.append(str(role_key))
+
+            role_bucket["assignee_ids"] = sorted(list(unique_ids))
+
+            # Also remove from self-assign target visibility so ERP card disappears after leave.
+            existing_targets = role_bucket.get("self_assign_target_ids", None)
+            if existing_targets is not None:
+                clean_targets = []
+                for raw_id in existing_targets:
+                    try:
+                        parsed_target = int(raw_id)
+                    except (TypeError, ValueError):
+                        continue
+                    if parsed_target > 0 and parsed_target != user_id:
+                        clean_targets.append(parsed_target)
+
+                if len(clean_targets) != len(list(existing_targets)):
+                    changed = True
+                role_bucket["self_assign_target_ids"] = sorted(list(set(clean_targets)))
+
+            members[role_key] = role_bucket
+
+        # Backward compatibility: some records may still track member assignment here.
+        if erp.assigned_workers.filter(id=user_id).exists():
+            erp.assigned_workers.remove(request.user)
+            changed = True
+
+        if not changed:
+            return Response(
+                {"detail": "You are not assigned to this ERP task."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        snapshot["members"] = members
+        erp.configuration_snapshot = snapshot
+        erp.save(update_fields=["configuration_snapshot", "updated_at"])
+
+        actor_name = request.user.name or request.user.username or request.user.email or f"User #{request.user.id}"
+        post_title = (
+            (erp.configuration_snapshot or {}).get("post", {}).get("title")
+            or getattr(erp.post, "post_title", "")
+            or getattr(erp.post, "post_name", "")
+            or f"ERP #{erp.id}"
+        )
+        left_roles_text = ", ".join(sorted(set(left_roles))) if left_roles else "assigned roles"
+        self._notify_provider_member_activity(
+            erp,
+            request.user,
+            "ERP Member Left Task",
+            f"{actor_name} left ERP #{erp.id} from {left_roles_text} in '{post_title}'.",
+        )
 
         return Response(self.get_serializer(erp).data)
 
@@ -1065,6 +1195,22 @@ class ERPViewSet(viewsets.ModelViewSet):
             message=message_text,
             parent=parent,
         )
+
+        actor_name = request.user.name or request.user.username or request.user.email or f"User #{request.user.id}"
+        post_title = (
+            (erp.configuration_snapshot or {}).get("post", {}).get("title")
+            or getattr(erp.post, "post_title", "")
+            or getattr(erp.post, "post_name", "")
+            or f"ERP #{erp.id}"
+        )
+        snippet = message_text[:80]
+        self._notify_provider_member_activity(
+            erp,
+            request.user,
+            "ERP Task Message",
+            f"{actor_name} sent a message in '{post_title}' (ERP #{erp.id}): {snippet}",
+        )
+
         serializer = ERPMessageSerializer(instance)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 

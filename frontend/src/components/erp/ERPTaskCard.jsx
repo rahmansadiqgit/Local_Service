@@ -10,9 +10,11 @@ export default function ERPTaskCard({
   currentUserId,
   expandedId,
   trackOpenId,
+  messageOpenId,
   phaseTasks,
   onSetPending,
   onToggleTrack,
+  onToggleMessage,
   onGeneratePdf,
   onToggleDetails,
   onTrackNext,
@@ -22,6 +24,7 @@ export default function ERPTaskCard({
   onUpdateMemberAssignment,
   onPublishMemberPost,
   onCloseMemberPost,
+  onLeaveAssignment,
   onOpenOwner,
   toMediaUrl,
 }) {
@@ -34,6 +37,7 @@ export default function ERPTaskCard({
   const [isLoadingMessages, setIsLoadingMessages] = useState(false)
   const [isSendingMessage, setIsSendingMessage] = useState(false)
   const [selfAssignMessageByRole, setSelfAssignMessageByRole] = useState({})
+  const [isLeavingAssignment, setIsLeavingAssignment] = useState(false)
 
   const phases = ['Pending', 'On Process', 'Completed']
   const activePhaseIndex = phases.indexOf(erp.stage)
@@ -78,13 +82,51 @@ export default function ERPTaskCard({
     supplier: 'Delivary Man',
   }
   const associatedMemberRoles = ['expertise', 'skill_provider', 'supplier']
+  const roleKeyAliases = {
+    expertise: ['expertise'],
+    skill_provider: ['skill_provider', 'service_provider'],
+    supplier: ['supplier', 'delivery_man', 'delivary_man', 'delivery'],
+  }
+
+  const getRoleBuckets = (roleKey) => {
+    const aliases = roleKeyAliases[roleKey] || [roleKey]
+    return aliases
+      .map((alias) => membersState?.[alias] || null)
+      .filter(Boolean)
+  }
+
+  const getRoleAssigneeIds = (roleKey) => {
+    const idSet = new Set()
+    getRoleBuckets(roleKey).forEach((bucket) => {
+      const rawIds = Array.isArray(bucket?.assignee_ids) ? bucket.assignee_ids : []
+      rawIds.forEach((rawId) => {
+        const parsed = Number(rawId)
+        if (Number.isFinite(parsed) && parsed > 0) {
+          idSet.add(parsed)
+        }
+      })
+    })
+    return Array.from(idSet)
+  }
+
+  const getRoleState = (roleKey) => {
+    const buckets = getRoleBuckets(roleKey)
+    const mergedState = buckets[0] || {}
+    return {
+      ...mergedState,
+      assignee_ids: getRoleAssigneeIds(roleKey),
+      self_assign_enabled: buckets.some((bucket) => Boolean(bucket?.self_assign_enabled)),
+      self_assign_message: String(
+        buckets
+          .map((bucket) => String(bucket?.self_assign_message || '').trim())
+          .find(Boolean) || '',
+      ),
+    }
+  }
 
   const membersState = snapshot.members || {}
   const associatedMembersByRole = associatedMemberRoles.map((roleKey) => {
-    const roleBucket = membersState[roleKey] || {}
-    const assigneeIds = Array.isArray(roleBucket.assignee_ids)
-      ? roleBucket.assignee_ids.map((id) => Number(id)).filter((id) => Number.isFinite(id) && id > 0)
-      : []
+    const assigneeIds = getRoleAssigneeIds(roleKey)
     const members = users.filter((user) => assigneeIds.includes(Number(user.id)))
 
     return {
@@ -94,7 +136,7 @@ export default function ERPTaskCard({
     }
   })
   const hasAssociatedMembers = associatedMembersByRole.some((entry) => entry.members.length > 0)
-  const selectedRoleState = selectedMemberRole ? membersState[selectedMemberRole] || {} : {}
+  const selectedRoleState = selectedMemberRole ? getRoleState(selectedMemberRole) : {}
   const selectedAssigneeIds = Array.isArray(selectedRoleState.assignee_ids)
     ? selectedRoleState.assignee_ids.map((id) => Number(id))
     : []
@@ -134,6 +176,72 @@ export default function ERPTaskCard({
     : []
   const visibleMembers = isProvider ? providerMembersWithSelfFirst : assignedMembersForSelectedRole
 
+  const getResponsibilityItemsByRole = (roleKey) => {
+    if (roleKey === 'expertise') {
+      return snapshotExpertise
+        .map((item) => String(item?.name || '').trim())
+        .filter(Boolean)
+    }
+
+    if (roleKey === 'skill_provider') {
+      return snapshotServices
+        .map((item) => String(item?.name || '').trim())
+        .filter(Boolean)
+    }
+
+    if (roleKey === 'supplier') {
+      return snapshotProducts
+        .map((item) => String(item?.name || '').trim())
+        .filter(Boolean)
+    }
+
+    return []
+  }
+
+  const getResponsibilityTextByRole = (roleKey) => {
+    if (!roleKey) return ''
+    const items = Array.from(new Set(getResponsibilityItemsByRole(roleKey)))
+    if (!items.length) return 'Specific task details are not listed yet.'
+
+    const joined = items.join(', ')
+    if (roleKey === 'expertise') return `Work as: ${joined}`
+    if (roleKey === 'skill_provider') return `Provide service: ${joined}`
+    if (roleKey === 'supplier') return `Deliver product: ${joined}`
+    return joined
+  }
+
+  const selectedRoleResponsibilityText = getResponsibilityTextByRole(selectedMemberRole)
+  const currentUserNumericId = Number(currentUserId)
+  const hasCurrentUserId = Number.isFinite(currentUserNumericId) && currentUserNumericId > 0
+  const assignedWorkerIds = Array.isArray(erp?.assigned_workers)
+    ? erp.assigned_workers.map((id) => Number(id)).filter((id) => Number.isFinite(id) && id > 0)
+    : []
+  const currentUserRoleResponsibilities = hasCurrentUserId
+    ? (() => {
+        const roleSet = new Set(
+          associatedMemberRoles.filter((roleKey) => getRoleAssigneeIds(roleKey).includes(currentUserNumericId)),
+        )
+
+        // Backward compatibility: some legacy ERP records track delivery assignment only in assigned_workers.
+        if (
+          roleSet.size === 0
+          && hasProductCategory
+          && assignedWorkerIds.includes(currentUserNumericId)
+        ) {
+          roleSet.add('supplier')
+        }
+
+        return Array.from(roleSet).map((roleKey) => ({
+          roleKey,
+          roleLabel: roleKeyToLabel[roleKey] || roleKey,
+          responsibilityText: getResponsibilityTextByRole(roleKey),
+        }))
+      })()
+    : []
+  const canLeaveTask = currentUserRoleResponsibilities.length > 0
+  const isReceiver = viewerRole === 'Receiver'
+  const canUseMessenger = isProvider || isReceiver || currentUserRoleResponsibilities.length > 0
+
   const counterpartyUserId =
     viewerRole === 'Provider'
       ? Number(erp.receiver)
@@ -168,7 +276,6 @@ export default function ERPTaskCard({
   const completedStageTasks = (phaseTasks.Completed || []).filter((task) => task.done)
   const completedTasks = [...donePendingTasks, ...completedStageTasks]
 
-  const openPendingTaskKeys = new Set(openPendingTasks.map((task) => String(task.key || '').trim()))
   const pendingMemberRoleByTaskKey = {
     member_expertise: 'expertise',
     member_skill_provider: 'skill_provider',
@@ -251,10 +358,10 @@ export default function ERPTaskCard({
   }, [erp.id, erp.stage])
 
   useEffect(() => {
-    if (trackOpenId === erp.id && erp.stage === 'On Process') {
+    if (messageOpenId === erp.id && erp.stage === 'On Process') {
       loadMessages()
     }
-  }, [trackOpenId, erp.id, erp.stage, loadMessages])
+  }, [messageOpenId, erp.id, erp.stage, loadMessages])
 
   const handleSendMessage = async () => {
     const messageText = chatInput.trim()
@@ -300,6 +407,19 @@ export default function ERPTaskCard({
       <h2 className="relative mx-auto mt-2 w-full max-w-3xl rounded-xl bg-white/80 px-3 py-2 text-center text-base font-bold text-slate-800 shadow-sm ring-1 ring-slate-200/80">
         <span className="font-semibold">Post Title:</span> {post?.post_title || snapshotPost?.title || '-'}
       </h2>
+
+      {currentUserRoleResponsibilities.length ? (
+        <div className="relative mx-auto mt-2 w-full max-w-3xl rounded-xl border border-brand-100 bg-brand-50/60 px-3 py-2 text-sm text-slate-700 shadow-sm">
+          <p className="text-xs font-semibold uppercase tracking-wide text-brand-700">Your Responsibility</p>
+          <div className="mt-1 space-y-1">
+            {currentUserRoleResponsibilities.map((entry) => (
+              <p key={`my-responsibility-${erp.id}-${entry.roleKey}`} className="leading-relaxed">
+                <span className="font-semibold text-slate-800">{entry.roleLabel}:</span> {entry.responsibilityText}
+              </p>
+            ))}
+          </div>
+        </div>
+      ) : null}
 
       <div className="relative space-y-1.5">
         {counterpartyUserId && (
@@ -366,23 +486,64 @@ export default function ERPTaskCard({
         </div>
       </div>
 
-      <div className="relative flex justify-end" data-erp-actions-root>
-        <button
-          type="button"
-          onClick={() => {
-            setIsActionsMenuOpen((prev) => !prev)
-            if (isActionsMenuOpen) {
-              setIsMembersMenuOpen(false)
-            }
-          }}
-          className={`rounded-full border px-4 py-2 text-sm font-semibold transition ${
-            shouldPulseActionsButton
-              ? 'animate-bounce border-rose-300 bg-rose-100 text-rose-700 hover:border-rose-400 hover:bg-rose-200'
-              : 'border-slate-300 bg-white text-slate-700 hover:border-slate-400'
-          }`}
-        >
-          Menu
-        </button>
+      <div className="relative grid grid-cols-3 items-center" data-erp-actions-root>
+        <div className="justify-self-start">
+          {canLeaveTask ? (
+            <button
+              type="button"
+              disabled={isLeavingAssignment}
+              onClick={async () => {
+                if (!onLeaveAssignment) return
+                setIsLeavingAssignment(true)
+                try {
+                  await onLeaveAssignment(erp)
+                } finally {
+                  setIsLeavingAssignment(false)
+                }
+              }}
+              className="rounded-full border border-rose-300 bg-rose-50 px-4 py-2 text-sm font-semibold text-rose-700 transition hover:border-rose-400 hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {isLeavingAssignment ? 'Leaving...' : 'Leave'}
+            </button>
+          ) : (
+            <span />
+          )}
+        </div>
+
+        <div className="justify-self-center">
+          {erp.stage === 'On Process' && canUseMessenger ? (
+            <button
+              type="button"
+              onClick={() => onToggleMessage?.(erp.id)}
+              className={`rounded-full border px-4 py-2 text-sm font-semibold transition ${
+                messageOpenId === erp.id
+                  ? 'border-brand-400 bg-brand-100 text-brand-800'
+                  : 'border-brand-300 bg-white text-brand-700 hover:border-brand-400 hover:bg-brand-50'
+              }`}
+            >
+              Messenger
+            </button>
+          ) : null}
+        </div>
+
+        <div className="justify-self-end">
+          <button
+            type="button"
+            onClick={() => {
+              setIsActionsMenuOpen((prev) => !prev)
+              if (isActionsMenuOpen) {
+                setIsMembersMenuOpen(false)
+              }
+            }}
+            className={`rounded-full border px-4 py-2 text-sm font-semibold transition ${
+              shouldPulseActionsButton
+                ? 'animate-bounce border-rose-300 bg-rose-100 text-rose-700 hover:border-rose-400 hover:bg-rose-200'
+                : 'border-slate-300 bg-white text-slate-700 hover:border-slate-400'
+            }`}
+          >
+            Menu
+          </button>
+        </div>
 
         {isActionsMenuOpen ? (
           <div className="absolute bottom-full right-0 z-30 mb-2 w-56 space-y-2 rounded-xl border border-slate-200 bg-white p-2 shadow-sm">
@@ -548,6 +709,11 @@ export default function ERPTaskCard({
             Self-assign status: {selfAssignEnabled ? 'Open' : 'Closed'}
           </p>
 
+          <div className="rounded-md border border-brand-100 bg-brand-50/50 px-2 py-1.5 text-[11px] text-slate-700">
+            <p className="font-semibold text-brand-700">Responsibility in this ERP</p>
+            <p className="mt-0.5">{selectedRoleResponsibilityText}</p>
+          </div>
+
           {isProvider ? (
             <div className="space-y-1">
               <label className="text-[11px] font-semibold text-slate-600">
@@ -578,10 +744,15 @@ export default function ERPTaskCard({
                     key={`erp-member-${selectedMemberRole}-${user.id}`}
                     className={`flex items-center justify-between gap-2 rounded-md px-2 py-1 ${isProvider ? 'cursor-pointer hover:bg-white' : ''}`}
                   >
-                    <span className="truncate text-slate-700">
-                      {isCurrentUser
-                        ? 'Assign myself'
-                        : user.name || user.username || `User #${user.id}`}
+                    <span className="min-w-0">
+                      <span className="block truncate text-slate-700">
+                        {isCurrentUser
+                          ? 'Assign myself'
+                          : user.name || user.username || `User #${user.id}`}
+                      </span>
+                      <span className="block truncate text-[10px] text-slate-500">
+                        {selectedRoleResponsibilityText}
+                      </span>
                     </span>
                     {isProvider ? (
                       <input
@@ -647,106 +818,110 @@ export default function ERPTaskCard({
             </button>
             <p className="text-[11px] text-slate-500">Use Next State to move along the flow.</p>
           </div>
-
-          {erp.stage === 'On Process' ? (
-            <div className="rounded-lg border border-slate-200 bg-white p-3">
-              <div className="mb-2 flex items-center justify-between gap-2">
-                <p className="text-sm font-semibold text-slate-800">Group Messages</p>
-                <button
-                  type="button"
-                  onClick={loadMessages}
-                  className="rounded-full border border-slate-200 px-2 py-1 text-[11px] font-semibold text-slate-600"
-                >
-                  Refresh
-                </button>
-              </div>
-
-              <div className="max-h-40 space-y-2 overflow-y-auto rounded-md border border-slate-100 bg-slate-50 p-2">
-                {isLoadingMessages ? (
-                  <p className="text-[11px] text-slate-500">Loading messages...</p>
-                ) : messages.length ? (
-                  messages.map((msg) => {
-                    const isMine = String(msg.sender) === String(currentUserId)
-                    return (
-                      <div
-                        key={`erp-msg-${msg.id}`}
-                        className={`rounded-md border px-2 py-1 text-[11px] ${
-                          isMine
-                            ? 'border-brand-200 bg-brand-50'
-                            : 'border-slate-200 bg-white'
-                        }`}
-                      >
-                        <div className="mb-1 flex items-center gap-1 text-slate-500">
-                          <img
-                            src={toMediaUrl(msg.sender_profile_photo) || defaultAvatar}
-                            alt={msg.sender_name || 'Member'}
-                            className="h-4 w-4 rounded-full object-cover"
-                          />
-                          <span className="font-semibold text-slate-700">{msg.sender_name || `User #${msg.sender}`}</span>
-                          <span>•</span>
-                          <span>{new Date(msg.created_at).toLocaleString()}</span>
-                        </div>
-                        {msg.parent_id ? (
-                          <p className="mb-1 text-[10px] text-slate-500">Replying to message #{msg.parent_id}</p>
-                        ) : null}
-                        <p className="whitespace-pre-wrap text-slate-700">{msg.message}</p>
-                        <button
-                          type="button"
-                          onClick={() => setReplyTargetId(msg.id)}
-                          className="mt-1 text-[10px] font-semibold text-brand-600"
-                        >
-                          Reply
-                        </button>
-                      </div>
-                    )
-                  })
-                ) : (
-                  <p className="text-[11px] text-slate-500">No messages yet. Start the conversation.</p>
-                )}
-              </div>
-
-              {replyTargetId ? (
-                <div className="mt-2 flex items-center justify-between rounded-md border border-brand-200 bg-brand-50 px-2 py-1 text-[11px] text-brand-700">
-                  <span>Replying to message #{replyTargetId}</span>
-                  <button
-                    type="button"
-                    onClick={() => setReplyTargetId(null)}
-                    className="font-semibold"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              ) : null}
-
-              <div className="mt-2 flex gap-2">
-                <input
-                  type="text"
-                  value={chatInput}
-                  onChange={(event) => setChatInput(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter' && !event.shiftKey) {
-                      event.preventDefault()
-                      handleSendMessage()
-                    }
-                  }}
-                  placeholder="Type a message for this ERP group"
-                  className="w-full rounded-md border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700 outline-none focus:border-brand-300"
-                />
-                <button
-                  type="button"
-                  onClick={handleSendMessage}
-                  disabled={isSendingMessage || !chatInput.trim()}
-                  className="rounded-md border border-brand-200 px-3 py-1 text-xs font-semibold text-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {isSendingMessage ? 'Sending...' : 'Send'}
-                </button>
-              </div>
-            </div>
-          ) : (
-            <p className="text-[11px] text-slate-500">Messaging is available only in On Process stage.</p>
-          )}
         </div>
       )}
+
+      {erp.stage === 'On Process' && canUseMessenger && messageOpenId === erp.id ? (
+        <div className="space-y-2 rounded-xl border border-slate-200 bg-white p-3">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <p className="text-sm font-semibold text-slate-800">Group Messages</p>
+            <button
+              type="button"
+              onClick={loadMessages}
+              className="rounded-full border border-slate-200 px-2 py-1 text-[11px] font-semibold text-slate-600"
+            >
+              Refresh
+            </button>
+          </div>
+
+          <div className="max-h-40 space-y-2 overflow-y-auto rounded-md border border-slate-100 bg-slate-50 p-2">
+            {isLoadingMessages ? (
+              <p className="text-[11px] text-slate-500">Loading messages...</p>
+            ) : messages.length ? (
+              messages.map((msg) => {
+                const isMine = String(msg.sender) === String(currentUserId)
+                return (
+                  <div
+                    key={`erp-msg-${msg.id}`}
+                    className={`rounded-md border px-2 py-1 text-[11px] ${
+                      isMine
+                        ? 'border-brand-200 bg-brand-50'
+                        : 'border-slate-200 bg-white'
+                    }`}
+                  >
+                    <div className="mb-1 flex items-center gap-1 text-slate-500">
+                      <button
+                        type="button"
+                        onClick={() => onOpenOwner?.(Number(msg.sender))}
+                        className="inline-flex items-center gap-1 rounded-md px-1 py-0.5 transition hover:bg-slate-100"
+                      >
+                        <img
+                          src={toMediaUrl(msg.sender_profile_photo) || defaultAvatar}
+                          alt={msg.sender_name || 'Member'}
+                          className="h-4 w-4 rounded-full object-cover"
+                        />
+                        <span className="font-semibold text-slate-700 hover:underline">{msg.sender_name || `User #${msg.sender}`}</span>
+                      </button>
+                      <span>•</span>
+                      <span>{new Date(msg.created_at).toLocaleString()}</span>
+                    </div>
+                    {msg.parent_id ? (
+                      <p className="mb-1 text-[10px] text-slate-500">Replying to message #{msg.parent_id}</p>
+                    ) : null}
+                    <p className="whitespace-pre-wrap text-slate-700">{msg.message}</p>
+                    <button
+                      type="button"
+                      onClick={() => setReplyTargetId(msg.id)}
+                      className="mt-1 text-[10px] font-semibold text-brand-600"
+                    >
+                      Reply
+                    </button>
+                  </div>
+                )
+              })
+            ) : (
+              <p className="text-[11px] text-slate-500">No messages yet. Start the conversation.</p>
+            )}
+          </div>
+
+          {replyTargetId ? (
+            <div className="mt-2 flex items-center justify-between rounded-md border border-brand-200 bg-brand-50 px-2 py-1 text-[11px] text-brand-700">
+              <span>Replying to message #{replyTargetId}</span>
+              <button
+                type="button"
+                onClick={() => setReplyTargetId(null)}
+                className="font-semibold"
+              >
+                Cancel
+              </button>
+            </div>
+          ) : null}
+
+          <div className="mt-2 flex gap-2">
+            <input
+              type="text"
+              value={chatInput}
+              onChange={(event) => setChatInput(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' && !event.shiftKey) {
+                  event.preventDefault()
+                  handleSendMessage()
+                }
+              }}
+              placeholder="Type a message for this ERP group"
+              className="w-full rounded-md border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700 outline-none focus:border-brand-300"
+            />
+            <button
+              type="button"
+              onClick={handleSendMessage}
+              disabled={isSendingMessage || !chatInput.trim()}
+              className="rounded-md border border-brand-200 px-3 py-1 text-xs font-semibold text-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {isSendingMessage ? 'Sending...' : 'Send'}
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       {expandedId === erp.id && (
         <div className="space-y-4 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
