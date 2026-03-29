@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import L from 'leaflet'
 import {
   Circle,
@@ -14,10 +14,10 @@ import markerIcon from 'leaflet/dist/images/marker-icon.png'
 import markerShadow from 'leaflet/dist/images/marker-shadow.png'
 
 const BANGLADESH_CENTER = [23.81, 90.41]
-const DEFAULT_ZOOM = 8
+const BANGLADESH_FIT_ZOOM = 7.3
 const BANGLADESH_BOUNDS = [
-  [20.55, 88.0],
-  [26.75, 92.7],
+  [20.67, 88.03],
+  [26.64, 92.68],
 ]
 
 const toCoordinateOrNull = (value) => {
@@ -56,13 +56,17 @@ function MapClickHandler({ onPick }) {
   return null
 }
 
-function MapRecenter({ position }) {
+function MapViewportController({ position, selectedZoom }) {
   const map = useMap()
 
   useEffect(() => {
-    if (!position) return
-    map.flyTo(position, Math.max(map.getZoom(), 15), { duration: 0.4 })
-  }, [map, position])
+    if (position) {
+      map.flyTo(position, selectedZoom, { duration: 0.4 })
+      return
+    }
+
+    map.setView(BANGLADESH_CENTER, BANGLADESH_FIT_ZOOM, { animate: false })
+  }, [map, position, selectedZoom])
 
   return null
 }
@@ -97,6 +101,10 @@ export default function LocationPickerMap({
   longitude,
   onPick,
   radiusKm,
+  mapSizeInches = 5,
+  mapWidthInches,
+  mapHeightInches,
+  selectedZoom = 14,
   hintText = '',
   showUseMyLocation = true,
   popupText = 'Confirm this location?',
@@ -104,6 +112,7 @@ export default function LocationPickerMap({
 }) {
   const [geoLoading, setGeoLoading] = useState(false)
   const [geoError, setGeoError] = useState('')
+  const popupRef = useRef(null)
 
   const selectedPosition = useMemo(() => {
     const lat = toCoordinateOrNull(latitude)
@@ -115,6 +124,9 @@ export default function LocationPickerMap({
 
     return null
   }, [latitude, longitude])
+
+  const frameWidth = `${mapWidthInches || mapSizeInches}in`
+  const frameHeight = `${mapHeightInches || mapSizeInches}in`
 
   const handleUseMyLocation = () => {
     if (!navigator.geolocation) {
@@ -142,63 +154,93 @@ export default function LocationPickerMap({
     )
   }
 
+  const handleConfirmSelectedLocation = () => {
+    if (!selectedPosition) return
+    onPick(selectedPosition[0], selectedPosition[1])
+    popupRef.current?.close()
+  }
+
   return (
-    <div className={`rounded-xl border border-violet-200/70 bg-white/80 p-2 shadow-[0_6px_22px_rgba(0,0,0,0.16)] ${className}`}>
-      {showUseMyLocation && (
-        <div className="mb-2 flex items-center justify-between gap-2">
-          <button
-            type="button"
-            onClick={handleUseMyLocation}
-            disabled={geoLoading}
-            className="inline-flex items-center rounded-lg bg-gradient-to-r from-violet-600 to-fuchsia-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:from-violet-700 hover:to-fuchsia-700 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {geoLoading ? 'Detecting location...' : 'Use My Current Location'}
-          </button>
-          {geoError && <p className="text-[11px] text-rose-600">{geoError}</p>}
-        </div>
-      )}
-
-      <div className="relative z-0 overflow-hidden rounded-xl border border-violet-200/70">
-        {hintText ? (
-          <div className="pointer-events-none absolute left-2 top-2 z-[500] rounded-md bg-black/45 px-2 py-1 text-[11px] font-medium text-white">
-            {hintText}
+    <div className={`flex flex-col items-center ${className}`}>
+      <div
+        className="relative z-0 flex flex-col gap-1 rounded-xl border border-amber-200 bg-amber-50 px-2 py-1"
+        style={{
+          width: `min(100%, ${frameWidth})`,
+          height: frameHeight,
+        }}
+      >
+        {showUseMyLocation && (
+          <div className="z-[650] self-start">
+            <button
+              type="button"
+              onClick={handleUseMyLocation}
+              disabled={geoLoading}
+              className="inline-flex items-center rounded-lg bg-gradient-to-r from-violet-600 to-fuchsia-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:from-violet-700 hover:to-fuchsia-700 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {geoLoading ? 'Detecting location...' : 'Use My Current Location'}
+            </button>
           </div>
-        ) : null}
+        )}
 
-        <MapContainer
-          center={selectedPosition || BANGLADESH_CENTER}
-          zoom={selectedPosition ? 11 : DEFAULT_ZOOM}
-          minZoom={7}
-          maxZoom={18}
-          scrollWheelZoom
-          style={{ height: 230, width: '100%', zIndex: 0 }}
-          maxBounds={BANGLADESH_BOUNDS}
-          maxBoundsViscosity={0.7}
-        >
-          <MapInvalidateSize />
-          <TileLayer
-            attribution='&copy; OpenStreetMap contributors'
-            url='https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'
-          />
-          <MapClickHandler onPick={onPick} />
-          <MapRecenter position={selectedPosition} />
+        <div className="relative min-h-0 w-full flex-1 overflow-hidden rounded-lg">
+          {hintText ? (
+            <div className="pointer-events-none absolute left-2 top-2 z-[500] rounded-md bg-black/45 px-2 py-1 text-[11px] font-medium text-white">
+              {hintText}
+            </div>
+          ) : null}
 
-          {selectedPosition && (
-            <Marker position={selectedPosition} icon={GOOGLE_STYLE_MARKER_ICON}>
-              <Popup>
-                <div className="text-xs font-semibold text-slate-700">{popupText}</div>
-              </Popup>
-            </Marker>
-          )}
-          {selectedPosition && Number.isFinite(radiusKm) && radiusKm > 0 && (
-            <Circle
-              center={selectedPosition}
-              radius={radiusKm * 1000}
-              pathOptions={{ color: '#7c3aed', fillColor: '#a78bfa', fillOpacity: 0.18 }}
+          <MapContainer
+            center={selectedPosition || BANGLADESH_CENTER}
+            zoom={BANGLADESH_FIT_ZOOM}
+            minZoom={6}
+            maxZoom={18}
+            zoomSnap={0.1}
+            zoomDelta={0.2}
+            scrollWheelZoom
+            style={{ height: '100%', width: '100%', zIndex: 0 }}
+            className="bg-amber-50"
+            maxBounds={BANGLADESH_BOUNDS}
+            maxBoundsViscosity={0.7}
+            attributionControl={false}
+          >
+            <MapInvalidateSize />
+            <MapViewportController position={selectedPosition} selectedZoom={selectedZoom} />
+            <TileLayer
+              attribution=''
+              url='https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'
             />
-          )}
-        </MapContainer>
+            <MapClickHandler onPick={onPick} />
+
+            {selectedPosition && (
+              <Marker position={selectedPosition} icon={GOOGLE_STYLE_MARKER_ICON}>
+                <Popup ref={popupRef}>
+                  <div className="space-y-2">
+                    <div className="text-xs font-semibold text-slate-700">{popupText}</div>
+                    <div className="flex justify-center">
+                      <button
+                        type="button"
+                        onClick={handleConfirmSelectedLocation}
+                        className="inline-flex items-center rounded-lg bg-gradient-to-r from-violet-600 to-fuchsia-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:from-violet-700 hover:to-fuchsia-700"
+                      >
+                        Confirm
+                      </button>
+                    </div>
+                  </div>
+                </Popup>
+              </Marker>
+            )}
+            {selectedPosition && Number.isFinite(radiusKm) && radiusKm > 0 && (
+              <Circle
+                center={selectedPosition}
+                radius={radiusKm * 1000}
+                pathOptions={{ color: '#7c3aed', fillColor: '#a78bfa', fillOpacity: 0.18 }}
+              />
+            )}
+          </MapContainer>
+        </div>
       </div>
+
+      {geoError && <p className="mt-2 text-center text-[11px] text-rose-600">{geoError}</p>}
     </div>
   )
 }

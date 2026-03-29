@@ -238,6 +238,10 @@ class ERPSerializer(serializers.ModelSerializer):
             "configuration_snapshot",
             "is_configured",
             "pdf_slip",
+            "completion_comment",
+            "completion_rating",
+            "completed_by",
+            "completed_at",
         )
         read_only_fields = ("provider", "receiver", "category")
 

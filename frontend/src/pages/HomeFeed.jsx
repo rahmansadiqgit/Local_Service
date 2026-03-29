@@ -60,6 +60,7 @@ export default function HomeFeed() {
   const [expertises, setExpertises] = useState([])
   const [products, setProducts] = useState([])
   const [ratings, setRatings] = useState([])
+  const [erpItems, setErpItems] = useState([])
   const [loading, setLoading] = useState(true)
   const [peopleSearch, setPeopleSearch] = useState('')
 
@@ -78,6 +79,7 @@ export default function HomeFeed() {
 
   const [actionMessage, setActionMessage] = useState('')
   const [openDetailsPostId, setOpenDetailsPostId] = useState(null)
+  const [openCommentsPostId, setOpenCommentsPostId] = useState(null)
   const currentUserId = user?.id
 
   useEffect(() => {
@@ -144,6 +146,7 @@ export default function HomeFeed() {
           api.get('/expertises/', publicRequestConfig),
           api.get('/products/', publicRequestConfig),
           api.get('/ratings/', publicRequestConfig),
+          api.get('/erp/', publicRequestConfig),
         ])
 
         if (!active) return
@@ -151,6 +154,7 @@ export default function HomeFeed() {
         setExpertises(detailResponses[1].status === 'fulfilled' ? detailResponses[1].value.data : [])
         setProducts(detailResponses[2].status === 'fulfilled' ? detailResponses[2].value.data : [])
         setRatings(detailResponses[3].status === 'fulfilled' ? detailResponses[3].value.data : [])
+        setErpItems(detailResponses[4].status === 'fulfilled' ? detailResponses[4].value.data : [])
 
         if (isAuthenticated) {
           const usersRes = await api.get('/users/')
@@ -202,6 +206,33 @@ export default function HomeFeed() {
       .slice(0, 8)
   }, [allUsers, peopleSearch])
 
+  const usersById = useMemo(() => {
+    const map = new Map()
+    ;(Array.isArray(allUsers) ? allUsers : []).forEach((entry) => {
+      const parsedId = Number(entry?.id)
+      if (!Number.isFinite(parsedId) || parsedId <= 0) return
+      map.set(parsedId, entry)
+    })
+    return map
+  }, [allUsers])
+
+  const receiverByPostId = useMemo(() => {
+    const map = new Map()
+    ;(Array.isArray(erpItems) ? erpItems : []).forEach((erp) => {
+      if (String(erp?.stage || '') !== 'Completed') return
+      const postId = Number(erp?.post)
+      const receiverId = Number(erp?.receiver)
+      const entryId = Number(erp?.id || 0)
+      if (!Number.isFinite(postId) || postId <= 0 || !Number.isFinite(receiverId) || receiverId <= 0) return
+
+      const prev = map.get(postId)
+      if (!prev || entryId > prev.erpId) {
+        map.set(postId, { receiverId, erpId: entryId })
+      }
+    })
+    return map
+  }, [erpItems])
+
   const skillsByPost = useMemo(() => {
     return skills.reduce((acc, skill) => {
       acc[skill.post] = acc[skill.post] || []
@@ -227,10 +258,101 @@ export default function HomeFeed() {
   }, [products])
 
   const ratingByPost = useMemo(() => {
-    return ratings.reduce((acc, rating) => {
-      acc[rating.post] = rating
+    const ownerByPostId = new Map(
+      (Array.isArray(posts) ? posts : []).map((post) => [
+        Number(post?.id),
+        Number(post?.owner_id ?? post?.owner),
+      ]),
+    )
+
+    return (Array.isArray(ratings) ? ratings : []).reduce((acc, entry) => {
+      const postId = Number(entry?.post)
+      const ownerId = ownerByPostId.get(postId)
+      const providerId = Number(entry?.provider)
+      const customerId = Number(entry?.customer)
+      const receiverEntry = receiverByPostId.get(postId)
+      const receiverId = Number(receiverEntry?.receiverId)
+
+      if (!Number.isFinite(postId) || !Number.isFinite(ownerId) || ownerId <= 0) return acc
+
+      // HomeFeed should show receiver's review about the post owner, not owner-authored ratings.
+      const isReceiverReview =
+        Number.isFinite(customerId)
+        && customerId > 0
+        && customerId !== ownerId
+        && providerId === ownerId
+
+      if (!isReceiverReview) return acc
+
+      // Prefer explicit receiver feedback when ERP receiver is known for this post.
+      if (Number.isFinite(receiverId) && receiverId > 0 && customerId !== receiverId) return acc
+
+      const prev = acc[postId]
+      if (!prev || Number(entry?.id || 0) > Number(prev?.id || 0)) {
+        acc[postId] = entry
+      }
+
       return acc
     }, {})
+  }, [ratings, posts, receiverByPostId])
+
+  const commentsByPost = useMemo(() => {
+    const ownerByPostId = new Map(
+      (Array.isArray(posts) ? posts : []).map((post) => [
+        Number(post?.id),
+        Number(post?.owner_id ?? post?.owner),
+      ]),
+    )
+
+    const result = {}
+    ;(Array.isArray(ratings) ? ratings : []).forEach((entry) => {
+      const postId = Number(entry?.post)
+      const ownerId = ownerByPostId.get(postId)
+      const providerId = Number(entry?.provider)
+      const customerId = Number(entry?.customer)
+      if (!Number.isFinite(postId) || !Number.isFinite(ownerId) || ownerId <= 0) return
+      if (providerId !== ownerId) return
+      if (!Number.isFinite(customerId) || customerId <= 0 || customerId === ownerId) return
+
+      const reviewer = usersById.get(customerId)
+      if (!result[postId]) result[postId] = []
+
+      result[postId].push({
+        id: Number(entry?.id || 0),
+        rating: entry,
+        reviewer: {
+          id: customerId,
+          name: reviewer?.name || reviewer?.username || entry?.customer_name || `User #${customerId}`,
+          photo: reviewer?.profile_photo || entry?.customer_profile_photo || '',
+        },
+      })
+    })
+
+    Object.keys(result).forEach((postId) => {
+      result[postId].sort((left, right) => Number(right?.id || 0) - Number(left?.id || 0))
+    })
+
+    return result
+  }, [ratings, posts, usersById])
+
+  const averageRatingByUser = useMemo(() => {
+    const totals = {}
+    const counts = {}
+
+    ;(Array.isArray(ratings) ? ratings : []).forEach((entry) => {
+      const providerId = Number(entry?.provider)
+      const value = Number(entry?.rating_value)
+      if (!Number.isFinite(providerId) || providerId <= 0 || !Number.isFinite(value)) return
+      totals[providerId] = (totals[providerId] || 0) + value
+      counts[providerId] = (counts[providerId] || 0) + 1
+    })
+
+    const averages = {}
+    Object.keys(totals).forEach((providerId) => {
+      const count = counts[providerId] || 1
+      averages[providerId] = totals[providerId] / count
+    })
+    return averages
   }, [ratings])
 
   const costSummaryByPost = useMemo(() => {
@@ -477,6 +599,13 @@ export default function HomeFeed() {
     })
   }
 
+  const handleToggleComments = (postId, shouldOpen) => {
+    setOpenCommentsPostId((prev) => {
+      if (!shouldOpen) return prev === postId ? null : prev
+      return postId
+    })
+  }
+
   return (
     <div className="space-y-6">
 
@@ -541,70 +670,6 @@ export default function HomeFeed() {
         </div>
       </section>
 
-      <section className="relative overflow-hidden rounded-3xl border border-brand-200/60 bg-gradient-to-r from-white via-brand-50/70 to-cyan-50/60 p-4 shadow-[0_12px_26px_rgba(14,165,233,0.12)] sm:p-5">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.55),transparent_58%)]" />
-        <div className="relative space-y-3">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <h2 className="text-xl font-extrabold text-slate-900">Find People & Skills</h2>
-            <p className="text-xs text-slate-500">Search members by name or Education & Skills</p>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2">
-            <input
-              type="text"
-              value={peopleSearch}
-              onChange={(event) => setPeopleSearch(event.target.value)}
-              placeholder="Find someone or find skills"
-              className="h-11 min-w-[240px] flex-1 rounded-xl border border-brand-200/70 bg-white px-3 text-sm text-slate-800 shadow-sm placeholder:text-slate-400 focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand-200"
-            />
-            <button
-              type="button"
-              onClick={() => setPeopleSearch((prev) => String(prev || '').trim())}
-              className="inline-flex h-11 items-center justify-center rounded-xl bg-brand-600 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-700"
-            >
-              Search
-            </button>
-          </div>
-
-          {!isAuthenticated ? (
-            <p className="text-sm text-slate-600">
-              Login to search all users, including members who have not posted yet.
-            </p>
-          ) : String(peopleSearch || '').trim() ? (
-            searchedUsers.length ? (
-              <div className="grid gap-2 md:grid-cols-2">
-                {searchedUsers.map((person) => (
-                  <div
-                    key={`user-search-${person.id}`}
-                    className="flex items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2"
-                  >
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold text-slate-800">
-                        {person.name || person.username || `User #${person.id}`}
-                      </p>
-                      <p className="truncate text-xs text-slate-500">
-                        {person.education_skills || 'No education/skills added yet'}
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => navigate(`/dashboard/${person.id}`)}
-                      className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-700 transition hover:border-brand-300 hover:text-brand-700"
-                    >
-                      View
-                    </button>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-sm text-slate-600">No matching user found.</p>
-            )
-          ) : (
-            <p className="text-sm text-slate-600">Type a name like "Prithibi" or a skill like "Electrician".</p>
-          )}
-        </div>
-      </section>
-
       <section className="space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
@@ -634,6 +699,71 @@ export default function HomeFeed() {
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.45),transparent_52%)]" />
           <div className="absolute -left-10 -top-10 h-24 w-24 rounded-full bg-white/35 blur-2xl" />
           <div className="absolute -right-10 -bottom-10 h-24 w-24 rounded-full bg-orange-200/45 blur-2xl" />
+          <div className="relative mb-4">
+            <div className="mb-3 flex items-center justify-between gap-3 border-b border-white/45 pb-3">
+              <p className="text-sm font-extrabold tracking-wide text-orange-900">Find Peoples & Skills</p>
+              <p className="text-xs text-slate-600">Search members by Name or Education & Skills</p>
+            </div>
+
+            <div className="mt-1.5 flex flex-wrap items-center gap-2">
+              <input
+                type="text"
+                value={peopleSearch}
+                onChange={(event) => setPeopleSearch(event.target.value)}
+                placeholder="Find someone or find skills"
+                className="h-11 min-w-[240px] flex-1 rounded-xl border border-white/50 bg-white/45 px-3 text-sm text-slate-800 shadow-sm placeholder:text-slate-500 focus:border-orange-300 focus:outline-none focus:ring-2 focus:ring-orange-200/80"
+              />
+              <button
+                type="button"
+                onClick={() => setPeopleSearch((prev) => String(prev || '').trim())}
+                className="inline-flex h-11 items-center justify-center rounded-lg bg-gradient-to-r from-violet-600 to-fuchsia-600 px-4 text-sm font-semibold text-white shadow-sm transition hover:from-violet-700 hover:to-fuchsia-700"
+              >
+                Search
+              </button>
+            </div>
+
+            <div className="mt-2">
+              {!isAuthenticated ? (
+                <p className="text-sm text-slate-600">
+                  Login to search all users, including members who have not posted yet.
+                </p>
+              ) : String(peopleSearch || '').trim() ? (
+                searchedUsers.length ? (
+                  <div className="grid gap-2 md:grid-cols-2">
+                    {searchedUsers.map((person) => (
+                      <div
+                        key={`user-search-${person.id}`}
+                        className="flex items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2"
+                      >
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-semibold text-slate-800">
+                            {person.name || person.username || `User #${person.id}`}
+                          </p>
+                          <p className="truncate text-xs text-slate-500">
+                            {person.education_skills || 'No education/skills added yet'}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => navigate(`/dashboard/${person.id}`)}
+                          className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-700 transition hover:border-orange-300 hover:text-orange-700"
+                        >
+                          View
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-slate-600">No matching user found.</p>
+                )
+              ) : (
+                <p className="text-sm text-slate-600">Type a Name like "Partho Chandra" or a Skill like "Software Engineer"</p>
+              )}
+            </div>
+          </div>
+
+          <div className="h-4" />
+
           <div className="relative mb-4 flex items-center justify-between gap-3 border-b border-white/45 pb-3">
             <p className="text-sm font-extrabold tracking-wide text-orange-900">Search & Filters</p>
             <p className="text-xs text-slate-600">Use filters to quickly narrow service posts</p>
@@ -728,10 +858,14 @@ export default function HomeFeed() {
                   longitude={filters.longitude}
                   radiusKm={toCoordinateOrNull(filters.radiusKm)}
                   onPick={handleFilterLocationPick}
+                  mapWidthInches={16}
+                  mapHeightInches={4}
+                  selectedZoom={10}
                   popupText="Confirm this search location?"
                 />
               </div>
             </div>
+
           </div>
         </div>
 
@@ -747,36 +881,60 @@ export default function HomeFeed() {
           <div className="card">No posts match your filters.</div>
         ) : (
           <div className="grid grid-cols-1 items-stretch gap-6 md:grid-cols-2">
-            {filteredPosts.map(post => (
-              <PostCard
-                key={post.id}
-                post={post}
-                skills={skillsByPost[post.id] || []}
-                expertises={expertisesByPost[post.id] || []}
-                products={productsByPost[post.id] || []}
-                rating={ratingByPost[post.id]}
-                isOwnPost={
-                  Boolean(currentUserId) &&
-                  String(post.owner_id || post.owner) === String(currentUserId)
-                }
-                profile={{
-                  id: post.owner_id || post.owner || null,
-                  name:
-                    post.owner_name ||
-                    post.owner_username ||
-                    post.brand_company_name ||
-                    'Localix Member',
-                  supplyStatus: post.owner_supply_status || '',
-                  demandStatus: post.owner_demand_status || '',
-                  photo: post.owner_profile_photo || '',
-                }}
-                onAction={handleAction}
-                onAddToCart={handleAddToCart}
-                inCart={isInCart(post.id)}
-                isDetailsOpen={openDetailsPostId === post.id}
-                onToggleDetails={(shouldOpen) => handleToggleDetails(post.id, shouldOpen)}
-              />
-            ))}
+            {filteredPosts.map((post) => {
+              const ownerId = Number(post.owner_id || post.owner)
+              const profileRating =
+                averageRatingByUser[ownerId]
+                ?? Number(post.owner_profile_rating ?? post.owner_rating)
+              const ratingEntry = ratingByPost[post.id]
+              const reviewerId = Number(ratingEntry?.customer)
+              const reviewerUser = usersById.get(reviewerId)
+              const postComments = commentsByPost[post.id] || []
+
+              return (
+                <PostCard
+                  key={post.id}
+                  post={post}
+                  skills={skillsByPost[post.id] || []}
+                  expertises={expertisesByPost[post.id] || []}
+                  products={productsByPost[post.id] || []}
+                  rating={ratingEntry}
+                  ratingReviewer={{
+                    id: reviewerId,
+                    name:
+                      reviewerUser?.name
+                      || reviewerUser?.username
+                      || ratingEntry?.customer_name
+                      || (Number.isFinite(reviewerId) && reviewerId > 0 ? `User #${reviewerId}` : 'Customer'),
+                    photo: reviewerUser?.profile_photo || ratingEntry?.customer_profile_photo || '',
+                  }}
+                  isOwnPost={
+                    Boolean(currentUserId) &&
+                    String(post.owner_id || post.owner) === String(currentUserId)
+                  }
+                  profile={{
+                    id: post.owner_id || post.owner || null,
+                    name:
+                      post.owner_name ||
+                      post.owner_username ||
+                      post.brand_company_name ||
+                      'Localix Member',
+                    supplyStatus: post.owner_supply_status || '',
+                    demandStatus: post.owner_demand_status || '',
+                    photo: post.owner_profile_photo || '',
+                    rating: Number.isFinite(profileRating) ? profileRating : null,
+                  }}
+                  onAction={handleAction}
+                  onAddToCart={handleAddToCart}
+                  inCart={isInCart(post.id)}
+                  isDetailsOpen={openDetailsPostId === post.id}
+                  onToggleDetails={(shouldOpen) => handleToggleDetails(post.id, shouldOpen)}
+                  ratingComments={postComments}
+                  isCommentsOpen={openCommentsPostId === post.id}
+                  onToggleComments={(shouldOpen) => handleToggleComments(post.id, shouldOpen)}
+                />
+              )
+            })}
           </div>
         )}
       </section>

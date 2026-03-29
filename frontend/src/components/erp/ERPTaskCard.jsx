@@ -2,11 +2,13 @@ import { useCallback, useEffect, useState } from 'react'
 
 import api from '../../api/client'
 import defaultAvatar from '../../assets/default-avatar.svg'
+import RatingRingAvatar from '../RatingRingAvatar'
 
 export default function ERPTaskCard({
   erp,
   post,
   rating,
+  ratings = [],
   currentUserId,
   expandedId,
   trackOpenId,
@@ -25,6 +27,9 @@ export default function ERPTaskCard({
   onPublishMemberPost,
   onCloseMemberPost,
   onLeaveAssignment,
+  onCompleteByReceiver,
+  onRateParticipant,
+  onRateProvider,
   onOpenOwner,
   toMediaUrl,
 }) {
@@ -36,8 +41,27 @@ export default function ERPTaskCard({
   const [replyTargetId, setReplyTargetId] = useState(null)
   const [isLoadingMessages, setIsLoadingMessages] = useState(false)
   const [isSendingMessage, setIsSendingMessage] = useState(false)
+  const [messageError, setMessageError] = useState('')
   const [selfAssignMessageByRole, setSelfAssignMessageByRole] = useState({})
   const [isLeavingAssignment, setIsLeavingAssignment] = useState(false)
+  const [isCompletionFormOpen, setIsCompletionFormOpen] = useState(false)
+  const [completionRating, setCompletionRating] = useState('')
+  const [completionComment, setCompletionComment] = useState('')
+  const [completionError, setCompletionError] = useState('')
+  const [isSubmittingCompletion, setIsSubmittingCompletion] = useState(false)
+  const [selectedParticipantId, setSelectedParticipantId] = useState('')
+  const [participantRating, setParticipantRating] = useState('')
+  const [participantComment, setParticipantComment] = useState('')
+  const [participantRatingError, setParticipantRatingError] = useState('')
+  const [participantRatingSuccess, setParticipantRatingSuccess] = useState('')
+  const [isSubmittingParticipantRating, setIsSubmittingParticipantRating] = useState(false)
+  const [isParticipantRatingOpen, setIsParticipantRatingOpen] = useState(false)
+  const [isProviderFeedbackOpen, setIsProviderFeedbackOpen] = useState(false)
+  const [providerFeedbackRating, setProviderFeedbackRating] = useState('')
+  const [providerFeedbackComment, setProviderFeedbackComment] = useState('')
+  const [providerFeedbackError, setProviderFeedbackError] = useState('')
+  const [providerFeedbackSuccess, setProviderFeedbackSuccess] = useState('')
+  const [isSubmittingProviderFeedback, setIsSubmittingProviderFeedback] = useState(false)
 
   const phases = ['Pending', 'On Process', 'Completed']
   const activePhaseIndex = phases.indexOf(erp.stage)
@@ -50,19 +74,23 @@ export default function ERPTaskCard({
   const snapshotTotals = snapshot.totals || {}
   const supplierNote = String(snapshot?.notes?.supplier_note || snapshot?.supplier_note || '').trim()
 
-  const parsePostCategories = (value) =>
-    String(value || '')
-      .split(',')
-      .map((item) => String(item || '').trim().toLowerCase())
-      .filter(Boolean)
+  const hasRequiredRows = (rows) =>
+    Array.isArray(rows) &&
+    rows.some((row) => {
+      const qty = Number(row?.quantity ?? row?.qty ?? 0)
+      const lineTotal = Number(row?.line_total ?? row?.lineTotal ?? 0)
+      return qty > 0 || lineTotal > 0
+    })
 
-  const categories = parsePostCategories(post?.post_name || snapshotPost?.name || '')
-  const hasExpertiseCategory =
-    categories.includes('expertise') || snapshotExpertise.some((row) => Number(row.quantity || 0) > 0)
-  const hasServicesCategory =
-    categories.includes('service') || categories.includes('services') || snapshotServices.length > 0
-  const hasProductCategory =
-    categories.includes('product') || categories.includes('products') || snapshotProducts.length > 0
+  const hasExpertiseRows = hasRequiredRows(snapshotExpertise)
+  const hasServiceRows = hasRequiredRows(snapshotServices)
+  const hasProductRows = hasRequiredRows(snapshotProducts)
+  const hasExpertiseTotal = Number(snapshotTotals.expertise_total || snapshotTotals.expertise || 0) > 0
+  const hasServiceTotal = Number(snapshotTotals.services_total || snapshotTotals.services || 0) > 0
+  const hasProductTotal = Number(snapshotTotals.products_total || snapshotTotals.products || 0) > 0
+  const hasExpertiseCategory = hasExpertiseRows || hasExpertiseTotal
+  const hasServicesCategory = hasServiceRows || hasServiceTotal
+  const hasProductCategory = hasProductRows || hasProductTotal
 
   const memberMenuOptions = [
     hasExpertiseCategory ? 'Expertise' : null,
@@ -238,9 +266,34 @@ export default function ERPTaskCard({
         }))
       })()
     : []
-  const canLeaveTask = currentUserRoleResponsibilities.length > 0
+  const canLeaveTask = currentUserRoleResponsibilities.length > 0 && erp.stage !== 'Completed'
   const isReceiver = viewerRole === 'Receiver'
   const canUseMessenger = isProvider || isReceiver || currentUserRoleResponsibilities.length > 0
+  const canCompleteAsReceiver = isReceiver && erp.stage === 'On Process'
+
+  const averageRatingByUser = (() => {
+    const totals = new Map()
+    const counts = new Map()
+    ;(Array.isArray(ratings) ? ratings : []).forEach((entry) => {
+      const providerId = Number(entry?.provider)
+      const value = Number(entry?.rating_value)
+      if (!Number.isFinite(providerId) || providerId <= 0 || !Number.isFinite(value)) return
+      totals.set(providerId, (totals.get(providerId) || 0) + value)
+      counts.set(providerId, (counts.get(providerId) || 0) + 1)
+    })
+
+    const averages = new Map()
+    totals.forEach((sum, userId) => {
+      const count = counts.get(userId) || 1
+      averages.set(userId, sum / count)
+    })
+    return averages
+  })()
+
+  const getUserRating = useCallback(
+    (userId) => averageRatingByUser.get(Number(userId)) ?? null,
+    [averageRatingByUser],
+  )
 
   const counterpartyUserId =
     viewerRole === 'Provider'
@@ -262,6 +315,147 @@ export default function ERPTaskCard({
 
   const roleLabel =
     viewerRole === 'Provider' ? 'Providing' : viewerRole === 'Receiver' ? 'Receiving' : erp.category
+
+  const requiredCategoryLabels = [
+    hasExpertiseCategory ? 'Expertise' : null,
+    hasServicesCategory ? 'Services' : null,
+    hasProductCategory ? 'Product' : null,
+  ].filter(Boolean)
+
+  const taskCategoryLabel =
+    requiredCategoryLabels.length > 0 ? requiredCategoryLabels.join(', ') : post?.post_name || `Task #${erp.id}`
+
+  const providerUser = users.find((entry) => Number(entry.id) === Number(erp.provider))
+  const providerDisplayName =
+    providerUser?.name
+    || providerUser?.username
+    || post?.owner_name
+    || (erp.provider ? `User #${erp.provider}` : 'Provider')
+
+  const providerRatedUserIds = new Set(
+    (Array.isArray(snapshot?.feedback?.provider_rating_user_ids)
+      ? snapshot.feedback.provider_rating_user_ids
+      : [])
+      .map((id) => Number(id))
+      .filter((id) => Number.isFinite(id) && id > 0),
+  )
+  const hasRatedProviderFromSnapshot = providerRatedUserIds.has(Number(currentUserId))
+
+  const hasRatedProviderFromRatings = (Array.isArray(ratings) ? ratings : []).some(
+    (entry) =>
+      Number(entry?.post) === Number(erp.post)
+      && Number(entry?.customer) === Number(currentUserId)
+      && Number(entry?.provider) === Number(erp.provider),
+  )
+
+  const hasRatedProvider = hasRatedProviderFromSnapshot || hasRatedProviderFromRatings
+  const shouldShowProviderCommentButton = erp.stage === 'Completed' && !isProvider && !hasRatedProvider
+
+  const alreadyRatedParticipantIds = new Set(
+    (Array.isArray(ratings) ? ratings : [])
+      .filter(
+        (item) =>
+          Number(item?.post) === Number(erp.post)
+          && Number(item?.customer) === Number(currentUserId)
+          && Number(item?.provider) > 0,
+      )
+      .map((item) => Number(item.provider)),
+  )
+
+  const providerFeedbackForCurrentUser = (Array.isArray(ratings) ? ratings : [])
+    .filter(
+      (item) =>
+        Number(item?.post) === Number(erp.post)
+        && Number(item?.customer) === Number(erp.provider)
+        && Number(item?.provider) === Number(currentUserId),
+    )
+    .sort((left, right) => Number(right?.id || 0) - Number(left?.id || 0))[0] || null
+
+  const providerRateCandidates = Array.from(
+    new Map(
+      [
+        ...(erp.receiver ? users.filter((user) => Number(user.id) === Number(erp.receiver)) : []),
+        ...associatedMembersByRole.flatMap((entry) => entry.members),
+      ]
+        .filter(
+          (user) =>
+            Number(user.id)
+            && Number(user.id) !== Number(currentUserId)
+            && !alreadyRatedParticipantIds.has(Number(user.id)),
+        )
+        .map((user) => [Number(user.id), user]),
+    ).values(),
+  )
+  const shouldShowProviderParticipantRatingButton =
+    isProvider && erp.stage === 'Completed' && providerRateCandidates.length > 0
+
+  const providerRateUniverseIds = new Set(
+    [
+      ...(erp.receiver ? [Number(erp.receiver)] : []),
+      ...associatedMembersByRole.flatMap((entry) => entry.members.map((member) => Number(member.id))),
+    ].filter((id) => Number.isFinite(id) && id > 0 && id !== Number(currentUserId)),
+  )
+
+  const roleLabelsByUserId = new Map()
+  if (erp.receiver && Number.isFinite(Number(erp.receiver))) {
+    roleLabelsByUserId.set(Number(erp.receiver), new Set(['Receiver']))
+  }
+  associatedMembersByRole.forEach((entry) => {
+    entry.members.forEach((member) => {
+      const memberId = Number(member.id)
+      if (!Number.isFinite(memberId) || memberId <= 0) return
+      if (!roleLabelsByUserId.has(memberId)) {
+        roleLabelsByUserId.set(memberId, new Set())
+      }
+      roleLabelsByUserId.get(memberId).add(entry.roleLabel)
+    })
+  })
+
+  const providerFeedbackByParticipant = new Map()
+  ;(Array.isArray(ratings) ? ratings : []).forEach((item) => {
+    const postId = Number(item?.post)
+    const customerId = Number(item?.customer)
+    const participantId = Number(item?.provider)
+    if (postId !== Number(erp.post)) return
+    if (customerId !== Number(currentUserId)) return
+    if (!providerRateUniverseIds.has(participantId)) return
+
+    const previous = providerFeedbackByParticipant.get(participantId)
+    if (!previous || Number(item?.id || 0) > Number(previous?.id || 0)) {
+      providerFeedbackByParticipant.set(participantId, item)
+    }
+  })
+
+  const providerSubmittedFeedbackEntries = Array.from(providerFeedbackByParticipant.entries())
+    .map(([participantId, item]) => {
+      const participant = users.find((user) => Number(user.id) === Number(participantId))
+      const roles = Array.from(roleLabelsByUserId.get(Number(participantId)) || [])
+      return {
+        participantId: Number(participantId),
+        participantName:
+          participant?.name || participant?.username || `User #${participantId}`,
+        roles,
+        ratingValue: Number(item?.rating_value || 0),
+        message: String(item?.review_text || '').trim(),
+      }
+    })
+    .sort((left, right) => left.participantName.localeCompare(right.participantName))
+
+  useEffect(() => {
+    if (!selectedParticipantId) return
+    const stillAvailable = providerRateCandidates.some(
+      (user) => Number(user.id) === Number(selectedParticipantId),
+    )
+    if (!stillAvailable) {
+      setSelectedParticipantId('')
+    }
+  }, [selectedParticipantId, providerRateCandidates])
+
+  useEffect(() => {
+    if (providerRateCandidates.length === 0 && isParticipantRatingOpen) {
+      setIsParticipantRatingOpen(false)
+    }
+  }, [providerRateCandidates, isParticipantRatingOpen])
 
   const stageStyle =
     erp.stage === 'Completed'
@@ -328,7 +522,7 @@ export default function ERPTaskCard({
           className={`h-4 w-4 rounded-full border transition ${
             task.done
               ? 'border-emerald-600 bg-emerald-500'
-              : 'border-rose-400 bg-rose-200 hover:border-rose-500'
+              : 'border-slate-400 bg-white hover:border-slate-500'
           }`}
         />
       ) : (
@@ -347,11 +541,14 @@ export default function ERPTaskCard({
   const loadMessages = useCallback(async () => {
     if (erp.stage !== 'On Process') return
     setIsLoadingMessages(true)
+    setMessageError('')
     try {
       const { data } = await api.get(`/erp/${erp.id}/messages/`)
       setMessages(Array.isArray(data) ? data : [])
     } catch (error) {
       console.error(error)
+      const detail = String(error?.response?.data?.detail || '').trim()
+      setMessageError(detail || 'Failed to load messages. Please refresh and try again.')
     } finally {
       setIsLoadingMessages(false)
     }
@@ -368,6 +565,7 @@ export default function ERPTaskCard({
     if (!messageText || erp.stage !== 'On Process') return
 
     setIsSendingMessage(true)
+    setMessageError('')
     try {
       const payload = {
         message: messageText,
@@ -382,8 +580,144 @@ export default function ERPTaskCard({
       setReplyTargetId(null)
     } catch (error) {
       console.error(error)
+      const detail = String(error?.response?.data?.detail || '').trim()
+      setMessageError(detail || 'Could not send the message. Please try again.')
     } finally {
       setIsSendingMessage(false)
+    }
+  }
+
+  const handleReceiverComplete = async () => {
+    const ratingValue = Number(completionRating)
+    const commentValue = completionComment.trim()
+
+    if (!Number.isInteger(ratingValue) || ratingValue < 1 || ratingValue > 5) {
+      setCompletionError('Please select a rating from 1 to 5.')
+      return
+    }
+
+    if (!commentValue) {
+      setCompletionError('Please write your completion comment.')
+      return
+    }
+
+    if (!onCompleteByReceiver) {
+      setCompletionError('Completion service is unavailable right now.')
+      return
+    }
+
+    setIsSubmittingCompletion(true)
+    setCompletionError('')
+
+    try {
+      const result = await onCompleteByReceiver(erp, {
+        rating: ratingValue,
+        comment: commentValue,
+      })
+
+      if (!result?.ok) {
+        setCompletionError(result?.detail || 'Failed to complete ERP.')
+        return
+      }
+
+      setCompletionRating('')
+      setCompletionComment('')
+      setIsCompletionFormOpen(false)
+    } finally {
+      setIsSubmittingCompletion(false)
+    }
+  }
+
+  const handleProviderParticipantRating = async () => {
+    const participantId = Number(selectedParticipantId)
+    const ratingValue = Number(participantRating)
+    const commentValue = participantComment.trim()
+
+    if (!participantId) {
+      setParticipantRatingError('Please choose a participant first.')
+      return
+    }
+
+    if (!Number.isInteger(ratingValue) || ratingValue < 1 || ratingValue > 5) {
+      setParticipantRatingError('Please select a rating from 1 to 5.')
+      return
+    }
+
+    if (!commentValue) {
+      setParticipantRatingError('Please write a short feedback comment.')
+      return
+    }
+
+    if (!onRateParticipant) {
+      setParticipantRatingError('Participant rating service is unavailable right now.')
+      return
+    }
+
+    setIsSubmittingParticipantRating(true)
+    setParticipantRatingError('')
+    setParticipantRatingSuccess('')
+
+    try {
+      const result = await onRateParticipant(erp, {
+        participant_id: participantId,
+        rating: ratingValue,
+        comment: commentValue,
+      })
+
+      if (!result?.ok) {
+        setParticipantRatingError(result?.detail || 'Failed to submit participant rating.')
+        return
+      }
+
+      setParticipantRatingSuccess(result?.detail || 'Participant rating submitted.')
+      setParticipantRating('')
+      setParticipantComment('')
+      setSelectedParticipantId('')
+    } finally {
+      setIsSubmittingParticipantRating(false)
+    }
+  }
+
+  const handleSubmitProviderFeedback = async () => {
+    const ratingValue = Number(providerFeedbackRating)
+    const commentValue = providerFeedbackComment.trim()
+
+    if (!Number.isInteger(ratingValue) || ratingValue < 1 || ratingValue > 5) {
+      setProviderFeedbackError('Please select a rating from 1 to 5.')
+      return
+    }
+
+    if (!commentValue) {
+      setProviderFeedbackError('Please write your comment about the provider.')
+      return
+    }
+
+    if (!onRateProvider) {
+      setProviderFeedbackError('Feedback service is unavailable right now.')
+      return
+    }
+
+    setIsSubmittingProviderFeedback(true)
+    setProviderFeedbackError('')
+    setProviderFeedbackSuccess('')
+
+    try {
+      const result = await onRateProvider(erp, {
+        rating: ratingValue,
+        comment: commentValue,
+      })
+
+      if (!result?.ok) {
+        setProviderFeedbackError(result?.detail || 'Failed to submit feedback.')
+        return
+      }
+
+      setProviderFeedbackSuccess(result?.detail || 'Your feedback has been submitted.')
+      setProviderFeedbackRating('')
+      setProviderFeedbackComment('')
+      setIsProviderFeedbackOpen(false)
+    } finally {
+      setIsSubmittingProviderFeedback(false)
     }
   }
 
@@ -397,9 +731,9 @@ export default function ERPTaskCard({
         </p>
         <p
           className="px-2 text-center text-lg font-normal tracking-normal text-slate-500"
-          title={post?.post_name || `Task #${erp.id}`}
+          title={taskCategoryLabel}
         >
-          {post?.post_name || `Task #${erp.id}`}
+          {taskCategoryLabel}
         </p>
         <span className={`rounded-full px-4 py-1.5 text-base font-bold ${stageStyle}`}>{erp.stage}</span>
       </div>
@@ -429,10 +763,12 @@ export default function ERPTaskCard({
             className="mt-1 inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-brand-300 hover:bg-brand-50/60"
           >
             <span className="text-slate-500">{counterpartyLabel}:</span>
-            <img
+            <RatingRingAvatar
               src={counterpartyPhoto}
               alt={counterpartyName}
-              className="h-7 w-7 rounded-full border border-slate-200 object-cover"
+              rating={getUserRating(counterpartyUserId)}
+              size={48}
+              ringWidth={2}
             />
             <span className="text-slate-800">{counterpartyName}</span>
             <p className="text-[11px] font-normal text-slate-500">{post?.location || 'Unknown location'}</p>
@@ -488,7 +824,42 @@ export default function ERPTaskCard({
 
       <div className="relative grid grid-cols-3 items-center" data-erp-actions-root>
         <div className="justify-self-start">
-          {canLeaveTask ? (
+          {canCompleteAsReceiver ? (
+            <button
+              type="button"
+              onClick={() => {
+                setCompletionError('')
+                setIsCompletionFormOpen((prev) => !prev)
+              }}
+              className="rounded-full border border-emerald-300 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-700 transition hover:border-emerald-400 hover:bg-emerald-100"
+            >
+              Completed
+            </button>
+          ) : shouldShowProviderParticipantRatingButton ? (
+            <button
+              type="button"
+              onClick={() => {
+                setParticipantRatingError('')
+                setParticipantRatingSuccess('')
+                setIsParticipantRatingOpen((prev) => !prev)
+              }}
+              className="animate-bounce rounded-full border border-rose-300 bg-rose-100 px-4 py-2 text-sm font-semibold text-rose-700 transition hover:border-rose-400 hover:bg-rose-200"
+            >
+              Rating
+            </button>
+          ) : shouldShowProviderCommentButton ? (
+            <button
+              type="button"
+              onClick={() => {
+                setProviderFeedbackError('')
+                setProviderFeedbackSuccess('')
+                setIsProviderFeedbackOpen((prev) => !prev)
+              }}
+              className="animate-bounce rounded-full border border-rose-300 bg-rose-100 px-4 py-2 text-sm font-semibold text-rose-700 transition hover:border-rose-400 hover:bg-rose-200"
+            >
+              Rating
+            </button>
+          ) : canLeaveTask ? (
             <button
               type="button"
               disabled={isLeavingAssignment}
@@ -855,10 +1226,12 @@ export default function ERPTaskCard({
                         onClick={() => onOpenOwner?.(Number(msg.sender))}
                         className="inline-flex items-center gap-1 rounded-md px-1 py-0.5 transition hover:bg-slate-100"
                       >
-                        <img
+                        <RatingRingAvatar
                           src={toMediaUrl(msg.sender_profile_photo) || defaultAvatar}
                           alt={msg.sender_name || 'Member'}
-                          className="h-4 w-4 rounded-full object-cover"
+                          rating={getUserRating(msg.sender)}
+                          size={24}
+                          ringWidth={2}
                         />
                         <span className="font-semibold text-slate-700 hover:underline">{msg.sender_name || `User #${msg.sender}`}</span>
                       </button>
@@ -901,7 +1274,12 @@ export default function ERPTaskCard({
             <input
               type="text"
               value={chatInput}
-              onChange={(event) => setChatInput(event.target.value)}
+              onChange={(event) => {
+                setChatInput(event.target.value)
+                if (messageError) {
+                  setMessageError('')
+                }
+              }}
               onKeyDown={(event) => {
                 if (event.key === 'Enter' && !event.shiftKey) {
                   event.preventDefault()
@@ -920,6 +1298,8 @@ export default function ERPTaskCard({
               {isSendingMessage ? 'Sending...' : 'Send'}
             </button>
           </div>
+
+          {messageError ? <p className="text-[11px] text-rose-600">{messageError}</p> : null}
         </div>
       ) : null}
 
@@ -977,10 +1357,12 @@ export default function ERPTaskCard({
                             className="rounded-lg border border-slate-200 bg-slate-50 p-2 text-left transition hover:border-brand-300 hover:bg-brand-50/50"
                           >
                             <div className="flex items-center gap-2">
-                              <img
+                              <RatingRingAvatar
                                 src={toMediaUrl(member.profile_photo) || defaultAvatar}
                                 alt={member.name || member.username || `User #${member.id}`}
-                                className="h-8 w-8 rounded-full border border-slate-200 object-cover"
+                                rating={getUserRating(member.id)}
+                                size={48}
+                                ringWidth={2}
                               />
                               <div className="min-w-0">
                                 <p className="truncate text-xs font-semibold text-slate-800">
@@ -1083,6 +1465,252 @@ export default function ERPTaskCard({
 
         </div>
       )}
+
+      {canCompleteAsReceiver && isCompletionFormOpen ? (
+        <div className="space-y-2 rounded-xl border border-emerald-200 bg-emerald-50/60 p-3">
+          <p className="text-sm font-semibold text-emerald-800">Complete ERP With Rating</p>
+          <p className="text-[11px] text-emerald-700">
+            Confirm completion by giving provider a rating and comment. This will move the task to Completed.
+          </p>
+
+          <div className="grid gap-2 sm:grid-cols-2">
+            <label className="text-xs font-semibold text-slate-700">
+              Rating
+              <select
+                value={completionRating}
+                onChange={(event) => {
+                  setCompletionRating(event.target.value)
+                  if (completionError) setCompletionError('')
+                }}
+                className="mt-1 w-full rounded-md border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700 outline-none focus:border-emerald-300"
+              >
+                <option value="">Select rating</option>
+                <option value="5">5 - Excellent</option>
+                <option value="4">4 - Good</option>
+                <option value="3">3 - Average</option>
+                <option value="2">2 - Poor</option>
+                <option value="1">1 - Very Poor</option>
+              </select>
+            </label>
+          </div>
+
+          <label className="text-xs font-semibold text-slate-700">
+            Completion Comment
+            <textarea
+              value={completionComment}
+              onChange={(event) => {
+                setCompletionComment(event.target.value)
+                if (completionError) setCompletionError('')
+              }}
+              rows={3}
+              placeholder="Describe your overall experience and completion note"
+              className="mt-1 w-full rounded-md border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700 outline-none focus:border-emerald-300"
+            />
+          </label>
+
+          {completionError ? <p className="text-[11px] text-rose-600">{completionError}</p> : null}
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleReceiverComplete}
+              disabled={isSubmittingCompletion}
+              className="rounded-md border border-emerald-300 bg-white px-3 py-1 text-xs font-semibold text-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {isSubmittingCompletion ? 'Completing...' : 'Confirm Completed'}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setIsCompletionFormOpen(false)
+                setCompletionError('')
+              }}
+              className="rounded-md border border-slate-300 bg-white px-3 py-1 text-xs font-semibold text-slate-600"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      {erp.stage === 'Completed' && !isProvider && hasRatedProvider ? (
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50/40 p-3 text-xs text-emerald-800">
+          Your comment about provider has already been submitted.
+        </div>
+      ) : null}
+
+      {erp.stage === 'Completed' && !isProvider && providerFeedbackForCurrentUser ? (
+        <div className="rounded-xl border border-sky-200 bg-sky-50/50 p-3 text-xs text-slate-700">
+          <p className="font-semibold text-sky-800">Provider {providerDisplayName} Feedback For You</p>
+          <p className="mt-1">
+            <span className="font-semibold">Rating:</span> {Number(providerFeedbackForCurrentUser.rating_value || 0).toFixed(1)} / 5
+          </p>
+          <p className="mt-1 whitespace-pre-wrap">
+            <span className="font-semibold">Message:</span> {providerFeedbackForCurrentUser.review_text || '-'}
+          </p>
+        </div>
+      ) : null}
+
+      {erp.stage === 'Completed' && !isProvider && isProviderFeedbackOpen && !hasRatedProvider ? (
+        <div className="space-y-2 rounded-xl border border-brand-200 bg-brand-50/50 p-3 text-xs text-slate-700">
+          <p className="text-sm font-semibold text-brand-800">Rate and Comment Provider</p>
+          <p className="text-[11px] text-brand-700">
+            Share how satisfied you were working with {counterpartyName || 'the provider'}.
+          </p>
+
+          <label className="text-xs font-semibold text-slate-700">
+            Rating
+            <select
+              value={providerFeedbackRating}
+              onChange={(event) => {
+                setProviderFeedbackRating(event.target.value)
+                if (providerFeedbackError) setProviderFeedbackError('')
+              }}
+              className="mt-1 w-full rounded-md border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700 outline-none focus:border-brand-300"
+            >
+              <option value="">Select rating</option>
+              <option value="5">5 - Excellent</option>
+              <option value="4">4 - Good</option>
+              <option value="3">3 - Average</option>
+              <option value="2">2 - Poor</option>
+              <option value="1">1 - Very Poor</option>
+            </select>
+          </label>
+
+          <label className="text-xs font-semibold text-slate-700">
+            Comment
+            <textarea
+              value={providerFeedbackComment}
+              onChange={(event) => {
+                setProviderFeedbackComment(event.target.value)
+                if (providerFeedbackError) setProviderFeedbackError('')
+              }}
+              rows={3}
+              placeholder={`Write your feedback about working with ${counterpartyName || 'the provider'}`}
+              className="mt-1 w-full rounded-md border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700 outline-none focus:border-brand-300"
+            />
+          </label>
+
+          {providerFeedbackError ? <p className="text-[11px] text-rose-600">{providerFeedbackError}</p> : null}
+          {providerFeedbackSuccess ? <p className="text-[11px] text-emerald-700">{providerFeedbackSuccess}</p> : null}
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleSubmitProviderFeedback}
+              disabled={isSubmittingProviderFeedback}
+              className="rounded-md border border-brand-300 bg-white px-3 py-1 text-xs font-semibold text-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {isSubmittingProviderFeedback ? 'Submitting...' : 'Submit Rating'}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setIsProviderFeedbackOpen(false)
+                setProviderFeedbackError('')
+              }}
+              className="rounded-md border border-slate-300 bg-white px-3 py-1 text-xs font-semibold text-slate-600"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      {isProvider && erp.stage === 'Completed' && isParticipantRatingOpen ? (
+        <div className="space-y-2 rounded-xl border border-sky-200 bg-sky-50/50 p-3 text-xs text-slate-700">
+          <p className="text-sm font-semibold text-sky-800">Rate Receiver and Members</p>
+          <p className="text-[11px] text-sky-700">
+            Your rating updates participant profile score and sends them feedback notification.
+          </p>
+
+          <label className="text-xs font-semibold text-slate-700">
+            Participant
+            <select
+              value={selectedParticipantId}
+              onChange={(event) => {
+                setSelectedParticipantId(event.target.value)
+                if (participantRatingError) setParticipantRatingError('')
+              }}
+              className="mt-1 w-full rounded-md border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700 outline-none focus:border-sky-300"
+            >
+              <option value="">Select receiver/member</option>
+              {providerRateCandidates.map((user) => (
+                <option key={`participant-rate-${erp.id}-${user.id}`} value={user.id}>
+                  {user.name || user.username || `User #${user.id}`}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="text-xs font-semibold text-slate-700">
+            Rating
+            <select
+              value={participantRating}
+              onChange={(event) => {
+                setParticipantRating(event.target.value)
+                if (participantRatingError) setParticipantRatingError('')
+              }}
+              className="mt-1 w-full rounded-md border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700 outline-none focus:border-sky-300"
+            >
+              <option value="">Select rating</option>
+              <option value="5">5 - Excellent</option>
+              <option value="4">4 - Good</option>
+              <option value="3">3 - Average</option>
+              <option value="2">2 - Poor</option>
+              <option value="1">1 - Very Poor</option>
+            </select>
+          </label>
+
+          <label className="text-xs font-semibold text-slate-700">
+            Comment
+            <textarea
+              value={participantComment}
+              onChange={(event) => {
+                setParticipantComment(event.target.value)
+                if (participantRatingError) setParticipantRatingError('')
+              }}
+              rows={2}
+              placeholder="Feedback for this participant"
+              className="mt-1 w-full rounded-md border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700 outline-none focus:border-sky-300"
+            />
+          </label>
+
+          {participantRatingError ? <p className="text-[11px] text-rose-600">{participantRatingError}</p> : null}
+          {participantRatingSuccess ? <p className="text-[11px] text-emerald-700">{participantRatingSuccess}</p> : null}
+
+          <button
+            type="button"
+            onClick={handleProviderParticipantRating}
+            disabled={isSubmittingParticipantRating || providerRateCandidates.length === 0}
+            className="rounded-md border border-sky-300 bg-white px-3 py-1 text-xs font-semibold text-sky-700 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {isSubmittingParticipantRating ? 'Submitting...' : 'Submit Participant Rating'}
+          </button>
+        </div>
+      ) : null}
+
+      {isProvider && erp.stage === 'Completed' && providerSubmittedFeedbackEntries.length > 0 ? (
+        <div className="space-y-2 rounded-xl border border-violet-200 bg-violet-50/50 p-3 text-xs text-slate-700">
+          <p className="text-sm font-semibold text-violet-800">Given Ratings and Comments</p>
+          <div className="space-y-2">
+            {providerSubmittedFeedbackEntries.map((entry) => (
+              <div key={`provider-given-feedback-${erp.id}-${entry.participantId}`} className="rounded-md border border-violet-200 bg-white p-2">
+                <p className="font-semibold text-slate-800">{entry.participantName}</p>
+                {entry.roles.length ? (
+                  <p className="mt-0.5 text-[11px] text-slate-500">Role: {entry.roles.join(', ')}</p>
+                ) : null}
+                <p className="mt-1">
+                  <span className="font-semibold">Rating:</span> {entry.ratingValue.toFixed(1)} / 5
+                </p>
+                <p className="mt-1 whitespace-pre-wrap">
+                  <span className="font-semibold">Message:</span> {entry.message || '-'}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
     </div>
   )
 }

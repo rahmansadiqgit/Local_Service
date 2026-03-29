@@ -1,17 +1,18 @@
 import { useEffect, useMemo, useState } from 'react'
 import api from '../api/client'
-import defaultAvatar from '../assets/default-avatar.svg'
+import RatingRingAvatar from '../components/RatingRingAvatar'
 
 const ROLE_ENTRIES = [
   { key: 'expertise', label: 'Expertise' },
   { key: 'skill_provider', label: 'Skill provider' },
-  { key: 'supplier', label: 'Supplier' },
+  { key: 'supplier', label: 'Delivary Man' },
 ]
 
 export default function Connections() {
   const [selected, setSelected] = useState(null)
   const [memberCategory, setMemberCategory] = useState('Expertise')
   const [posts, setPosts] = useState([])
+  const [ratings, setRatings] = useState([])
   const [users, setUsers] = useState([])
   const [erpItems, setErpItems] = useState([])
   const [currentUserId, setCurrentUserId] = useState(null)
@@ -63,8 +64,9 @@ export default function Connections() {
 
     const load = async () => {
       try {
-        const [postRes, userRes, erpRes, meRes, overviewRes] = await Promise.all([
+        const [postRes, ratingRes, userRes, erpRes, meRes, overviewRes] = await Promise.all([
           api.get('/posts/'),
+          api.get('/ratings/'),
           api.get('/users/'),
           api.get('/erp/'),
           api.get('/auth/me/'),
@@ -72,6 +74,7 @@ export default function Connections() {
         ])
         if (!active) return
         setPosts(postRes.data)
+        setRatings(Array.isArray(ratingRes.data) ? ratingRes.data : [])
         setUsers(Array.isArray(userRes.data) ? userRes.data : [])
         setErpItems(erpRes.data)
         setCurrentUserId(meRes.data?.id ?? null)
@@ -105,6 +108,27 @@ export default function Connections() {
     return map
   }, [users])
 
+  const averageRatingByUser = useMemo(() => {
+    const totals = new Map()
+    const counts = new Map()
+
+    ;(Array.isArray(ratings) ? ratings : []).forEach((entry) => {
+      const providerId = Number(entry?.provider)
+      const value = Number(entry?.rating_value)
+      if (!Number.isFinite(providerId) || providerId <= 0 || !Number.isFinite(value)) return
+      totals.set(providerId, (totals.get(providerId) || 0) + value)
+      counts.set(providerId, (counts.get(providerId) || 0) + 1)
+    })
+
+    const averages = new Map()
+    totals.forEach((sum, userId) => {
+      const count = counts.get(userId) || 1
+      averages.set(userId, sum / count)
+    })
+
+    return averages
+  }, [ratings])
+
   const memberCategoryToRoleKey = {
     Expertise: 'expertise',
     'Skill Providers': 'skill_provider',
@@ -117,6 +141,39 @@ export default function Connections() {
     : []
 
   const openSelfAssignPosts = useMemo(() => {
+    const getResponsibilityText = (erp, roleKey) => {
+      const snapshot = erp?.configuration_snapshot || {}
+      const expertiseRows = Array.isArray(snapshot.expertise) ? snapshot.expertise : []
+      const serviceRows = Array.isArray(snapshot.services) ? snapshot.services : []
+      const productRows = Array.isArray(snapshot.products) ? snapshot.products : []
+
+      const uniqueNames = (rows) =>
+        Array.from(
+          new Set(
+            rows
+              .map((row) => String(row?.name || '').trim())
+              .filter(Boolean),
+          ),
+        )
+
+      if (roleKey === 'expertise') {
+        const names = uniqueNames(expertiseRows)
+        return names.length ? `Work as: ${names.join(', ')}` : 'Work as listed in ERP details.'
+      }
+
+      if (roleKey === 'skill_provider') {
+        const names = uniqueNames(serviceRows)
+        return names.length ? `Provide service: ${names.join(', ')}` : 'Provide service as listed in ERP details.'
+      }
+
+      if (roleKey === 'supplier') {
+        const names = uniqueNames(productRows)
+        return names.length ? `Deliver product: ${names.join(', ')}` : 'Deliver product as listed in ERP details.'
+      }
+
+      return 'See ERP details for responsibility.'
+    }
+
     return (erpItems || []).flatMap((erp) => {
       if (String(erp?.stage || '').trim().toLowerCase() === 'on process') {
         return []
@@ -136,14 +193,22 @@ export default function Connections() {
             .map((id) => Number(id))
             .filter((id) => Number.isFinite(id) && id > 0)
 
-          // Backward compatibility: if no targets were stored, keep role visible.
-          if (!targetIds.length) return true
-          return targetIds.includes(Number(currentUserId))
+          const rawAssignedIds = Array.isArray(members[key]?.assignee_ids)
+            ? members[key].assignee_ids
+            : []
+          const assignedIds = rawAssignedIds
+            .map((id) => Number(id))
+            .filter((id) => Number.isFinite(id) && id > 0)
+
+          // Show only to explicitly targeted users, or users already assigned in this role.
+          const currentId = Number(currentUserId)
+          return targetIds.includes(currentId) || assignedIds.includes(currentId)
         })
         .map(({ key, label }) => ({
           erp,
           role: key,
           roleLabel: label,
+          responsibilityText: getResponsibilityText(erp, key),
           assignedIds: Array.isArray(members[key]?.assignee_ids) ? members[key].assignee_ids : [],
           selfAssignMessage: String(members[key]?.self_assign_message || '').trim(),
           postLink: String(members[key]?.self_assign_post_link || '').trim(),
@@ -252,13 +317,17 @@ export default function Connections() {
       className={`${profileLikeBoxClass} text-left transition hover:border-violet-300`}
     >
       <div className="flex items-start gap-3">
-        <div className="h-12 w-12 shrink-0 overflow-hidden rounded-full border border-violet-200 bg-white">
-          <img
-            src={resolveMediaUrl(person.profile_photo) || defaultAvatar}
-            alt={person.name || person.username || 'User'}
-            className="h-full w-full object-cover"
-          />
-        </div>
+        <RatingRingAvatar
+          src={resolveMediaUrl(person.profile_photo)}
+          alt={person.name || person.username || 'User'}
+          rating={
+            averageRatingByUser.get(Number(person?.id))
+            ?? Number(person?.profile_rating ?? person?.average_rating ?? person?.rating)
+          }
+          size={48}
+          ringWidth={2}
+          className="shrink-0"
+        />
         <div className="min-w-0 flex-1">
           <p className="font-semibold">{person.name || person.username}</p>
           <div className="mt-2 space-y-1 text-xs text-slate-600">
@@ -500,7 +569,7 @@ export default function Connections() {
             <p className="mt-1 text-xs text-slate-500">If provider generated assignment post, you can assign or remove yourself here.</p>
             <div className="mt-3 space-y-2">
               {openSelfAssignPosts.length ? (
-                openSelfAssignPosts.map(({ erp, role, roleLabel, assignedIds, selfAssignMessage, postTitle }) => {
+                openSelfAssignPosts.map(({ erp, role, roleLabel, responsibilityText, assignedIds, selfAssignMessage, postTitle }) => {
                   const isAssigned = assignedIds.map((id) => Number(id)).includes(Number(currentUserId))
                   const loadingKey = `${erp.id}-${role}`
                   const postRecord = posts.find((item) => Number(item.id) === Number(erp.post)) || null
@@ -521,6 +590,7 @@ export default function Connections() {
                       </div>
 
                       <p className="mt-1 text-xs text-slate-500">Requested by: {providerName}</p>
+                      <p className="mt-1 text-xs text-slate-600">Responsibility: {responsibilityText}</p>
                       <p className="mt-1 text-xs text-slate-600">
                         Message: {selfAssignMessage || 'No message from provider.'}
                       </p>

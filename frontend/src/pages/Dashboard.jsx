@@ -1,20 +1,24 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import api from '../api/client';
 import ExpertiseTable from '../components/ExpertiseTable';
 import ProductTable from '../components/ProductTable';
+import RatingRingAvatar from '../components/RatingRingAvatar';
 import ServiceTable from '../components/ServiceTable';
 import useAuth from '../context/useAuth';
 
 export default function Dashboard() {
+  const navigate = useNavigate();
   const { id } = useParams();
   const { user } = useAuth()
   const [profile, setProfile] = useState(null)
   const [posts, setPosts] = useState([])
   const [ratings, setRatings] = useState([])
+  const [users, setUsers] = useState([])
   const [skills, setSkills] = useState([])
   const [expertises, setExpertises] = useState([])
   const [products, setProducts] = useState([])
+  const [erpItems, setErpItems] = useState([])
   const [expandedPostId, setExpandedPostId] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -48,29 +52,32 @@ export default function Dashboard() {
           profileData = profileRes.data;
         }
         
-        const results = await Promise.allSettled([
+  const results = await Promise.allSettled([
           api.get('/posts/'),
           api.get('/ratings/'),
           api.get('/skills/'),
           api.get('/expertises/'),
           api.get('/products/'),
           api.get('/connections/overview/'),
+          api.get('/users/'),
+          api.get('/erp/'),
         ]);
 
         if (!active) return;
+  const [postRes, ratingRes, skillRes, expertiseRes, productRes, overviewRes, userRes, erpRes] = results
 
-        const [postRes, ratingRes, skillRes, expertiseRes, productRes, overviewRes] = results
+  if (postRes.status === 'rejected') {
+    throw postRes.reason
+  }
 
-        if (postRes.status === 'rejected') {
-          throw postRes.reason
-        }
-
-        setPosts(Array.isArray(postRes.value?.data) ? postRes.value.data : []);
-        setRatings(ratingRes.status === 'fulfilled' && Array.isArray(ratingRes.value?.data) ? ratingRes.value.data : []);
-        setSkills(skillRes.status === 'fulfilled' && Array.isArray(skillRes.value?.data) ? skillRes.value.data : []);
-        setExpertises(expertiseRes.status === 'fulfilled' && Array.isArray(expertiseRes.value?.data) ? expertiseRes.value.data : []);
-        setProducts(productRes.status === 'fulfilled' && Array.isArray(productRes.value?.data) ? productRes.value.data : []);
-        setConnectionsOverview(overviewRes.status === 'fulfilled' ? (overviewRes.value?.data || null) : null)
+  setPosts(Array.isArray(postRes.value?.data) ? postRes.value.data : []);
+  setRatings(ratingRes.status === 'fulfilled' && Array.isArray(ratingRes.value?.data) ? ratingRes.value.data : []);
+  setUsers(userRes.status === 'fulfilled' && Array.isArray(userRes.value?.data) ? userRes.value.data : []);
+  setSkills(skillRes.status === 'fulfilled' && Array.isArray(skillRes.value?.data) ? skillRes.value.data : []);
+  setExpertises(expertiseRes.status === 'fulfilled' && Array.isArray(expertiseRes.value?.data) ? expertiseRes.value.data : []);
+  setProducts(productRes.status === 'fulfilled' && Array.isArray(productRes.value?.data) ? productRes.value.data : []);
+  setErpItems(erpRes.status === 'fulfilled' && Array.isArray(erpRes.value?.data) ? erpRes.value.data : []);
+  setConnectionsOverview(overviewRes.status === 'fulfilled' ? (overviewRes.value?.data || null) : null)
         setProfile(profileData);
       } catch (error) {
         console.error('Dashboard load error:', error);
@@ -103,18 +110,31 @@ export default function Dashboard() {
   }, [ratingsByPost])
 
   const ratingsSummary = useMemo(() => {
-    const map = {}
-    ratings.forEach((rating) => {
-      const key = rating.provider
-      if (!key) return
-      map[key] = map[key] || []
-      map[key].push(Number(rating.rating_value || 0))
+    const targetId = profile?.id
+    if (targetId == null) return []
+
+    const ownedPosts = posts.filter((post) => {
+      const ownerId = post.owner_id ?? post.owner
+      return String(ownerId) === String(targetId)
     })
-    return Object.entries(map).map(([providerId, values]) => {
-      const avg = values.reduce((sum, value) => sum + value, 0) / values.length
-      return { providerId, average: avg.toFixed(2), count: values.length }
-    })
-  }, [ratings])
+
+    return ownedPosts
+      .map((post) => {
+        const ownerId = Number(post.owner_id ?? post.owner)
+        const items = (ratingsByPost[post.id] || []).filter(
+          (entry) => Number(entry?.provider) === ownerId,
+        )
+        const total = items.reduce((sum, item) => sum + Number(item.rating_value || 0), 0)
+        const average = items.length ? total / items.length : 0
+        return {
+          postId: post.id,
+          postName: post.post_title || post.post_name || `Post #${post.id}`,
+          average: average.toFixed(2),
+          count: items.length,
+        }
+      })
+      .sort((left, right) => Number(right.average) - Number(left.average))
+  }, [profile?.id, posts, ratingsByPost])
 
   const skillsByPost = useMemo(() => {
     return skills.reduce((acc, skill) => {
@@ -139,6 +159,227 @@ export default function Dashboard() {
       return acc
     }, {})
   }, [expertises])
+
+  const usersById = useMemo(() => {
+    const map = new Map()
+    ;(Array.isArray(users) ? users : []).forEach((entry) => {
+      const idValue = Number(entry?.id)
+      if (Number.isFinite(idValue) && idValue > 0) {
+        map.set(idValue, entry)
+      }
+    })
+    return map
+  }, [users])
+
+  const averageRatingByUser = useMemo(() => {
+    const totals = new Map()
+    const counts = new Map()
+    ;(Array.isArray(ratings) ? ratings : []).forEach((entry) => {
+      const providerId = Number(entry?.provider)
+      const value = Number(entry?.rating_value)
+      if (!Number.isFinite(providerId) || providerId <= 0 || !Number.isFinite(value)) return
+      totals.set(providerId, (totals.get(providerId) || 0) + value)
+      counts.set(providerId, (counts.get(providerId) || 0) + 1)
+    })
+
+    const averages = new Map()
+    totals.forEach((sum, userId) => {
+      const count = counts.get(userId) || 1
+      averages.set(userId, sum / count)
+    })
+    return averages
+  }, [ratings])
+
+  const roleLabelsByPostAndUser = useMemo(() => {
+    const map = new Map()
+    ;(Array.isArray(erpItems) ? erpItems : []).forEach((item) => {
+      if (String(item?.stage || '') !== 'Completed') return
+      const postId = Number(item?.post)
+      if (!Number.isFinite(postId) || postId <= 0) return
+
+      if (!map.has(postId)) {
+        map.set(postId, new Map())
+      }
+      const perPost = map.get(postId)
+
+      const addRole = (userId, roleLabel) => {
+        const parsedUserId = Number(userId)
+        if (!Number.isFinite(parsedUserId) || parsedUserId <= 0) return
+        if (!perPost.has(parsedUserId)) {
+          perPost.set(parsedUserId, new Set())
+        }
+        perPost.get(parsedUserId).add(roleLabel)
+      }
+
+      addRole(item?.provider, 'Provider')
+      addRole(item?.receiver, 'Receiver')
+
+      const members = item?.configuration_snapshot?.members || {}
+      const roleGroups = [
+        { keys: ['expertise'], label: 'Expertise' },
+        { keys: ['skill_provider', 'service_provider'], label: 'Skill provider' },
+        { keys: ['supplier', 'delivery_man', 'delivary_man', 'delivery'], label: 'Delivary Man' },
+      ]
+
+      roleGroups.forEach((group) => {
+        group.keys.forEach((key) => {
+          const assigneeIds = Array.isArray(members?.[key]?.assignee_ids) ? members[key].assignee_ids : []
+          assigneeIds.forEach((idValue) => addRole(idValue, group.label))
+        })
+      })
+    })
+    return map
+  }, [erpItems])
+
+  const providerGivenRatingsForProfile = useMemo(() => {
+    const targetId = Number(profile?.id)
+    if (!Number.isFinite(targetId) || targetId <= 0) return []
+
+    const uniqueNames = (items, key) =>
+      Array.from(
+        new Set(
+          (Array.isArray(items) ? items : [])
+            .map((item) => String(item?.[key] || '').trim())
+            .filter(Boolean),
+        ),
+      )
+
+    const roleGroups = [
+      { keys: ['expertise'], label: 'Expertise' },
+      { keys: ['skill_provider', 'service_provider'], label: 'Skill provider' },
+      { keys: ['supplier', 'delivery_man', 'delivary_man', 'delivery'], label: 'Delivary Man' },
+    ]
+
+    const collectRolesForUser = (erp, userId) => {
+      const roles = new Set()
+      const snapshot = erp?.configuration_snapshot || {}
+      const expertiseNames = uniqueNames(snapshot?.expertise, 'name')
+      const serviceNames = uniqueNames(snapshot?.services, 'name')
+      const productNames = uniqueNames(snapshot?.products, 'name')
+
+      if (Number(erp?.provider) === Number(userId)) {
+        roles.add('Providing')
+      }
+      if (Number(erp?.receiver) === Number(userId)) {
+        roles.add('Receiving')
+      }
+
+      const snapshotMembers = erp?.configuration_snapshot?.members || {}
+      roleGroups.forEach((group) => {
+        const isAssigned = group.keys.some((key) => {
+          const assigneeIds = Array.isArray(snapshotMembers?.[key]?.assignee_ids)
+            ? snapshotMembers[key].assignee_ids
+            : []
+          return assigneeIds.some((value) => Number(value) === Number(userId))
+        })
+
+        if (!isAssigned) return
+
+        if (group.label === 'Expertise') {
+          roles.add(
+            expertiseNames.length
+              ? `Expertise: Work as: ${expertiseNames.join(', ')}`
+              : 'Expertise',
+          )
+          return
+        }
+
+        if (group.label === 'Skill provider') {
+          roles.add(
+            serviceNames.length
+              ? `Skill provider: Provide service: ${serviceNames.join(', ')}`
+              : 'Skill provider',
+          )
+          return
+        }
+
+        if (group.label === 'Delivary Man') {
+          roles.add(
+            productNames.length
+              ? `Delivary Man: Deliver product: ${productNames.join(', ')}`
+              : 'Delivary Man',
+          )
+        }
+      })
+
+      const assignedWorkers = Array.isArray(erp?.assigned_workers) ? erp.assigned_workers : []
+      if (assignedWorkers.some((value) => Number(value) === Number(userId))) {
+        roles.add(
+          productNames.length
+            ? `Delivary Man: Deliver product: ${productNames.join(', ')}`
+            : 'Delivary Man',
+        )
+      }
+
+      return Array.from(roles)
+    }
+
+    return (Array.isArray(ratings) ? ratings : [])
+      .filter((entry) => Number(entry?.provider) === targetId)
+      .map((entry) => {
+        const reviewerId = Number(entry?.customer)
+        const postId = Number(entry?.post)
+        const matchingErps = (Array.isArray(erpItems) ? erpItems : []).filter(
+          (erp) =>
+            String(erp?.stage || '') === 'Completed'
+            && Number(erp?.post) === postId
+            && Number(erp?.provider) === reviewerId
+            && collectRolesForUser(erp, targetId).length > 0,
+        )
+
+        if (!matchingErps.length) {
+          return null
+        }
+
+        const responsibilitySet = new Set()
+        matchingErps.forEach((erp) => {
+          collectRolesForUser(erp, targetId).forEach((roleLabel) => responsibilitySet.add(roleLabel))
+        })
+
+        const post = posts.find((item) => Number(item.id) === postId)
+        const reviewer = usersById.get(reviewerId)
+
+        return {
+          id: Number(entry?.id || 0),
+          postId,
+          postName: post?.post_title || post?.post_name || `Post #${postId}`,
+          providerId: reviewerId,
+          providerName: reviewer?.name || reviewer?.username || `User #${reviewerId}`,
+          providerPhoto: reviewer?.profile_photo || '',
+          responsibilities: Array.from(responsibilitySet),
+          rating: Number(entry?.rating_value || 0),
+          comment: String(entry?.review_text || '').trim(),
+        }
+      })
+      .filter(Boolean)
+      .sort((left, right) => Number(right.id) - Number(left.id))
+  }, [profile?.id, ratings, erpItems, posts, usersById])
+
+  const profileRatingStats = useMemo(() => {
+    const targetId = Number(profile?.id)
+    if (!Number.isFinite(targetId) || targetId <= 0) {
+      return { count: 0, average: 0 }
+    }
+
+    const ownedProviderRatings = (Array.isArray(posts) ? posts : []).flatMap((post) => {
+      const ownerId = Number(post?.owner_id ?? post?.owner)
+      if (ownerId !== targetId) return []
+      return (ratingsByPost[post.id] || []).filter((entry) => Number(entry?.provider) === ownerId)
+    })
+
+    const providerFeedbackRatings = providerGivenRatingsForProfile.map((item) => Number(item?.rating || 0))
+    const mergedValues = [
+      ...ownedProviderRatings.map((entry) => Number(entry?.rating_value || 0)),
+      ...providerFeedbackRatings,
+    ].filter((value) => Number.isFinite(value) && value > 0)
+
+    const total = mergedValues.reduce((sum, value) => sum + value, 0)
+    const count = mergedValues.length
+    return {
+      count,
+      average: count ? total / count : 0,
+    }
+  }, [profile?.id, posts, ratingsByPost, providerGivenRatingsForProfile])
 
   // Filter posts for the selected profile; support owner_id/owner and string/number IDs.
   const userPosts = useMemo(() => {
@@ -368,6 +609,12 @@ export default function Dashboard() {
     const { hasExpertise, hasServices, hasProduct, expertiseRows, serviceRows, productRows, showServiceDescription, showProductDescription } =
       buildCategoryRows(post)
     const isExpanded = expandedPostId === post.id
+    const postOwnerId = Number(post.owner_id ?? post.owner)
+    const postRatings = (ratingsByPost[post.id] || [])
+      .filter((entry) => Number(entry?.provider) === postOwnerId)
+      .slice()
+      .sort((left, right) => Number(right?.id || 0) - Number(left?.id || 0))
+    const perPostRoleMap = roleLabelsByPostAndUser.get(Number(post.id)) || new Map()
 
     return (
       <article
@@ -482,6 +729,42 @@ export default function Dashboard() {
             {!hasExpertise && !hasServices && !hasProduct && (
               <p className="text-sm text-slate-400">No detail listed.</p>
             )}
+
+            <div className="space-y-2 rounded-xl border border-violet-200 bg-violet-50/50 p-3">
+              <p className="text-sm font-semibold text-violet-800">Ratings and Comments</p>
+              {postRatings.length ? (
+                <div className="space-y-2">
+                  {postRatings.map((entry) => {
+                    const reviewerId = Number(entry?.customer)
+                    const targetId = Number(entry?.provider)
+                    const reviewer = usersById.get(reviewerId)
+                    const target = usersById.get(targetId)
+                    const reviewerRoles = Array.from(perPostRoleMap.get(reviewerId) || [])
+
+                    return (
+                      <div key={`post-rating-${post.id}-${entry.id}`} className="rounded-lg border border-violet-200 bg-white p-2">
+                        <p className="font-semibold text-slate-800">
+                          {reviewer?.name || reviewer?.username || `User #${reviewerId}`}
+                          {' -> '}
+                          {target?.name || target?.username || `User #${targetId}`}
+                        </p>
+                        {reviewerRoles.length ? (
+                          <p className="mt-0.5 text-[11px] text-slate-500">Role: {reviewerRoles.join(', ')}</p>
+                        ) : null}
+                        <p className="mt-1 text-sm text-slate-700">
+                          <span className="font-semibold">Rating:</span> {Number(entry?.rating_value || 0).toFixed(1)} / 5
+                        </p>
+                        <p className="mt-1 text-sm text-slate-700 whitespace-pre-wrap">
+                          <span className="font-semibold">Comment:</span> {entry?.review_text || '-'}
+                        </p>
+                      </div>
+                    )
+                  })}
+                </div>
+              ) : (
+                <p className="text-sm text-slate-500">No ratings/comments yet for this post.</p>
+              )}
+            </div>
           </div>
         )}
       </article>
@@ -648,12 +931,19 @@ export default function Dashboard() {
       </div>
 
       <div className="card border border-violet-300/80 bg-gradient-to-br from-[#f4e9ff] via-[#ecd9ff] to-[#f7ecff] shadow-lg">
+        <p className="text-lg font-semibold text-violet-900">
+          Profile Rating : {profileRatingStats.average.toFixed(2)} / 5
+          <span className="ml-2 text-base font-normal text-violet-700">({profileRatingStats.count} reviews)</span>
+        </p>
+      </div>
+
+      <div className="card border border-violet-300/80 bg-gradient-to-br from-[#f4e9ff] via-[#ecd9ff] to-[#f7ecff] shadow-lg">
         <h3 className="mb-4 text-lg font-semibold text-violet-900">Ratings Summary</h3>
         <div className="overflow-hidden rounded-2xl border-2 border-violet-300 bg-white/75 backdrop-blur-sm">
           <table className="w-full border-collapse text-left text-sm">
             <thead className="bg-violet-200/70 text-violet-900">
               <tr>
-                <th className="border border-violet-300 px-4 py-2">Provider ID</th>
+                <th className="border border-violet-300 px-4 py-2">Post Name</th>
                 <th className="border border-violet-300 px-4 py-2">Average Rating</th>
                 <th className="border border-violet-300 px-4 py-2">Total Reviews</th>
               </tr>
@@ -667,10 +957,61 @@ export default function Dashboard() {
                 </tr>
               ) : (
                 ratingsSummary.map((row) => (
-                  <tr key={row.providerId} className="odd:bg-white/70 even:bg-violet-50/70">
-                    <td className="border border-violet-300 px-4 py-2 font-medium">{row.providerId}</td>
+                  <tr key={row.postId} className="odd:bg-white/70 even:bg-violet-50/70">
+                    <td className="border border-violet-300 px-4 py-2 font-medium">{row.postName}</td>
                     <td className="border border-violet-300 px-4 py-2">{row.average}</td>
                     <td className="border border-violet-300 px-4 py-2">{row.count}</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div className="card border border-sky-300/80 bg-gradient-to-br from-[#eaf6ff] via-[#dff0ff] to-[#eff8ff] shadow-lg">
+        <h3 className="mb-4 text-lg font-semibold text-sky-900">Provider Ratings For You</h3>
+        <div className="overflow-hidden rounded-2xl border-2 border-sky-300 bg-white/80 backdrop-blur-sm">
+          <table className="w-full border-collapse text-left text-sm">
+            <thead className="bg-sky-200/70 text-sky-900">
+              <tr>
+                <th className="border border-sky-300 px-4 py-2">Post Name</th>
+                <th className="border border-sky-300 px-4 py-2">Provider</th>
+                <th className="border border-sky-300 px-4 py-2">Responsibility</th>
+                <th className="border border-sky-300 px-4 py-2">Rating</th>
+                <th className="border border-sky-300 px-4 py-2">Comment</th>
+              </tr>
+            </thead>
+            <tbody>
+              {providerGivenRatingsForProfile.length === 0 ? (
+                <tr>
+                  <td className="border border-sky-300 px-4 py-3 text-slate-600" colSpan={5}>
+                    No provider feedback found for your responsibilities.
+                  </td>
+                </tr>
+              ) : (
+                providerGivenRatingsForProfile.map((row) => (
+                  <tr key={`provider-feedback-${row.id}`} className="odd:bg-white/80 even:bg-sky-50/70">
+                    <td className="border border-sky-300 px-4 py-2 font-medium">{row.postName}</td>
+                    <td className="border border-sky-300 px-4 py-2">
+                      <button
+                        type="button"
+                        onClick={() => navigate(`/dashboard/${row.providerId}`)}
+                        className="inline-flex items-center gap-2 rounded-lg px-1 py-1 text-left text-slate-800 transition hover:bg-sky-100"
+                      >
+                        <RatingRingAvatar
+                          src={toMediaUrl(row.providerPhoto) || '/images/default-avatar.svg'}
+                          alt={row.providerName}
+                          rating={averageRatingByUser.get(Number(row.providerId)) ?? null}
+                          size={28}
+                          ringWidth={2}
+                        />
+                        <span className="font-semibold hover:underline">{row.providerName}</span>
+                      </button>
+                    </td>
+                    <td className="border border-sky-300 px-4 py-2">{row.responsibilities.join(', ') || '-'}</td>
+                    <td className="border border-sky-300 px-4 py-2">{row.rating.toFixed(1)} / 5</td>
+                    <td className="border border-sky-300 px-4 py-2 whitespace-pre-wrap">{row.comment || '-'}</td>
                   </tr>
                 ))
               )}

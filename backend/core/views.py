@@ -469,39 +469,41 @@ class ERPViewSet(viewsets.ModelViewSet):
             members = snapshot.get("members") or {}
 
             for role in self._allowed_member_roles():
-                role_bucket = members.get(role) or {}
+                for role_bucket in self._iter_role_buckets(members, role):
+                    # Always include ERP for explicitly assigned members.
+                    raw_assignees = role_bucket.get("assignee_ids") or []
+                    assignee_ids = set()
+                    for raw_id in raw_assignees:
+                        try:
+                            assignee_ids.add(int(raw_id))
+                        except (TypeError, ValueError):
+                            continue
 
-                # Always include ERP for explicitly assigned members.
-                raw_assignees = role_bucket.get("assignee_ids") or []
-                assignee_ids = set()
-                for raw_id in raw_assignees:
-                    try:
-                        assignee_ids.add(int(raw_id))
-                    except (TypeError, ValueError):
+                    if int(user.id) in assignee_ids:
+                        additional_ids.add(int(item.id))
+                        break
+
+                    if not bool(role_bucket.get("self_assign_enabled", False)):
                         continue
 
-                if int(user.id) in assignee_ids:
-                    additional_ids.add(int(item.id))
-                    break
+                    raw_targets = role_bucket.get("self_assign_target_ids", None)
+                    target_ids = set()
+                    for raw_id in (raw_targets or []):
+                        try:
+                            target_ids.add(int(raw_id))
+                        except (TypeError, ValueError):
+                            continue
 
-                if not bool(role_bucket.get("self_assign_enabled", False)):
-                    continue
+                    # Backward compatibility only when key is missing, not when explicitly empty.
+                    if raw_targets is None and not target_ids and item.provider:
+                        # Backward compatibility for snapshots created before target IDs were stored.
+                        target_ids = self._get_accepted_connection_member_ids(item.provider, role=role)
 
-                raw_targets = role_bucket.get("self_assign_target_ids", None)
-                target_ids = set()
-                for raw_id in (raw_targets or []):
-                    try:
-                        target_ids.add(int(raw_id))
-                    except (TypeError, ValueError):
-                        continue
+                    if int(user.id) in target_ids:
+                        additional_ids.add(int(item.id))
+                        break
 
-                # Backward compatibility only when key is missing, not when explicitly empty.
-                if raw_targets is None and not target_ids and item.provider:
-                    # Backward compatibility for snapshots created before target IDs were stored.
-                    target_ids = self._get_accepted_connection_member_ids(item.provider, role=role)
-
-                if int(user.id) in target_ids:
-                    additional_ids.add(int(item.id))
+                if int(item.id) in additional_ids:
                     break
 
         if not additional_ids:
@@ -564,11 +566,29 @@ class ERPViewSet(viewsets.ModelViewSet):
     def _allowed_member_roles(self):
         return {"expertise", "skill_provider", "supplier"}
 
+    def _member_role_aliases(self):
+        return {
+            "expertise": {"expertise"},
+            "skill_provider": {"skill_provider", "service_provider"},
+            "supplier": {"supplier", "delivery_man", "delivary_man", "delivery"},
+        }
+
+    def _iter_role_buckets(self, members, role):
+        aliases = self._member_role_aliases().get(role, {role})
+        for key in aliases:
+            bucket = members.get(key) or {}
+            if isinstance(bucket, dict):
+                yield bucket
+
     def _get_member_bucket(self, erp, role):
         snapshot = erp.configuration_snapshot or {}
         members = snapshot.get("members") or {}
 
-        role_bucket = members.get(role) or {}
+        merged_role_bucket = {}
+        for bucket in self._iter_role_buckets(members, role):
+            merged_role_bucket.update(bucket)
+
+        role_bucket = merged_role_bucket
         existing_ids = role_bucket.get("assignee_ids") or []
         assignee_ids = []
         for raw_id in existing_ids:
@@ -608,6 +628,28 @@ class ERPViewSet(viewsets.ModelViewSet):
     def _save_snapshot(self, erp, snapshot):
         erp.configuration_snapshot = snapshot
         erp.save(update_fields=["configuration_snapshot", "updated_at"])
+
+    def _get_provider_rated_user_ids(self, erp):
+        snapshot = erp.configuration_snapshot or {}
+        feedback = snapshot.get("feedback") or {}
+        rated_ids = set()
+        for raw_id in feedback.get("provider_rating_user_ids") or []:
+            try:
+                parsed = int(raw_id)
+            except (TypeError, ValueError):
+                continue
+            if parsed > 0:
+                rated_ids.add(parsed)
+        return rated_ids
+
+    def _mark_provider_rated(self, erp, user_id):
+        snapshot = erp.configuration_snapshot or {}
+        feedback = snapshot.get("feedback") or {}
+        rated_ids = self._get_provider_rated_user_ids(erp)
+        rated_ids.add(int(user_id))
+        feedback["provider_rating_user_ids"] = sorted(list(rated_ids))
+        snapshot["feedback"] = feedback
+        self._save_snapshot(erp, snapshot)
 
     def _get_accepted_connection_member_ids(self, user, role=None):
         if not user:
@@ -937,9 +979,319 @@ class ERPViewSet(viewsets.ModelViewSet):
         stage = request.data.get("stage")
         if not stage:
             return Response({"detail": "Stage is required."}, status=400)
+
+        if stage == "Completed":
+            return Response(
+                {"detail": "Use complete_by_receiver with rating and comment to finish this ERP."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if stage == "Pending" and (not erp.provider or erp.provider.id != request.user.id):
+            raise PermissionDenied("Only provider can move task back to Pending.")
+
+        if stage == "On Process" and (not erp.provider or erp.provider.id != request.user.id):
+            raise PermissionDenied("Only provider can move task to On Process.")
+
         erp.stage = stage
-        erp.save()
+        erp.save(update_fields=["stage", "updated_at"])
         return Response(self.get_serializer(erp).data)
+
+    @action(detail=True, methods=["post"])
+    def complete_by_receiver(self, request, pk=None):
+        erp = self.get_object()
+
+        if erp.stage != "On Process":
+            return Response(
+                {"detail": "ERP can be completed only from On Process state."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if not erp.receiver or erp.receiver.id != request.user.id:
+            raise PermissionDenied("Only receiver can complete this ERP task.")
+
+        comment = str(request.data.get("comment", "") or "").strip()
+        rating_raw = request.data.get("rating")
+
+        if not comment:
+            return Response({"detail": "Completion comment is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            rating_value = int(rating_raw)
+        except (TypeError, ValueError):
+            return Response({"detail": "Rating must be an integer from 1 to 5."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if rating_value < 1 or rating_value > 5:
+            return Response({"detail": "Rating must be between 1 and 5."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if not erp.post_id or not erp.provider_id:
+            return Response(
+                {"detail": "ERP is missing post/provider links required for completion rating."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        provider_rating = Rating.objects.create(
+            post=erp.post,
+            provider=erp.provider,
+            customer=request.user,
+            rating_value=rating_value,
+            review_text=comment,
+        )
+        self._mark_provider_rated(erp, request.user.id)
+
+        erp.stage = "Completed"
+        erp.completion_comment = comment
+        erp.completion_rating = rating_value
+        erp.completed_by = request.user
+        erp.completed_at = timezone.now()
+        erp.save(
+            update_fields=[
+                "stage",
+                "completion_comment",
+                "completion_rating",
+                "completed_by",
+                "completed_at",
+                "updated_at",
+            ]
+        )
+
+        receiver_name = request.user.name or request.user.username or request.user.email or f"User #{request.user.id}"
+        post_title = (
+            (erp.configuration_snapshot or {}).get("post", {}).get("title")
+            or getattr(erp.post, "post_title", "")
+            or getattr(erp.post, "post_name", "")
+            or f"ERP #{erp.id}"
+        )
+
+        Notification.objects.create(
+            user=erp.provider,
+            title="ERP Completed by Receiver",
+            message=(
+                f"{receiver_name} marked '{post_title}' (ERP #{erp.id}) as completed with rating "
+                f"{rating_value}/5. Comment: {comment}"
+            ),
+        )
+
+        snapshot_members = (erp.configuration_snapshot or {}).get("members") or {}
+        participant_ids = set()
+        for role_key in self._allowed_member_roles():
+            for role_bucket in self._iter_role_buckets(snapshot_members, role_key):
+                for raw_id in role_bucket.get("assignee_ids") or []:
+                    try:
+                        parsed = int(raw_id)
+                    except (TypeError, ValueError):
+                        continue
+                    if parsed > 0 and parsed not in {request.user.id, erp.provider_id}:
+                        participant_ids.add(parsed)
+
+        participants = User.objects.filter(id__in=list(participant_ids))
+        if participants:
+            Notification.objects.bulk_create(
+                [
+                    Notification(
+                        user=participant,
+                        title="ERP Completed",
+                        message=(
+                            f"ERP #{erp.id} for '{post_title}' has been completed by {receiver_name}. "
+                            "The provider can now rate participants."
+                        ),
+                    )
+                    for participant in participants
+                ]
+            )
+
+        Notification.objects.create(
+            user=request.user,
+            title="ERP Completion Submitted",
+            message=f"You completed ERP #{erp.id} and submitted rating for provider.",
+        )
+
+        return Response(
+            {
+                "detail": "ERP completed successfully.",
+                "erp": self.get_serializer(erp).data,
+                "rating": RatingSerializer(provider_rating).data,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+    @action(detail=True, methods=["post"])
+    def rate_participant(self, request, pk=None):
+        erp = self.get_object()
+
+        if not erp.provider or erp.provider.id != request.user.id:
+            raise PermissionDenied("Only provider can rate participants for this ERP.")
+
+        if erp.stage != "Completed":
+            return Response(
+                {"detail": "Participants can be rated only after ERP is completed."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        participant_id_raw = request.data.get("participant_id")
+        rating_raw = request.data.get("rating")
+        comment = str(request.data.get("comment", "") or "").strip()
+
+        try:
+            participant_id = int(participant_id_raw)
+        except (TypeError, ValueError):
+            return Response({"detail": "Valid participant_id is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            rating_value = int(rating_raw)
+        except (TypeError, ValueError):
+            return Response({"detail": "Rating must be an integer from 1 to 5."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if rating_value < 1 or rating_value > 5:
+            return Response({"detail": "Rating must be between 1 and 5."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if not comment:
+            return Response({"detail": "Rating comment is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        candidate_ids = set()
+        if erp.receiver_id:
+            candidate_ids.add(int(erp.receiver_id))
+
+        snapshot_members = (erp.configuration_snapshot or {}).get("members") or {}
+        for role_key in self._allowed_member_roles():
+            for role_bucket in self._iter_role_buckets(snapshot_members, role_key):
+                for raw_id in role_bucket.get("assignee_ids") or []:
+                    try:
+                        parsed = int(raw_id)
+                    except (TypeError, ValueError):
+                        continue
+                    if parsed > 0:
+                        candidate_ids.add(parsed)
+
+        candidate_ids.update(
+            int(uid) for uid in erp.assigned_workers.values_list("id", flat=True)
+        )
+
+        candidate_ids.discard(int(request.user.id))
+
+        if participant_id not in candidate_ids:
+            return Response(
+                {"detail": "Selected participant is not part of this ERP."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        participant = User.objects.filter(id=participant_id).first()
+        if not participant:
+            return Response({"detail": "Participant not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        if not erp.post_id:
+            return Response({"detail": "ERP post is required for participant rating."}, status=status.HTTP_400_BAD_REQUEST)
+
+        rating_obj = Rating.objects.create(
+            post=erp.post,
+            provider=participant,
+            customer=request.user,
+            rating_value=rating_value,
+            review_text=comment,
+        )
+
+        provider_name = request.user.name or request.user.username or request.user.email or f"User #{request.user.id}"
+        Notification.objects.create(
+            user=participant,
+            title="You Received a New ERP Rating",
+            message=(
+                f"{provider_name} rated your work in ERP #{erp.id}: {rating_value}/5. "
+                f"Comment: {comment}"
+            ),
+        )
+
+        return Response(
+            {
+                "detail": "Participant rating submitted.",
+                "rating": RatingSerializer(rating_obj).data,
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
+    @action(detail=True, methods=["post"])
+    def rate_provider(self, request, pk=None):
+        erp = self.get_object()
+
+        if erp.stage != "Completed":
+            return Response(
+                {"detail": "Provider can be rated only after ERP is completed."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if not erp.provider_id:
+            return Response({"detail": "ERP provider is missing."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if int(request.user.id) == int(erp.provider_id):
+            raise PermissionDenied("Provider cannot rate themselves.")
+
+        allowed_ids = set()
+        if erp.receiver_id:
+            allowed_ids.add(int(erp.receiver_id))
+
+        snapshot_members = (erp.configuration_snapshot or {}).get("members") or {}
+        for role_key in self._allowed_member_roles():
+            for role_bucket in self._iter_role_buckets(snapshot_members, role_key):
+                for raw_id in role_bucket.get("assignee_ids") or []:
+                    try:
+                        parsed = int(raw_id)
+                    except (TypeError, ValueError):
+                        continue
+                    if parsed > 0:
+                        allowed_ids.add(parsed)
+
+        allowed_ids.update(int(uid) for uid in erp.assigned_workers.values_list("id", flat=True))
+
+        if int(request.user.id) not in allowed_ids:
+            raise PermissionDenied("Only receiver or assigned members can rate provider for this ERP.")
+
+        if int(request.user.id) in self._get_provider_rated_user_ids(erp):
+            return Response(
+                {"detail": "You already submitted your feedback for this provider in this ERP."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        rating_raw = request.data.get("rating")
+        comment = str(request.data.get("comment", "") or "").strip()
+
+        try:
+            rating_value = int(rating_raw)
+        except (TypeError, ValueError):
+            return Response({"detail": "Rating must be an integer from 1 to 5."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if rating_value < 1 or rating_value > 5:
+            return Response({"detail": "Rating must be between 1 and 5."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if not comment:
+            return Response({"detail": "Comment is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        rating_obj = Rating.objects.create(
+            post=erp.post,
+            provider=erp.provider,
+            customer=request.user,
+            rating_value=rating_value,
+            review_text=comment,
+        )
+
+        self._mark_provider_rated(erp, request.user.id)
+        erp.refresh_from_db()
+
+        actor_name = request.user.name or request.user.username or request.user.email or f"User #{request.user.id}"
+        Notification.objects.create(
+            user=erp.provider,
+            title="New Provider Feedback",
+            message=(
+                f"{actor_name} submitted feedback in ERP #{erp.id}: {rating_value}/5. "
+                f"Comment: {comment}"
+            ),
+        )
+
+        return Response(
+            {
+                "detail": "Your feedback has been submitted.",
+                "erp": self.get_serializer(erp).data,
+                "rating": RatingSerializer(rating_obj).data,
+            },
+            status=status.HTTP_201_CREATED,
+        )
 
     @action(detail=True, methods=["post"])
     def assign_workers(self, request, pk=None):
@@ -1443,24 +1795,58 @@ class ConnectionViewSet(viewsets.GenericViewSet):
         if not addressee:
             return Response({"detail": "Target user not found."}, status=status.HTTP_404_NOT_FOUND)
 
-        existing = Connection.objects.filter(
-            Q(requester=request.user, addressee=addressee)
-            | Q(requester=addressee, addressee=request.user)
-        ).order_by("-updated_at", "-id").first()
-
-        if existing and existing.status == ConnectionStatus.ACCEPTED:
-            return Response({"detail": "You are already connected."}, status=status.HTTP_400_BAD_REQUEST)
-
-        if existing and existing.status == ConnectionStatus.PENDING:
-            return Response({"detail": "A pending request already exists between both users."}, status=status.HTTP_400_BAD_REQUEST)
-
-        connection = Connection.objects.create(
+        direct = Connection.objects.filter(
             requester=request.user,
             addressee=addressee,
-            status=ConnectionStatus.PENDING,
-            requested_role=requested_role,
-            request_message=message,
+        ).order_by("-updated_at", "-id").first()
+        reverse = Connection.objects.filter(
+            requester=addressee,
+            addressee=request.user,
+        ).order_by("-updated_at", "-id").first()
+
+        existing_any = Connection.objects.filter(
+            Q(requester=request.user, addressee=addressee)
+            | Q(requester=addressee, addressee=request.user)
         )
+
+        if existing_any.filter(status=ConnectionStatus.ACCEPTED).exists():
+            return Response({"detail": "You are already connected."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if existing_any.filter(status=ConnectionStatus.PENDING).exists():
+            return Response({"detail": "A pending request already exists between both users."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Re-open rejected requests instead of creating a new row, which can violate
+        # unique_connection_direction when a historical row already exists.
+        connection = direct
+        if not connection and reverse and reverse.status == ConnectionStatus.REJECTED:
+            connection = reverse
+
+        if connection and connection.status == ConnectionStatus.REJECTED:
+            connection.requester = request.user
+            connection.addressee = addressee
+            connection.status = ConnectionStatus.PENDING
+            connection.requested_role = requested_role
+            connection.request_message = message
+            connection.accepted_at = None
+            connection.save(
+                update_fields=[
+                    "requester",
+                    "addressee",
+                    "status",
+                    "requested_role",
+                    "request_message",
+                    "accepted_at",
+                    "updated_at",
+                ]
+            )
+        else:
+            connection = Connection.objects.create(
+                requester=request.user,
+                addressee=addressee,
+                status=ConnectionStatus.PENDING,
+                requested_role=requested_role,
+                request_message=message,
+            )
 
         sender_name = request.user.name or request.user.username or request.user.email
         role_label = connection.get_requested_role_display()
