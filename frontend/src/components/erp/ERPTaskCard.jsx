@@ -287,6 +287,13 @@ export default function ERPTaskCard({
   const roleLabel =
     viewerRole === 'Provider' ? 'Providing' : viewerRole === 'Receiver' ? 'Receiving' : erp.category
 
+  const providerUser = users.find((entry) => Number(entry.id) === Number(erp.provider))
+  const providerDisplayName =
+    providerUser?.name
+    || providerUser?.username
+    || post?.owner_name
+    || (erp.provider ? `User #${erp.provider}` : 'Provider')
+
   const providerRatedUserIds = new Set(
     (Array.isArray(snapshot?.feedback?.provider_rating_user_ids)
       ? snapshot.feedback.provider_rating_user_ids
@@ -1490,7 +1497,7 @@ export default function ERPTaskCard({
 
       {erp.stage === 'Completed' && !isProvider && providerFeedbackForCurrentUser ? (
         <div className="rounded-xl border border-sky-200 bg-sky-50/50 p-3 text-xs text-slate-700">
-          <p className="font-semibold text-sky-800">Provider Feedback For You</p>
+          <p className="font-semibold text-sky-800">Provider {providerDisplayName} Feedback For You</p>
           <p className="mt-1">
             <span className="font-semibold">Rating:</span> {Number(providerFeedbackForCurrentUser.rating_value || 0).toFixed(1)} / 5
           </p>
@@ -1566,7 +1573,7 @@ export default function ERPTaskCard({
         </div>
       ) : null}
 
-      {erp.stage === 'Completed' && (erp.completion_rating || erp.completion_comment) ? (
+      {erp.stage === 'Completed' && (isProvider || isReceiver) && (erp.completion_rating || erp.completion_comment) ? (
         <div className="rounded-xl border border-emerald-200 bg-emerald-50/40 p-3 text-xs text-slate-700">
           <p className="font-semibold text-emerald-800">Receiver Completion Feedback</p>
           <p className="mt-1">
