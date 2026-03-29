@@ -78,13 +78,51 @@ export default function ERPTaskCard({
     supplier: 'Delivary Man',
   }
   const associatedMemberRoles = ['expertise', 'skill_provider', 'supplier']
+  const roleKeyAliases = {
+    expertise: ['expertise'],
+    skill_provider: ['skill_provider', 'service_provider'],
+    supplier: ['supplier', 'delivery_man', 'delivary_man', 'delivery'],
+  }
+
+  const getRoleBuckets = (roleKey) => {
+    const aliases = roleKeyAliases[roleKey] || [roleKey]
+    return aliases
+      .map((alias) => membersState?.[alias] || null)
+      .filter(Boolean)
+  }
+
+  const getRoleAssigneeIds = (roleKey) => {
+    const idSet = new Set()
+    getRoleBuckets(roleKey).forEach((bucket) => {
+      const rawIds = Array.isArray(bucket?.assignee_ids) ? bucket.assignee_ids : []
+      rawIds.forEach((rawId) => {
+        const parsed = Number(rawId)
+        if (Number.isFinite(parsed) && parsed > 0) {
+          idSet.add(parsed)
+        }
+      })
+    })
+    return Array.from(idSet)
+  }
+
+  const getRoleState = (roleKey) => {
+    const buckets = getRoleBuckets(roleKey)
+    const mergedState = buckets[0] || {}
+    return {
+      ...mergedState,
+      assignee_ids: getRoleAssigneeIds(roleKey),
+      self_assign_enabled: buckets.some((bucket) => Boolean(bucket?.self_assign_enabled)),
+      self_assign_message: String(
+        buckets
+          .map((bucket) => String(bucket?.self_assign_message || '').trim())
+          .find(Boolean) || '',
+      ),
+    }
+  }
 
   const membersState = snapshot.members || {}
   const associatedMembersByRole = associatedMemberRoles.map((roleKey) => {
-    const roleBucket = membersState[roleKey] || {}
-    const assigneeIds = Array.isArray(roleBucket.assignee_ids)
-      ? roleBucket.assignee_ids.map((id) => Number(id)).filter((id) => Number.isFinite(id) && id > 0)
-      : []
+    const assigneeIds = getRoleAssigneeIds(roleKey)
     const members = users.filter((user) => assigneeIds.includes(Number(user.id)))
 
     return {
@@ -94,7 +132,7 @@ export default function ERPTaskCard({
     }
   })
   const hasAssociatedMembers = associatedMembersByRole.some((entry) => entry.members.length > 0)
-  const selectedRoleState = selectedMemberRole ? membersState[selectedMemberRole] || {} : {}
+  const selectedRoleState = selectedMemberRole ? getRoleState(selectedMemberRole) : {}
   const selectedAssigneeIds = Array.isArray(selectedRoleState.assignee_ids)
     ? selectedRoleState.assignee_ids.map((id) => Number(id))
     : []
@@ -171,19 +209,30 @@ export default function ERPTaskCard({
   const selectedRoleResponsibilityText = getResponsibilityTextByRole(selectedMemberRole)
   const currentUserNumericId = Number(currentUserId)
   const hasCurrentUserId = Number.isFinite(currentUserNumericId) && currentUserNumericId > 0
+  const assignedWorkerIds = Array.isArray(erp?.assigned_workers)
+    ? erp.assigned_workers.map((id) => Number(id)).filter((id) => Number.isFinite(id) && id > 0)
+    : []
   const currentUserRoleResponsibilities = hasCurrentUserId
-    ? associatedMemberRoles
-        .filter((roleKey) => {
-          const assigneeIds = Array.isArray(membersState[roleKey]?.assignee_ids)
-            ? membersState[roleKey].assignee_ids
-            : []
-          return assigneeIds.map((id) => Number(id)).includes(currentUserNumericId)
-        })
-        .map((roleKey) => ({
+    ? (() => {
+        const roleSet = new Set(
+          associatedMemberRoles.filter((roleKey) => getRoleAssigneeIds(roleKey).includes(currentUserNumericId)),
+        )
+
+        // Backward compatibility: some legacy ERP records track delivery assignment only in assigned_workers.
+        if (
+          roleSet.size === 0
+          && hasProductCategory
+          && assignedWorkerIds.includes(currentUserNumericId)
+        ) {
+          roleSet.add('supplier')
+        }
+
+        return Array.from(roleSet).map((roleKey) => ({
           roleKey,
           roleLabel: roleKeyToLabel[roleKey] || roleKey,
           responsibilityText: getResponsibilityTextByRole(roleKey),
         }))
+      })()
     : []
 
   const counterpartyUserId =

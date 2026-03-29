@@ -400,6 +400,20 @@ class ERPViewSet(viewsets.ModelViewSet):
 
             for role in self._allowed_member_roles():
                 role_bucket = members.get(role) or {}
+
+                # Always include ERP for explicitly assigned members.
+                raw_assignees = role_bucket.get("assignee_ids") or []
+                assignee_ids = set()
+                for raw_id in raw_assignees:
+                    try:
+                        assignee_ids.add(int(raw_id))
+                    except (TypeError, ValueError):
+                        continue
+
+                if int(user.id) in assignee_ids:
+                    additional_ids.add(int(item.id))
+                    break
+
                 if not bool(role_bucket.get("self_assign_enabled", False)):
                     continue
 
