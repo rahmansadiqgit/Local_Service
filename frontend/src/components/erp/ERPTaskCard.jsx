@@ -1573,21 +1573,6 @@ export default function ERPTaskCard({
         </div>
       ) : null}
 
-      {erp.stage === 'Completed' && (isProvider || isReceiver) && (erp.completion_rating || erp.completion_comment) ? (
-        <div className="rounded-xl border border-emerald-200 bg-emerald-50/40 p-3 text-xs text-slate-700">
-          <p className="font-semibold text-emerald-800">Receiver Completion Feedback</p>
-          <p className="mt-1">
-            <span className="font-semibold">Rating:</span> {Number(erp.completion_rating || 0).toFixed(1)} / 5
-          </p>
-          <p className="mt-1 whitespace-pre-wrap">
-            <span className="font-semibold">Comment:</span> {erp.completion_comment || '-'}
-          </p>
-          {erp.completed_at ? (
-            <p className="mt-1 text-[11px] text-slate-500">Completed at: {new Date(erp.completed_at).toLocaleString()}</p>
-          ) : null}
-        </div>
-      ) : null}
-
       {isProvider && erp.stage === 'Completed' && isParticipantRatingOpen ? (
         <div className="space-y-2 rounded-xl border border-sky-200 bg-sky-50/50 p-3 text-xs text-slate-700">
           <p className="text-sm font-semibold text-sky-800">Rate Receiver and Members</p>

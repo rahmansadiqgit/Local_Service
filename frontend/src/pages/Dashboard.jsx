@@ -204,6 +204,84 @@ export default function Dashboard() {
     return map
   }, [erpItems])
 
+  const providerGivenRatingsForProfile = useMemo(() => {
+    const targetId = Number(profile?.id)
+    if (!Number.isFinite(targetId) || targetId <= 0) return []
+
+    const roleAliases = {
+      expertise: 'Expertise',
+      skill_provider: 'Skill provider',
+      service_provider: 'Skill provider',
+      supplier: 'Delivary Man',
+      delivery_man: 'Delivary Man',
+      delivary_man: 'Delivary Man',
+      delivery: 'Delivary Man',
+    }
+
+    const collectRolesForUser = (erp, userId) => {
+      const roles = new Set()
+      if (Number(erp?.provider) === Number(userId)) {
+        roles.add('Providing')
+      }
+      if (Number(erp?.receiver) === Number(userId)) {
+        roles.add('Receiving')
+      }
+
+      const snapshotMembers = erp?.configuration_snapshot?.members || {}
+      Object.entries(snapshotMembers).forEach(([key, bucket]) => {
+        const assigneeIds = Array.isArray(bucket?.assignee_ids) ? bucket.assignee_ids : []
+        if (assigneeIds.some((value) => Number(value) === Number(userId))) {
+          roles.add(roleAliases[key] || key)
+        }
+      })
+
+      const assignedWorkers = Array.isArray(erp?.assigned_workers) ? erp.assigned_workers : []
+      if (assignedWorkers.some((value) => Number(value) === Number(userId))) {
+        roles.add('Delivary Man')
+      }
+
+      return Array.from(roles)
+    }
+
+    return (Array.isArray(ratings) ? ratings : [])
+      .filter((entry) => Number(entry?.provider) === targetId)
+      .map((entry) => {
+        const reviewerId = Number(entry?.customer)
+        const postId = Number(entry?.post)
+        const matchingErps = (Array.isArray(erpItems) ? erpItems : []).filter(
+          (erp) =>
+            String(erp?.stage || '') === 'Completed'
+            && Number(erp?.post) === postId
+            && Number(erp?.provider) === reviewerId
+            && collectRolesForUser(erp, targetId).length > 0,
+        )
+
+        if (!matchingErps.length) {
+          return null
+        }
+
+        const responsibilitySet = new Set()
+        matchingErps.forEach((erp) => {
+          collectRolesForUser(erp, targetId).forEach((roleLabel) => responsibilitySet.add(roleLabel))
+        })
+
+        const post = posts.find((item) => Number(item.id) === postId)
+        const reviewer = usersById.get(reviewerId)
+
+        return {
+          id: Number(entry?.id || 0),
+          postId,
+          postName: post?.post_title || post?.post_name || `Post #${postId}`,
+          providerName: reviewer?.name || reviewer?.username || `User #${reviewerId}`,
+          responsibilities: Array.from(responsibilitySet),
+          rating: Number(entry?.rating_value || 0),
+          comment: String(entry?.review_text || '').trim(),
+        }
+      })
+      .filter(Boolean)
+      .sort((left, right) => Number(right.id) - Number(left.id))
+  }, [profile?.id, ratings, erpItems, posts, usersById])
+
   // Filter posts for the selected profile; support owner_id/owner and string/number IDs.
   const userPosts = useMemo(() => {
     const targetId = profile?.id
@@ -775,6 +853,42 @@ export default function Dashboard() {
                     <td className="border border-violet-300 px-4 py-2 font-medium">{row.postName}</td>
                     <td className="border border-violet-300 px-4 py-2">{row.average}</td>
                     <td className="border border-violet-300 px-4 py-2">{row.count}</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div className="card border border-sky-300/80 bg-gradient-to-br from-[#eaf6ff] via-[#dff0ff] to-[#eff8ff] shadow-lg">
+        <h3 className="mb-4 text-lg font-semibold text-sky-900">Provider Ratings For You</h3>
+        <div className="overflow-hidden rounded-2xl border-2 border-sky-300 bg-white/80 backdrop-blur-sm">
+          <table className="w-full border-collapse text-left text-sm">
+            <thead className="bg-sky-200/70 text-sky-900">
+              <tr>
+                <th className="border border-sky-300 px-4 py-2">Post Name</th>
+                <th className="border border-sky-300 px-4 py-2">Provider</th>
+                <th className="border border-sky-300 px-4 py-2">Responsibility</th>
+                <th className="border border-sky-300 px-4 py-2">Rating</th>
+                <th className="border border-sky-300 px-4 py-2">Comment</th>
+              </tr>
+            </thead>
+            <tbody>
+              {providerGivenRatingsForProfile.length === 0 ? (
+                <tr>
+                  <td className="border border-sky-300 px-4 py-3 text-slate-600" colSpan={5}>
+                    No provider feedback found for your responsibilities.
+                  </td>
+                </tr>
+              ) : (
+                providerGivenRatingsForProfile.map((row) => (
+                  <tr key={`provider-feedback-${row.id}`} className="odd:bg-white/80 even:bg-sky-50/70">
+                    <td className="border border-sky-300 px-4 py-2 font-medium">{row.postName}</td>
+                    <td className="border border-sky-300 px-4 py-2">{row.providerName}</td>
+                    <td className="border border-sky-300 px-4 py-2">{row.responsibilities.join(', ') || '-'}</td>
+                    <td className="border border-sky-300 px-4 py-2">{row.rating.toFixed(1)} / 5</td>
+                    <td className="border border-sky-300 px-4 py-2 whitespace-pre-wrap">{row.comment || '-'}</td>
                   </tr>
                 ))
               )}
