@@ -486,9 +486,14 @@ export default function ManagePost() {
 
     serviceRows.forEach((row) => {
       const enabled = isItemEnabled(postId, 'service', row.id)
-      const lineTotal = enabled ? Number(row.cost_per_unit || 0) : 0
+      const requestedRate = Number(row.cost_per_unit || 0)
+      const offeredRate = getApplicationValue(`apply-service-${row.id}-rate`, requestedRate)
+      const lineTotal = enabled ? offeredRate : 0
       const note = getApplicationServiceNote(postId, row.id)
       if (enabled) serviceTotal += lineTotal
+      if (enabled && offeredRate <= 0) {
+        validationErrors.push(`${row.service_name}: add your service charge.`)
+      }
       if (enabled && !String(note || '').trim()) {
         validationErrors.push(`${row.service_name}: delivery description is required.`)
       }
@@ -604,13 +609,15 @@ export default function ManagePost() {
 
     const services = serviceRows.map((row) => {
       const requestedRate = Number(row.cost_per_unit || 0)
+      const offeredRate = getApplicationValue(`apply-service-${row.id}-rate`, requestedRate)
       const enabled = isItemEnabled(postId, 'service', row.id)
       return {
         id: row.id,
         name: row.service_name,
         included: enabled,
         requested_rate: requestedRate,
-        line_total: enabled ? requestedRate : 0,
+        offered_rate: offeredRate,
+        line_total: enabled ? offeredRate : 0,
         delivery_description: getApplicationServiceNote(postId, row.id),
       }
     })
@@ -1391,7 +1398,12 @@ export default function ManagePost() {
 
                           {(skillBreakdownByPost[post.id]?.services || []).map((service) => {
                             const enabled = isItemEnabled(post.id, 'service', service.id)
-                            const subtotal = enabled ? Number(service.cost_per_unit || 0) : 0
+                            const requestedRate = Number(service.cost_per_unit || 0)
+                            const applyRateKey = `apply-service-${service.id}-rate`
+                            const applyRate = getApplicationValue(applyRateKey, requestedRate)
+                            const subtotal = isApplyMode
+                              ? (enabled ? applyRate : 0)
+                              : (enabled ? Number(service.cost_per_unit || 0) : 0)
                             return (
                               <div
                                 key={`service-${service.id}`}
@@ -1422,6 +1434,14 @@ export default function ManagePost() {
                                         <div className="rounded-lg border border-emerald-400/30 bg-emerald-500/10 px-3 py-2">
                                           <p className="text-xs text-emerald-100">✓ You are willing to provide this service</p>
                                         </div>
+                                        <OfferRateInput
+                                          value={applyRate}
+                                          onChange={(val) => setApplicationValue(applyRateKey, val)}
+                                          requestedRate={requestedRate}
+                                          label="Your service charge"
+                                          helperText={`Requester budget: ৳${requestedRate.toFixed(0)}`}
+                                          unitLabel={String(service.unit || 'service').toLowerCase()}
+                                        />
                                         <div>
                                           <p className="mb-1 text-xs font-semibold text-slate-200">Delivery description</p>
                                           <textarea
