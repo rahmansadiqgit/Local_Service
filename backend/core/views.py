@@ -362,6 +362,17 @@ class ERPViewSet(viewsets.ModelViewSet):
             return value
         return str(value).strip().lower() in {"1", "true", "yes", "on"}
 
+    def _application_status(self, erp):
+        snapshot = erp.configuration_snapshot or {}
+        submission = snapshot.get("application_submission") or {}
+        return str(submission.get("status") or "").strip().lower()
+
+    def _is_demand_submission_approved(self, erp):
+        post_type = str(getattr(erp.post, "post_type", "") or "").strip().lower()
+        if post_type != "demand":
+            return True
+        return self._application_status(erp) in {"approved", "accepted", "confirmed"}
+
     def _notify_booking_confirmation(self, erp, actor):
         if not erp:
             return
@@ -439,6 +450,119 @@ class ERPViewSet(viewsets.ModelViewSet):
         Notification.objects.bulk_create(notifications)
         return Response(self.get_serializer(erp).data, status=status.HTTP_200_OK)
 
+    @action(detail=False, methods=["get"], url_path="pending_applications", url_name="pending_applications")
+    def pending_applications(self, request):
+        actor = request.user
+        post_id = request.query_params.get("post")
+
+        queryset = ERP.objects.filter(post__post_type="Demand", post__owner=actor).select_related("post", "provider")
+
+        if post_id:
+            try:
+                queryset = queryset.filter(post_id=int(post_id))
+            except (TypeError, ValueError):
+                raise ValidationError({"post": "Invalid post id."})
+
+        pending = []
+        for item in queryset.order_by("-updated_at", "-id"):
+            snapshot = item.configuration_snapshot or {}
+            submission = snapshot.get("application_submission") or {}
+            if str(submission.get("status") or "").strip().lower() != "submitted":
+                continue
+
+            provider = getattr(item, "provider", None)
+            post = getattr(item, "post", None)
+            totals = snapshot.get("totals") or {}
+
+            def _to_number(value):
+                try:
+                    return float(value)
+                except (TypeError, ValueError):
+                    return 0.0
+
+            pending.append(
+                {
+                    "erp_id": item.id,
+                    "post": {
+                        "id": getattr(post, "id", None),
+                        "title": getattr(post, "post_title", "") or getattr(post, "post_name", "") or "",
+                        "type": getattr(post, "post_type", "") or "",
+                    },
+                    "applicant": {
+                        "id": getattr(provider, "id", None),
+                        "name": getattr(provider, "name", "") or getattr(provider, "username", "") or "",
+                        "profile_photo": getattr(getattr(provider, "profile_photo", None), "url", "") if provider else "",
+                    },
+                    "totals": {
+                        "expertise": _to_number(totals.get("expertise", 0)) if isinstance(totals, dict) else 0.0,
+                        "services": _to_number(totals.get("services", 0)) if isinstance(totals, dict) else 0.0,
+                        "products": _to_number(totals.get("products", 0)) if isinstance(totals, dict) else 0.0,
+                        "grand": _to_number(totals.get("grand", 0)) if isinstance(totals, dict) else 0.0,
+                    },
+                    "submitted_at": submission.get("submitted_at"),
+                    "submitted_by": submission.get("submitted_by"),
+                    "configuration_snapshot": snapshot,
+                }
+            )
+
+        return Response(pending, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=["post"], url_path="approve_application", url_name="approve_application")
+    def approve_application(self, request, pk=None):
+        erp = self.get_object()
+        actor = request.user
+        post = getattr(erp, "post", None)
+
+        if not post or str(getattr(post, "post_type", "")).strip().lower() != "demand":
+            raise ValidationError({"detail": "Application approval is only available for demand posts."})
+
+        post_owner = getattr(post, "owner", None)
+        if not post_owner or int(post_owner.id) != int(actor.id):
+            raise PermissionDenied("Only the demand post owner can approve this application.")
+
+        snapshot = erp.configuration_snapshot or {}
+        submission = snapshot.get("application_submission") or {}
+        current_status = str(submission.get("status") or "").strip().lower()
+        if current_status != "submitted":
+            raise ValidationError({"detail": "Only submitted applications can be approved."})
+
+        submission["status"] = "approved"
+        submission["approved_by"] = int(actor.id)
+        submission["approved_at"] = timezone.now().isoformat()
+        snapshot["application_submission"] = submission
+
+        erp.configuration_snapshot = snapshot
+        erp.is_configured = True
+        erp.save(update_fields=["configuration_snapshot", "is_configured", "updated_at"])
+
+        post_title = (
+            snapshot.get("post", {}).get("title")
+            or getattr(post, "post_title", "")
+            or getattr(post, "post_name", "")
+            or "this post"
+        )
+
+        provider = getattr(erp, "provider", None)
+        notifications = [
+            Notification(
+                user=actor,
+                title="Application Approved",
+                message=f"You approved an application for '{post_title}'. ERP task is now active.",
+            )
+        ]
+
+        if provider and int(provider.id) != int(actor.id):
+            notifications.append(
+                Notification(
+                    user=provider,
+                    title="Application Approved",
+                    message=f"Your application for '{post_title}' was approved. ERP task card is now available.",
+                )
+            )
+
+        Notification.objects.bulk_create(notifications)
+        return Response(self.get_serializer(erp).data, status=status.HTTP_200_OK)
+
     def _notify_provider_member_activity(self, erp, actor, title, message):
         provider = getattr(erp, "provider", None)
         actor_id = getattr(actor, "id", None)
@@ -507,9 +631,26 @@ class ERPViewSet(viewsets.ModelViewSet):
                     break
 
         if not additional_ids:
-            return base_queryset
+            merged_queryset = base_queryset
+        else:
+            merged_queryset = ERP.objects.filter(Q(id__in=base_ids) | Q(id__in=additional_ids)).distinct()
 
-        return ERP.objects.filter(Q(id__in=base_ids) | Q(id__in=additional_ids)).distinct()
+        visible_ids = []
+        for item in merged_queryset.select_related("post"):
+            # Demand applications stay visible to the demand post owner for review,
+            # but remain hidden from task views until approved for others.
+            post_owner_id = getattr(item.post, "owner_id", None)
+            if post_owner_id and int(post_owner_id) == int(user.id):
+                visible_ids.append(int(item.id))
+                continue
+
+            if self._is_demand_submission_approved(item):
+                visible_ids.append(int(item.id))
+
+        if not visible_ids:
+            return ERP.objects.none()
+
+        return ERP.objects.filter(id__in=visible_ids).distinct()
 
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
