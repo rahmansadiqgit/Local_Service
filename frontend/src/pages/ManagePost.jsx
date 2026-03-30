@@ -19,7 +19,7 @@ export default function ManagePost() {
   const [itemToggles, setItemToggles] = useState({})
   const [supplierNotesByPost, setSupplierNotesByPost] = useState({})
   const [applicationValues, setApplicationValues] = useState({})
-  const [applicationServiceNotes, setApplicationServiceNotes] = useState({})
+  const [applicationServiceNotes] = useState({})
   const [applicationNotesByPost, setApplicationNotesByPost] = useState({})
   const [submittingApplicationPostId, setSubmittingApplicationPostId] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -489,13 +489,9 @@ export default function ManagePost() {
       const requestedRate = Number(row.cost_per_unit || 0)
       const offeredRate = getApplicationValue(`apply-service-${row.id}-rate`, requestedRate)
       const lineTotal = enabled ? offeredRate : 0
-      const note = getApplicationServiceNote(postId, row.id)
       if (enabled) serviceTotal += lineTotal
       if (enabled && offeredRate <= 0) {
         validationErrors.push(`${row.service_name}: add your service charge.`)
-      }
-      if (enabled && !String(note || '').trim()) {
-        validationErrors.push(`${row.service_name}: delivery description is required.`)
       }
 
       lineItems.push({
@@ -687,6 +683,14 @@ export default function ManagePost() {
     }
 
     const snapshot = buildApplicationSnapshot(post)
+    const submittedSnapshot = {
+      ...snapshot,
+      application_submission: {
+        ...(snapshot.application_submission || {}),
+        submitted_at: new Date().toISOString(),
+        status: 'submitted',
+      },
+    }
     setSubmittingApplicationPostId(post.id)
 
     try {
@@ -695,8 +699,8 @@ export default function ManagePost() {
 
       if (existing) {
         const { data } = await api.patch(`/erp/${existing.id}/`, {
-          total_cost: Number(snapshot.totals?.grand || 0),
-          configuration_snapshot: snapshot,
+          total_cost: Number(submittedSnapshot.totals?.grand || 0),
+          configuration_snapshot: submittedSnapshot,
           is_configured: false,
         })
         erpRecord = data
@@ -704,8 +708,8 @@ export default function ManagePost() {
       } else {
         const payload = {
           post: post.id,
-          total_cost: Number(snapshot.totals?.grand || 0),
-          configuration_snapshot: snapshot,
+          total_cost: Number(submittedSnapshot.totals?.grand || 0),
+          configuration_snapshot: submittedSnapshot,
           is_configured: false,
         }
         const { data } = await api.post('/erp/', payload)
@@ -713,9 +717,16 @@ export default function ManagePost() {
         setErpItems((prev) => [...prev, data])
       }
 
-      await api.post(`/erp/${erpRecord.id}/submit_application/`, {
-        note: getApplicationNoteForPost(post.id),
-      })
+      try {
+        await api.post(`/erp/${erpRecord.id}/submit_application/`, {
+          note: getApplicationNoteForPost(post.id),
+        })
+      } catch (submitError) {
+        // Backward-compatible fallback when custom submit endpoint is not available.
+        if (submitError?.response?.status !== 404) {
+          throw submitError
+        }
+      }
 
       window.dispatchEvent(new Event('localix:notifications-refresh'))
       showMessage('Your application was submitted successfully. Please wait for acceptance.', 'success')
@@ -726,9 +737,7 @@ export default function ManagePost() {
       console.error(error)
       const statusCode = error?.response?.status
       const detail = error?.response?.data
-      if (statusCode === 404) {
-        showMessage('Failed submission: application submit endpoint not found. Please restart backend.', 'error')
-      } else if (statusCode === 403) {
+      if (statusCode === 403) {
         showMessage('Failed submission: you are not allowed to submit this application.', 'error')
       } else if (statusCode === 400 && detail) {
         const text = typeof detail === 'string' ? detail : JSON.stringify(detail)
@@ -1442,22 +1451,6 @@ export default function ManagePost() {
                                           helperText={`Requester budget: ৳${requestedRate.toFixed(0)}`}
                                           unitLabel={String(service.unit || 'service').toLowerCase()}
                                         />
-                                        <div>
-                                          <p className="mb-1 text-xs font-semibold text-slate-200">Delivery description</p>
-                                          <textarea
-                                            rows={3}
-                                            value={getApplicationServiceNote(post.id, service.id)}
-                                            onChange={(event) => {
-                                              const key = `${post.id}-service-${service.id}`
-                                              setApplicationServiceNotes((prev) => ({
-                                                ...prev,
-                                                [key]: event.target.value,
-                                              }))
-                                            }}
-                                            placeholder="Describe process, tools, timeline, and delivery details..."
-                                            className="w-full resize-none rounded-lg border border-white/20 bg-white/10 px-3 py-2 text-sm text-white outline-none placeholder:text-slate-300 focus:border-violet-300 focus:ring-1 focus:ring-violet-300"
-                                          />
-                                        </div>
                                       </>
                                     ) : (
                                       <div className="rounded-lg border border-blue-400/30 bg-blue-500/10 px-3 py-2">

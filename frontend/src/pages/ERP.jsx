@@ -183,20 +183,38 @@ export default function ERP() {
   }, [ratings])
 
   const analytics = useMemo(() => {
-    const total = erpItems.length
-    const completed = erpItems.filter((item) => item.stage === 'Completed').length
-    const pending = erpItems.filter((item) => item.stage === 'Pending').length
-    const revenue = erpItems.reduce((sum, item) => sum + Number(item.total_cost || 0), 0)
+    const visible = erpItems.filter((item) => {
+      const post = postMap[item.post]
+      const isDemand = String(post?.post_type || '').toLowerCase() === 'demand'
+      if (!isDemand) return true
+      const status = String(item?.configuration_snapshot?.application_submission?.status || '').toLowerCase()
+      return status === 'approved' || status === 'accepted' || status === 'confirmed' || !status
+    })
+
+    const total = visible.length
+    const completed = visible.filter((item) => item.stage === 'Completed').length
+    const pending = visible.filter((item) => item.stage === 'Pending').length
+    const revenue = visible.reduce((sum, item) => sum + Number(item.total_cost || 0), 0)
     const topServices = Object.entries(averageRatingByPost)
       .map(([postId, avg]) => ({ postId: Number(postId), average: avg }))
       .sort((a, b) => b.average - a.average)
       .slice(0, 3)
 
     return { total, completed, pending, revenue, topServices }
-  }, [erpItems, averageRatingByPost])
+  }, [erpItems, averageRatingByPost, postMap])
+
+  const visibleErpItems = useMemo(() => {
+    return erpItems.filter((item) => {
+      const post = postMap[item.post]
+      const isDemand = String(post?.post_type || '').toLowerCase() === 'demand'
+      if (!isDemand) return true
+      const status = String(item?.configuration_snapshot?.application_submission?.status || '').toLowerCase()
+      return status === 'approved' || status === 'accepted' || status === 'confirmed' || !status
+    })
+  }, [erpItems, postMap])
 
   const filteredTasks = useMemo(() => {
-    return erpItems.filter((erp) => {
+    return visibleErpItems.filter((erp) => {
       const post = postMap[erp.post]
       if (filters.category && erp.category !== filters.category) return false
       if (filters.stage && erp.stage !== filters.stage) return false
@@ -210,7 +228,7 @@ export default function ERP() {
       }
       return true
     })
-  }, [erpItems, filters, postMap, averageRatingByPost])
+  }, [visibleErpItems, filters, postMap, averageRatingByPost])
 
   const uniqueFilteredTasks = useMemo(() => {
     const focusErpIdRaw = searchParams.get('erp_id')
