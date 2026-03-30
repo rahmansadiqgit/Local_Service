@@ -341,6 +341,9 @@ class ERPViewSet(viewsets.ModelViewSet):
     serializer_class = ERPSerializer
     permission_classes = [permissions.IsAuthenticated]
 
+    def _as_dict(self, value):
+        return value if isinstance(value, dict) else {}
+
     def _resolve_roles(self, actor, post):
         owner = post.owner
 
@@ -363,8 +366,8 @@ class ERPViewSet(viewsets.ModelViewSet):
         return str(value).strip().lower() in {"1", "true", "yes", "on"}
 
     def _application_status(self, erp):
-        snapshot = erp.configuration_snapshot or {}
-        submission = snapshot.get("application_submission") or {}
+        snapshot = self._as_dict(erp.configuration_snapshot)
+        submission = self._as_dict(snapshot.get("application_submission"))
         return str(submission.get("status") or "").strip().lower()
 
     def _is_demand_submission_approved(self, erp):
@@ -377,8 +380,10 @@ class ERPViewSet(viewsets.ModelViewSet):
         if not erp:
             return
 
+        snapshot = self._as_dict(getattr(erp, "configuration_snapshot", None))
+        post_snapshot = self._as_dict(snapshot.get("post"))
         post_title = (
-            (erp.configuration_snapshot or {}).get("post", {}).get("title")
+            post_snapshot.get("title")
             or getattr(erp.post, "post_title", "")
             or getattr(erp.post, "post_name", "")
             or "a post"
@@ -389,11 +394,14 @@ class ERPViewSet(viewsets.ModelViewSet):
         if not supplier:
             return
 
-        Notification.objects.create(
-            user=supplier,
-            title="Booking Confirmed",
-            message=f"{actor_name} confirmed booking for '{post_title}'. Check ERP for task details.",
-        )
+        try:
+            Notification.objects.create(
+                user=supplier,
+                title="Booking Confirmed",
+                message=f"{actor_name} confirmed booking for '{post_title}'. Check ERP for task details.",
+            )
+        except Exception:
+            logger.exception("Failed to create booking notification for ERP %s", getattr(erp, "id", None))
 
     @action(detail=True, methods=["post"], url_path="submit_application", url_name="submit_application")
     def submit_application(self, request, pk=None):
@@ -406,15 +414,15 @@ class ERPViewSet(viewsets.ModelViewSet):
         if not is_participant:
             raise PermissionDenied("You are not allowed to submit this application.")
 
-        snapshot = erp.configuration_snapshot or {}
-        submission = snapshot.get("application_submission") or {}
+        snapshot = self._as_dict(erp.configuration_snapshot)
+        submission = self._as_dict(snapshot.get("application_submission"))
         submission["submitted_by"] = int(actor.id)
         submission["submitted_at"] = timezone.now().isoformat()
         submission["status"] = "submitted"
         snapshot["application_submission"] = submission
 
         note = str(request.data.get("note") or "").strip()
-        notes = snapshot.get("notes") or {}
+        notes = self._as_dict(snapshot.get("notes"))
         if note:
             notes["requester_note"] = note
         snapshot["notes"] = notes
@@ -447,7 +455,10 @@ class ERPViewSet(viewsets.ModelViewSet):
                 )
             )
 
-        Notification.objects.bulk_create(notifications)
+        try:
+            Notification.objects.bulk_create(notifications)
+        except Exception:
+            logger.exception("Failed to create submit_application notifications for ERP %s", getattr(erp, "id", None))
         return Response(self.get_serializer(erp).data, status=status.HTTP_200_OK)
 
     @action(detail=False, methods=["get"], url_path="pending_applications", url_name="pending_applications")
@@ -465,14 +476,14 @@ class ERPViewSet(viewsets.ModelViewSet):
 
         pending = []
         for item in queryset.order_by("-updated_at", "-id"):
-            snapshot = item.configuration_snapshot or {}
-            submission = snapshot.get("application_submission") or {}
+            snapshot = self._as_dict(item.configuration_snapshot)
+            submission = self._as_dict(snapshot.get("application_submission"))
             if str(submission.get("status") or "").strip().lower() != "submitted":
                 continue
 
             provider = getattr(item, "provider", None)
             post = getattr(item, "post", None)
-            totals = snapshot.get("totals") or {}
+            totals = self._as_dict(snapshot.get("totals"))
 
             def _to_number(value):
                 try:
@@ -520,8 +531,8 @@ class ERPViewSet(viewsets.ModelViewSet):
         if not post_owner or int(post_owner.id) != int(actor.id):
             raise PermissionDenied("Only the demand post owner can approve this application.")
 
-        snapshot = erp.configuration_snapshot or {}
-        submission = snapshot.get("application_submission") or {}
+        snapshot = self._as_dict(erp.configuration_snapshot)
+        submission = self._as_dict(snapshot.get("application_submission"))
         current_status = str(submission.get("status") or "").strip().lower()
         if current_status != "submitted":
             raise ValidationError({"detail": "Only submitted applications can be approved."})
@@ -560,7 +571,10 @@ class ERPViewSet(viewsets.ModelViewSet):
                 )
             )
 
-        Notification.objects.bulk_create(notifications)
+        try:
+            Notification.objects.bulk_create(notifications)
+        except Exception:
+            logger.exception("Failed to create approve_application notifications for ERP %s", getattr(erp, "id", None))
         return Response(self.get_serializer(erp).data, status=status.HTTP_200_OK)
 
     def _notify_provider_member_activity(self, erp, actor, title, message):
@@ -572,11 +586,14 @@ class ERPViewSet(viewsets.ModelViewSet):
         if not provider or not actor_id or provider_id == actor_id:
             return
 
-        Notification.objects.create(
-            user=provider,
-            title=title,
-            message=message,
-        )
+        try:
+            Notification.objects.create(
+                user=provider,
+                title=title,
+                message=message,
+            )
+        except Exception:
+            logger.exception("Failed provider-member activity notification for ERP %s", getattr(erp, "id", None))
 
     def get_queryset(self):
         user = self.request.user
@@ -589,8 +606,8 @@ class ERPViewSet(viewsets.ModelViewSet):
         candidates = ERP.objects.exclude(id__in=base_ids).select_related("provider", "receiver", "post")
 
         for item in candidates:
-            snapshot = item.configuration_snapshot or {}
-            members = snapshot.get("members") or {}
+            snapshot = self._as_dict(item.configuration_snapshot)
+            members = self._as_dict(snapshot.get("members"))
 
             for role in self._allowed_member_roles():
                 for role_bucket in self._iter_role_buckets(members, role):
@@ -653,45 +670,63 @@ class ERPViewSet(viewsets.ModelViewSet):
         return ERP.objects.filter(id__in=visible_ids).distinct()
 
     def create(self, request, *args, **kwargs):
-        serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
+        try:
+            serializer = self.get_serializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
 
-        actor = request.user
-        post = serializer.validated_data.get("post")
+            actor = request.user
+            post = serializer.validated_data.get("post")
 
-        if not post:
-            raise ValidationError({"post": "Post is required."})
+            if not post:
+                raise ValidationError({"post": "Post is required."})
 
-        provider, receiver, category = self._resolve_roles(actor, post)
+            provider, receiver, category = self._resolve_roles(actor, post)
 
-        existing = (
-            ERP.objects.filter(post=post, provider=provider, receiver=receiver)
-            .order_by("-updated_at", "-id")
-            .first()
-        )
+            existing = (
+                ERP.objects.filter(post=post, provider=provider, receiver=receiver)
+                .order_by("-updated_at", "-id")
+                .first()
+            )
 
-        if existing:
-            data = self.get_serializer(existing).data
-            return Response(data, status=status.HTTP_200_OK)
+            if existing:
+                data = self.get_serializer(existing).data
+                return Response(data, status=status.HTTP_200_OK)
 
-        instance = serializer.save(provider=provider, receiver=receiver, category=category)
-        if self._to_bool(serializer.validated_data.get("is_configured", False)):
-            self._notify_booking_confirmation(instance, actor)
-        data = self.get_serializer(instance).data
-        headers = self.get_success_headers(data)
-        return Response(data, status=status.HTTP_201_CREATED, headers=headers)
+            instance = serializer.save(provider=provider, receiver=receiver, category=category)
+            if self._to_bool(serializer.validated_data.get("is_configured", False)):
+                self._notify_booking_confirmation(instance, actor)
+            data = self.get_serializer(instance).data
+            headers = self.get_success_headers(data)
+            return Response(data, status=status.HTTP_201_CREATED, headers=headers)
+        except (ValidationError, PermissionDenied):
+            raise
+        except Exception as exc:
+            logger.exception("Unhandled ERP create error for user %s", getattr(request.user, "id", None))
+            raise ValidationError({"detail": f"ERP create failed: {exc}"})
 
     def partial_update(self, request, *args, **kwargs):
-        response = super().partial_update(request, *args, **kwargs)
-        if self._to_bool(request.data.get("is_configured", False)):
-            self._notify_booking_confirmation(self.get_object(), request.user)
-        return response
+        try:
+            response = super().partial_update(request, *args, **kwargs)
+            if self._to_bool(request.data.get("is_configured", False)):
+                self._notify_booking_confirmation(self.get_object(), request.user)
+            return response
+        except (ValidationError, PermissionDenied):
+            raise
+        except Exception as exc:
+            logger.exception("Unhandled ERP partial_update error for user %s", getattr(request.user, "id", None))
+            raise ValidationError({"detail": f"ERP update failed: {exc}"})
 
     def update(self, request, *args, **kwargs):
-        response = super().update(request, *args, **kwargs)
-        if self._to_bool(request.data.get("is_configured", False)):
-            self._notify_booking_confirmation(self.get_object(), request.user)
-        return response
+        try:
+            response = super().update(request, *args, **kwargs)
+            if self._to_bool(request.data.get("is_configured", False)):
+                self._notify_booking_confirmation(self.get_object(), request.user)
+            return response
+        except (ValidationError, PermissionDenied):
+            raise
+        except Exception as exc:
+            logger.exception("Unhandled ERP update error for user %s", getattr(request.user, "id", None))
+            raise ValidationError({"detail": f"ERP update failed: {exc}"})
 
     def perform_create(self, serializer):
         actor = self.request.user
@@ -722,8 +757,8 @@ class ERPViewSet(viewsets.ModelViewSet):
                 yield bucket
 
     def _get_member_bucket(self, erp, role):
-        snapshot = erp.configuration_snapshot or {}
-        members = snapshot.get("members") or {}
+        snapshot = self._as_dict(erp.configuration_snapshot)
+        members = self._as_dict(snapshot.get("members"))
 
         merged_role_bucket = {}
         for bucket in self._iter_role_buckets(members, role):
@@ -771,8 +806,8 @@ class ERPViewSet(viewsets.ModelViewSet):
         erp.save(update_fields=["configuration_snapshot", "updated_at"])
 
     def _get_provider_rated_user_ids(self, erp):
-        snapshot = erp.configuration_snapshot or {}
-        feedback = snapshot.get("feedback") or {}
+        snapshot = self._as_dict(erp.configuration_snapshot)
+        feedback = self._as_dict(snapshot.get("feedback"))
         rated_ids = set()
         for raw_id in feedback.get("provider_rating_user_ids") or []:
             try:
@@ -784,8 +819,8 @@ class ERPViewSet(viewsets.ModelViewSet):
         return rated_ids
 
     def _mark_provider_rated(self, erp, user_id):
-        snapshot = erp.configuration_snapshot or {}
-        feedback = snapshot.get("feedback") or {}
+        snapshot = self._as_dict(erp.configuration_snapshot)
+        feedback = self._as_dict(snapshot.get("feedback"))
         rated_ids = self._get_provider_rated_user_ids(erp)
         rated_ids.add(int(user_id))
         feedback["provider_rating_user_ids"] = sorted(list(rated_ids))
