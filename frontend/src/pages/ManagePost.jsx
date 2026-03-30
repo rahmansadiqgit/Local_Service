@@ -151,7 +151,13 @@ export default function ManagePost() {
       const mineIds = new Set((myPostRes.data || []).map((post) => post.id))
       const erpPostIds = new Set((erpRes.data || []).map((item) => item.post))
       const manageableIds = new Set([...erpPostIds])
-      const manageablePosts = (allPostRes.data || []).filter((post) => manageableIds.has(post.id))
+      const selectedPostId = Number(id)
+      const hasSelectedPostId = Number.isFinite(selectedPostId) && selectedPostId > 0
+      const manageablePosts = (allPostRes.data || []).filter((post) => {
+        if (manageableIds.has(post.id)) return true
+        if (hasSelectedPostId && Number(post.id) === selectedPostId) return true
+        return false
+      })
 
       setOwnPostIds(mineIds)
       setPosts(manageablePosts)
@@ -165,7 +171,7 @@ export default function ManagePost() {
     } finally {
       setLoading(false)
     }
-  }, [showMessage])
+  }, [id, showMessage])
 
   useEffect(() => {
     loadPosts()
@@ -435,7 +441,6 @@ export default function ManagePost() {
       const enabled = isItemEnabled(postId, 'skill', row.id)
       const peopleMax = Math.max(Number(row.available_workers || 0), 0)
       const people = getApplicationValue(`apply-skill-${row.id}-people`, peopleMax)
-      const hoursMax = Math.max(Number(row.needed_budget_unit || 0), 0)
       const hours = getApplicationValue(`apply-skill-${row.id}-hours`, 0)
       const requestedRate = Number(row.cost_per_unit || 0)
       const offeredRate = getApplicationValue(`apply-skill-${row.id}-rate`, requestedRate)

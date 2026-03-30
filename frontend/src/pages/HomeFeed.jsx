@@ -513,64 +513,10 @@ export default function HomeFeed() {
       return
     }
 
-    try {
-      const cost = costSummaryByPost[post.id] || { min: 0 }
-
-      const erpPayload = {
-        category: post.post_type === 'Supply' ? 'Provided' : 'Received',
-        post: post.id,
-        total_cost: cost.min,
-      }
-
-      let erpCreated = false
-
-      try {
-        await api.post('/erp/', erpPayload)
-        erpCreated = true
-      } catch (erpError) {
-        console.warn('ERP creation issue:', erpError)
-
-        const statusCode = erpError?.response?.status
-        const detail = erpError?.response?.data
-
-        if (statusCode === 400 && typeof detail === 'object' && detail !== null) {
-          const text = Object.entries(detail)
-            .map(([field, messages]) => {
-              const messageText = Array.isArray(messages) ? messages.join(' ') : `${messages}`
-              return `${field}: ${messageText}`
-            })
-            .join(' | ')
-          setActionMessage(`Action failed: ${text || 'Could not create ERP task.'}`)
-        } else {
-          setActionMessage('Action failed: Could not create ERP task.')
-        }
-
-        return
-      }
-
-      try {
-        const title = actionType === 'apply' ? 'New Application' : 'New Booking'
-        await api.post('/notifications/', {
-          title,
-          message: `${title} for ${post.post_name} (${post.post_type}).`,
-        })
-      } catch (notifError) {
-        console.warn('Notification issue:', notifError)
-      }
-
-      if (!erpCreated) {
-        setActionMessage('Action failed. Please try again.')
-        return
-      }
-
-      setActionMessage('Action sent. Navigating to manage post...')
-      setTimeout(() => {
-        navigate(`/manage-post/${post.id}`, { state: { actionType } })
-      }, 800)
-    } catch (error) {
-      console.error(error)
-      setActionMessage('Action failed. Please try again.')
-    }
+    setActionMessage('Continue in manage post to complete this action.')
+    setTimeout(() => {
+      navigate(`/manage-post/${post.id}`, { state: { actionType } })
+    }, 300)
   }
 
   const handleAddToCart = (post) => {

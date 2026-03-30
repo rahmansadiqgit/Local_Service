@@ -116,52 +116,13 @@ export default function YourCart() {
     }
 
     setProcessingPostId(post.id)
-
     try {
-      const minCost = Number(item?.metadata?.minCost || 0)
-      await api.post('/erp/', {
-        category: post.post_type === 'Supply' ? 'Provided' : 'Received',
-        post: post.id,
-        total_cost: Number.isFinite(minCost) ? minCost : 0,
-      })
-
-      const title = post.post_type === 'Demand' ? 'New Application' : 'New Booking'
-      try {
-        await api.post('/notifications/', {
-          title,
-          message: `${title} for ${post.post_name} (${post.post_type}).`,
-        })
-      } catch (notifError) {
-        console.warn('Notification issue:', notifError)
-      }
-
-      setActionMessage('Action sent. Navigating to manage post...')
+      setActionMessage('Continue in manage post to complete this action.')
       setTimeout(() => {
         navigate(`/manage-post/${post.id}`, {
           state: { actionType: post.post_type === 'Demand' ? 'apply' : 'book' },
         })
-      }, 800)
-    } catch (error) {
-      console.error(error)
-
-      const statusCode = error?.response?.status
-      const detail = error?.response?.data
-      if (statusCode === 404) {
-        setUnavailablePostIds((prev) => ({ ...prev, [post.id]: true }))
-        setActionMessage('This post is no longer available. Please remove it from your cart.')
-        return
-      }
-      if (statusCode === 400 && typeof detail === 'object' && detail !== null) {
-        const text = Object.entries(detail)
-          .map(([field, messages]) => {
-            const messageText = Array.isArray(messages) ? messages.join(' ') : `${messages}`
-            return `${field}: ${messageText}`
-          })
-          .join(' | ')
-        setActionMessage(`Action failed: ${text || 'Could not create ERP task.'}`)
-      } else {
-        setActionMessage('Action failed. Please try again.')
-      }
+      }, 300)
     } finally {
       setProcessingPostId(null)
     }
