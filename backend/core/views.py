@@ -314,6 +314,21 @@ class PostViewSet(viewsets.ModelViewSet):
             message=f"You have successfully created your post: {post_title}.",
         )
 
+    def perform_update(self, serializer):
+        post = self.get_object()
+        actor = self.request.user
+        owner = getattr(post, "owner", None)
+        if not actor or not owner or int(actor.id) != int(owner.id):
+            raise PermissionDenied("Only the post owner can edit this post.")
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        actor = self.request.user
+        owner = getattr(instance, "owner", None)
+        if not actor or not owner or int(actor.id) != int(owner.id):
+            raise PermissionDenied("Only the post owner can delete this post.")
+        instance.delete()
+
 
 class SkillViewSet(viewsets.ModelViewSet):
     queryset = Skill.objects.all() 
@@ -364,6 +379,168 @@ class ERPViewSet(viewsets.ModelViewSet):
         if isinstance(value, bool):
             return value
         return str(value).strip().lower() in {"1", "true", "yes", "on"}
+
+    def _to_int(self, value, default=0):
+        try:
+            return int(float(value))
+        except (TypeError, ValueError):
+            return int(default)
+
+    def _normalize_expertise_source(self, value):
+        source = str(value or "").strip().lower()
+        if source == "skill":
+            return "skill"
+        return "expertise"
+
+    def _collect_snapshot_usage(self, snapshot):
+        data = self._as_dict(snapshot)
+        usage = {
+            "products": {},
+            "services": {},
+            "expertise_people": {},
+            "expertise_duration": {},
+        }
+
+        for row in data.get("products") or []:
+            if not isinstance(row, dict) or row.get("included") is False:
+                continue
+            row_id = self._to_int(row.get("id"))
+            qty = self._to_int(row.get("offered_quantity", row.get("quantity", 0)))
+            if row_id > 0 and qty > 0:
+                usage["products"][row_id] = usage["products"].get(row_id, 0) + qty
+
+        for row in data.get("services") or []:
+            if not isinstance(row, dict) or row.get("included") is False:
+                continue
+            row_id = self._to_int(row.get("id"))
+            count = self._to_int(row.get("quantity", 1), default=1)
+            if row_id > 0 and count > 0:
+                usage["services"][row_id] = usage["services"].get(row_id, 0) + count
+
+        for row in data.get("expertise") or []:
+            if not isinstance(row, dict) or row.get("included") is False:
+                continue
+            row_id = self._to_int(row.get("id"))
+            if row_id <= 0:
+                continue
+            source = self._normalize_expertise_source(row.get("source"))
+            key = (source, row_id)
+
+            people = self._to_int(row.get("offered_people", row.get("quantity", 0)))
+            duration = self._to_int(row.get("offered_hours", row.get("duration", 0)))
+
+            if people > 0:
+                usage["expertise_people"][key] = usage["expertise_people"].get(key, 0) + people
+            if duration > 0:
+                usage["expertise_duration"][key] = usage["expertise_duration"].get(key, 0) + duration
+
+        return usage
+
+    def _merge_usage(self, target, source):
+        for section in ("products", "services", "expertise_people", "expertise_duration"):
+            for key, value in (source.get(section) or {}).items():
+                target[section][key] = target[section].get(key, 0) + self._to_int(value)
+
+    def _validate_capacity_for_snapshot(self, post, snapshot, exclude_erp_id=None):
+        if not post:
+            return
+
+        requested_usage = self._collect_snapshot_usage(snapshot)
+        if not any(requested_usage[section] for section in requested_usage):
+            return
+
+        consumed_usage = {
+            "products": {},
+            "services": {},
+            "expertise_people": {},
+            "expertise_duration": {},
+        }
+
+        configured_qs = ERP.objects.filter(post=post, is_configured=True)
+        if exclude_erp_id:
+            configured_qs = configured_qs.exclude(id=exclude_erp_id)
+
+        for existing in configured_qs.only("configuration_snapshot"):
+            self._merge_usage(consumed_usage, self._collect_snapshot_usage(existing.configuration_snapshot))
+
+        product_map = {p.id: p for p in Product.objects.filter(post=post)}
+        expertise_map = {e.id: e for e in Expertise.objects.filter(post=post)}
+        skill_map = {s.id: s for s in Skill.objects.filter(post=post)}
+
+        errors = []
+
+        for product_id, requested_qty in requested_usage["products"].items():
+            product = product_map.get(product_id)
+            if not product:
+                continue
+            total_capacity = max(self._to_int(getattr(product, "available_units", 0)), 0)
+            consumed = max(self._to_int(consumed_usage["products"].get(product_id, 0)), 0)
+            remaining = max(total_capacity - consumed, 0)
+            if requested_qty > remaining:
+                errors.append(
+                    f'Product "{product.product_name}": requested {requested_qty}, only {remaining} remaining.'
+                )
+
+        for service_id, requested_count in requested_usage["services"].items():
+            skill = skill_map.get(service_id)
+            if not skill:
+                continue
+            consumed = max(self._to_int(consumed_usage["services"].get(service_id, 0)), 0)
+            remaining = max(1 - consumed, 0)
+            if requested_count > remaining:
+                errors.append(
+                    f'Service "{skill.skill_name}": already booked/given for this post.'
+                )
+
+        for key, requested_people in requested_usage["expertise_people"].items():
+            source, row_id = key
+            consumed_people = max(self._to_int(consumed_usage["expertise_people"].get(key, 0)), 0)
+
+            if source == "expertise":
+                row = expertise_map.get(row_id)
+                if not row:
+                    continue
+                total_people = max(self._to_int(getattr(row, "available_person", 0)), 0)
+                remaining_people = max(total_people - consumed_people, 0)
+                if requested_people > remaining_people:
+                    errors.append(
+                        f'Expertise "{row.name}": requested {requested_people} people, only {remaining_people} remaining.'
+                    )
+            else:
+                row = skill_map.get(row_id)
+                if not row:
+                    continue
+                total_people = self._to_int(getattr(row, "available_workers", 0), default=-1)
+                if total_people < 0:
+                    continue
+                remaining_people = max(total_people - consumed_people, 0)
+                if requested_people > remaining_people:
+                    errors.append(
+                        f'Expertise "{row.skill_name}": requested {requested_people} people, only {remaining_people} remaining.'
+                    )
+
+        for key, requested_duration in requested_usage["expertise_duration"].items():
+            source, row_id = key
+            if source != "expertise":
+                continue
+            row = expertise_map.get(row_id)
+            if not row:
+                continue
+            total_duration = max(self._to_int(getattr(row, "needed_budget_unit", 0)), 0)
+            consumed_duration = max(self._to_int(consumed_usage["expertise_duration"].get(key, 0)), 0)
+            remaining_duration = max(total_duration - consumed_duration, 0)
+            if requested_duration > remaining_duration:
+                errors.append(
+                    f'Expertise "{row.name}": requested duration {requested_duration}, only {remaining_duration} remaining.'
+                )
+
+        if errors:
+            raise ValidationError(
+                {
+                    "detail": "Cannot accept/configure this offer. Some items are already given/booked.",
+                    "items": errors,
+                }
+            )
 
     def _application_status(self, erp):
         snapshot = self._as_dict(erp.configuration_snapshot)
@@ -583,6 +760,12 @@ class ERPViewSet(viewsets.ModelViewSet):
         submission["approved_by"] = int(actor.id)
         submission["approved_at"] = timezone.now().isoformat()
         snapshot["application_submission"] = submission
+
+        self._validate_capacity_for_snapshot(
+            post=post,
+            snapshot=snapshot,
+            exclude_erp_id=erp.id,
+        )
 
         erp.configuration_snapshot = snapshot
         erp.is_configured = True
@@ -831,6 +1014,12 @@ class ERPViewSet(viewsets.ModelViewSet):
                 data = self.get_serializer(existing).data
                 return Response(data, status=status.HTTP_200_OK)
 
+            if self._to_bool(serializer.validated_data.get("is_configured", False)):
+                self._validate_capacity_for_snapshot(
+                    post=post,
+                    snapshot=serializer.validated_data.get("configuration_snapshot") or {},
+                )
+
             instance = serializer.save(provider=provider, receiver=receiver, category=category)
             if self._to_bool(serializer.validated_data.get("is_configured", False)):
                 self._notify_booking_confirmation(instance, actor)
@@ -845,6 +1034,14 @@ class ERPViewSet(viewsets.ModelViewSet):
 
     def partial_update(self, request, *args, **kwargs):
         try:
+            instance = self.get_object()
+            next_is_configured = self._to_bool(request.data.get("is_configured", instance.is_configured))
+            if next_is_configured:
+                self._validate_capacity_for_snapshot(
+                    post=instance.post,
+                    snapshot=request.data.get("configuration_snapshot", instance.configuration_snapshot) or {},
+                    exclude_erp_id=instance.id,
+                )
             response = super().partial_update(request, *args, **kwargs)
             if self._to_bool(request.data.get("is_configured", False)):
                 self._notify_booking_confirmation(self.get_object(), request.user)
@@ -857,6 +1054,14 @@ class ERPViewSet(viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         try:
+            instance = self.get_object()
+            next_is_configured = self._to_bool(request.data.get("is_configured", instance.is_configured))
+            if next_is_configured:
+                self._validate_capacity_for_snapshot(
+                    post=instance.post,
+                    snapshot=request.data.get("configuration_snapshot", instance.configuration_snapshot) or {},
+                    exclude_erp_id=instance.id,
+                )
             response = super().update(request, *args, **kwargs)
             if self._to_bool(request.data.get("is_configured", False)):
                 self._notify_booking_confirmation(self.get_object(), request.user)

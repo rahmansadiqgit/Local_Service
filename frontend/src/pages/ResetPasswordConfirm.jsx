@@ -64,7 +64,7 @@ export default function ResetPasswordConfirm() {
             >
               Set New Password
             </h2>
-            <p className="mt-0.5 whitespace-nowrap text-[11px] text-violet-800/80 sm:text-xs">
+            <p className="mt-0.5 whitespace-nowrap text-[11px] font-bold text-violet-800/80 sm:text-xs">
               Choose a new password for your account.
             </p>
           </div>

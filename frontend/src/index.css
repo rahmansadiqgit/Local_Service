@@ -85,6 +85,11 @@ button:not(.header-auth-btn):not(.settings-gear-btn):not(.post-owner-name-btn):n
   filter: saturate(1.05);
 }
 
+/* Keep page header subtitles bold across pages using the shared header-card pattern. */
+.card.border-0.bg-gradient-to-r p[class*="mt-0.5"][class*="text-violet-800"] {
+  font-weight: 700;
+}
+
 /* Leaflet tiles break if global img max-width rules apply. */
 .leaflet-container .leaflet-tile,
 .leaflet-container img {

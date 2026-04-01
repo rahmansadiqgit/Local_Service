@@ -52,11 +52,11 @@ export default function ProductTable({ products = [], postType = 'Supply', showD
                 </button>
               </th>
             )}
-            {!isDemand && (
-              <th className="px-3 py-2 whitespace-nowrap">
-                <button type="button" onClick={() => handleSort('unit')}>Unit</button>
-              </th>
-            )}
+            <th className="px-3 py-2 whitespace-nowrap">
+              <button type="button" onClick={() => handleSort('unit')}>
+                {isDemand ? 'Demanded Product Unit' : 'Available Product Unit'}
+              </button>
+            </th>
             <th className="px-3 py-2 whitespace-nowrap">
               <button type="button" onClick={() => handleSort('cost_per_unit')}>
                 {isDemand ? 'Budget (BDT)' : 'Cost per Unit'}
@@ -81,9 +81,12 @@ export default function ProductTable({ products = [], postType = 'Supply', showD
             >
               <td className={isProfileTone ? 'px-3 py-2 whitespace-normal break-words text-slate-800 w-32' : 'px-3 py-2 text-slate-900 dark:text-slate-100 whitespace-normal break-words w-32'}>{product.product_name || '-'}</td>
               {showDescription && <td className="px-3 py-2 whitespace-pre-line break-words">{product.description || '-'}</td>}
-              {!isDemand && <td className="px-3 py-2 whitespace-nowrap">{product.unit}</td>}
+              <td className="px-3 py-2 whitespace-nowrap">{product.unit || '-'}</td>
               <td className="px-3 py-2 whitespace-nowrap">{product.cost_per_unit}</td>
-              <td className="px-3 py-2 whitespace-nowrap">{product.available_units}</td>
+              <td className="px-3 py-2 whitespace-nowrap">
+                {product.available_units}
+                {product.unit ? ` (${product.unit})` : ''}
+              </td>
             </tr>
           ))}
         </tbody>
