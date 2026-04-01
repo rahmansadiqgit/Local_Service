@@ -295,6 +295,75 @@ export default function CreatePost() {
       return
     }
 
+    const isBlank = (value) => String(value ?? '').trim() === ''
+    const isValidNumber = (value) => Number.isFinite(Number(value))
+
+    if (showExpertiseSection) {
+      for (let index = 0; index < expertises.length; index += 1) {
+        const item = expertises[index]
+        const hasAnyValue = item.name || item.experience || String(item.unit || '').trim() || String(item.cost || '').trim() || String(item.available_person || '').trim() || String(item.needed_budget_unit || '').trim()
+
+        if (!hasAnyValue) continue
+
+        if (!isBlank(item.cost) && !isValidNumber(item.cost)) {
+          const fieldName = isDemand ? 'Your Budget (BDT)' : 'Charge (BDT) Per Unit'
+          setMessage(`Invalid value in Expertise row ${index + 1}: ${fieldName} must be a valid number.`)
+          setSaving(false)
+          return
+        }
+
+        if (!isBlank(item.available_person) && !isValidNumber(item.available_person)) {
+          const fieldName = isDemand ? 'Required Person' : 'Available Person'
+          setMessage(`Invalid value in Expertise row ${index + 1}: ${fieldName} must be a valid number.`)
+          setSaving(false)
+          return
+        }
+
+        if (isDemand && item.unit && !isBlank(item.needed_budget_unit) && !isValidNumber(item.needed_budget_unit)) {
+          setMessage(`Invalid value in Expertise row ${index + 1}: Needed Hire Unit must be a valid number.`)
+          setSaving(false)
+          return
+        }
+      }
+    }
+
+    if (showServicesSection) {
+      for (let index = 0; index < services.length; index += 1) {
+        const item = services[index]
+        const hasAnyValue = item.service_name || item.description || String(item.cost_per_unit || '').trim()
+        if (!hasAnyValue) continue
+
+        if (!isBlank(item.cost_per_unit) && !isValidNumber(item.cost_per_unit)) {
+          const fieldName = isDemand ? 'Your Budget (BDT)' : 'Service Charge (BDT)'
+          setMessage(`Invalid value in Services row ${index + 1}: ${fieldName} must be a valid number.`)
+          setSaving(false)
+          return
+        }
+      }
+    }
+
+    if (showProductsSection) {
+      for (let index = 0; index < products.length; index += 1) {
+        const item = products[index]
+        const hasAnyValue = item.product_name || item.description || String(item.unit || '').trim() || String(item.cost_per_unit || '').trim() || String(item.available_units || '').trim()
+        if (!hasAnyValue) continue
+
+        if (!isBlank(item.cost_per_unit) && !isValidNumber(item.cost_per_unit)) {
+          const fieldName = isDemand ? 'Budget per Unit (BDT)' : 'Cost Per Unit (BDT)'
+          setMessage(`Invalid value in Products row ${index + 1}: ${fieldName} must be a valid number.`)
+          setSaving(false)
+          return
+        }
+
+        if (!isBlank(item.available_units) && !isValidNumber(item.available_units)) {
+          const fieldName = isDemand ? 'Required Quantity' : 'Available Quantity'
+          setMessage(`Invalid value in Products row ${index + 1}: ${fieldName} must be a valid number.`)
+          setSaving(false)
+          return
+        }
+      }
+    }
+
     const expertiseDurationMissing = expertises.some((item) => {
       const hasAnyValue = item.name || item.experience || item.cost || String(item.available_person || '').trim()
       return hasAnyValue && !item.unit
@@ -328,6 +397,82 @@ export default function CreatePost() {
       return
     }
 
+    const toTitle = (value) =>
+      String(value || '')
+        .replace(/_/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .replace(/\b\w/g, (ch) => ch.toUpperCase())
+
+    const formatApiFieldError = (responseData, fieldLabelMap, contextLabel) => {
+      if (!responseData) return ''
+
+      if (typeof responseData === 'string') {
+        return `${contextLabel}: ${responseData}`
+      }
+
+      const detailMessage = responseData?.detail || responseData?.message
+      if (typeof detailMessage === 'string' && detailMessage.trim()) {
+        return `${contextLabel}: ${detailMessage.trim()}`
+      }
+
+      const lines = []
+      const collect = (value, path = []) => {
+        if (Array.isArray(value)) {
+          if (value.length === 0) return
+          const primitiveOnly = value.every((item) => item === null || ['string', 'number', 'boolean'].includes(typeof item))
+          if (primitiveOnly) {
+            lines.push({ path, message: value.map((item) => String(item)).join(', ') })
+            return
+          }
+          value.forEach((item, index) => collect(item, [...path, String(index + 1)]))
+          return
+        }
+
+        if (value && typeof value === 'object') {
+          Object.entries(value).forEach(([key, nested]) => collect(nested, [...path, key]))
+          return
+        }
+
+        if (value !== undefined && value !== null) {
+          lines.push({ path, message: String(value) })
+        }
+      }
+
+      collect(responseData)
+      if (!lines.length) return ''
+
+      const rendered = lines.map(({ path, message }) => {
+        let rowNumber = ''
+        let fieldKey = ''
+
+        if (path.length) {
+          if (/^\d+$/.test(path[0])) {
+            rowNumber = path[0]
+            fieldKey = path[1] || path[0]
+          } else {
+            fieldKey = path[0]
+          }
+        }
+
+        const fieldLabel = fieldLabelMap[fieldKey] || toTitle(fieldKey || 'field')
+        const rowLabel = rowNumber ? ` row ${rowNumber}` : ''
+        return `${contextLabel}${rowLabel}: ${fieldLabel} - ${message}`
+      })
+
+      return rendered.join(' | ')
+    }
+
+    const submitWithContext = async (requestFactory, contextLabel, fieldLabelMap) => {
+      try {
+        return await requestFactory()
+      } catch (requestError) {
+        const formatted = formatApiFieldError(requestError?.response?.data, fieldLabelMap, contextLabel)
+        const fallback = requestError?.message || 'Invalid input.'
+        throw new Error(formatted || `${contextLabel}: ${fallback}`)
+      }
+    }
+
     try {
       const payload = new FormData()
       Object.entries(post).forEach(([key, value]) => {
@@ -337,52 +482,124 @@ export default function CreatePost() {
         payload.append('image', imageFile)
       }
 
-      const { data: createdPost } = await api.post('/posts/', payload, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      })
+      const postFieldLabels = {
+        post_type: 'Post Type',
+        post_name: 'Post Categories',
+        post_title: 'Post Title',
+        description: 'Description',
+        brand_company_name: 'Brand / Company',
+        location: 'Location',
+        latitude: 'Latitude',
+        longitude: 'Longitude',
+        website_link: 'Website',
+        image: 'Image',
+      }
 
-      const validSkills = skills.filter((item) => item.skill_name && item.cost_per_unit)
-      const validExpertises = expertises.filter((item) => item.name && item.experience && item.unit && item.cost)
-      const validServices = services.filter((item) => item.service_name && item.cost_per_unit)
-      const validProducts = products.filter(
-        (item) => item.product_name && item.cost_per_unit && (post.post_type === 'Demand' || item.unit),
+      const { data: createdPost } = await submitWithContext(
+        () =>
+          api.post('/posts/', payload, {
+            headers: { 'Content-Type': 'multipart/form-data' },
+          }),
+        'Post',
+        postFieldLabels,
       )
 
-      await Promise.all([
-        ...validSkills.map((item) =>
-          api.post('/skills/', {
-            ...item,
-            skill_name: `__expertise__::${item.skill_name}`,
-            post: createdPost.id,
-          }),
-        ),
-        ...validExpertises.map((item) =>
-          api.post('/expertises/', {
-            name: item.name,
-            experience: item.experience,
-            unit: item.unit,
-            needed_budget_unit: Number(item.needed_budget_unit) || 0,
-            cost: Number(item.cost),
-            available_person: Number(item.available_person) || 0,
-            post: createdPost.id,
-          }),
-        ),
-        ...validServices.map((item) =>
-          api.post('/skills/', {
-            skill_name: `__service__::${item.service_name}`,
-            description: item.description,
-            cost_per_unit: item.cost_per_unit,
-            post: createdPost.id,
-          }),
-        ),
-        ...validProducts.map((item) =>
-          api.post('/products/', {
-            ...item,
-            unit: item.unit || (post.post_type === 'Demand' ? 'quantity' : item.unit),
-            post: createdPost.id,
-          }),
-        ),
-      ])
+      const validSkills = skills
+        .map((item, index) => ({ item, index }))
+        .filter(({ item }) => item.skill_name && item.cost_per_unit)
+      const validExpertises = expertises
+        .map((item, index) => ({ item, index }))
+        .filter(({ item }) => item.name && item.experience && item.unit && item.cost)
+      const validServices = services
+        .map((item, index) => ({ item, index }))
+        .filter(({ item }) => item.service_name && item.cost_per_unit)
+      const validProducts = products
+        .map((item, index) => ({ item, index }))
+        .filter(
+          ({ item }) => item.product_name && item.cost_per_unit && (post.post_type === 'Demand' || item.unit),
+        )
+
+      const expertiseSkillFieldLabels = {
+        skill_name: 'Skill/Experties Name',
+        cost_per_unit: isDemand ? 'Your Budget (BDT)' : 'Charge (BDT) Per Unit',
+      }
+      const expertiseFieldLabels = {
+        name: 'Skill/Experties Name',
+        experience: isDemand ? 'Preferred Experience' : 'Your Experience',
+        unit: isDemand ? 'Hire Unit' : 'Service Duration Unit',
+        needed_budget_unit: 'Needed Hire Unit',
+        cost: isDemand ? 'Your Budget (BDT)' : 'Charge (BDT) Per Unit',
+        available_person: isDemand ? 'Required Person' : 'Available Person',
+      }
+      const serviceFieldLabels = {
+        skill_name: 'Service Name',
+        description: 'Specific Service Description',
+        cost_per_unit: isDemand ? 'Your Budget (BDT)' : 'Service Charge (BDT)',
+      }
+      const productFieldLabels = {
+        product_name: 'Product Name',
+        description: 'Specific Product Description',
+        unit: isDemand ? 'Demanded Product Unit' : 'Available Product Unit',
+        cost_per_unit: isDemand ? 'Budget per Unit (BDT)' : 'Cost Per Unit (BDT)',
+        available_units: isDemand ? 'Required Quantity' : 'Available Quantity',
+      }
+
+      for (const { item, index } of validSkills) {
+        await submitWithContext(
+          () =>
+            api.post('/skills/', {
+              ...item,
+              skill_name: `__expertise__::${item.skill_name}`,
+              post: createdPost.id,
+            }),
+          `Expertise row ${index + 1}`,
+          expertiseSkillFieldLabels,
+        )
+      }
+
+      for (const { item, index } of validExpertises) {
+        await submitWithContext(
+          () =>
+            api.post('/expertises/', {
+              name: item.name,
+              experience: item.experience,
+              unit: item.unit,
+              needed_budget_unit: Number(item.needed_budget_unit) || 0,
+              cost: Number(item.cost),
+              available_person: Number(item.available_person) || 0,
+              post: createdPost.id,
+            }),
+          `Expertise row ${index + 1}`,
+          expertiseFieldLabels,
+        )
+      }
+
+      for (const { item, index } of validServices) {
+        await submitWithContext(
+          () =>
+            api.post('/skills/', {
+              skill_name: `__service__::${item.service_name}`,
+              description: item.description,
+              cost_per_unit: item.cost_per_unit,
+              post: createdPost.id,
+            }),
+          `Services row ${index + 1}`,
+          serviceFieldLabels,
+        )
+      }
+
+      for (const { item, index } of validProducts) {
+        await submitWithContext(
+          () =>
+            api.post('/products/', {
+              ...item,
+              unit: item.unit || (post.post_type === 'Demand' ? 'quantity' : item.unit),
+              post: createdPost.id,
+            }),
+          `Products row ${index + 1}`,
+          productFieldLabels,
+        )
+      }
       setMessage('Post created successfully.')
       setPost(initialPost)
       setSelectedCategories([])
@@ -397,25 +614,7 @@ export default function CreatePost() {
       navigate('/')
     } catch (error) {
       console.error(error)
-      const responseData = error.response?.data
-      let errorMessage = responseData?.detail || responseData?.message
-
-      if (!errorMessage && responseData && typeof responseData === 'object') {
-        const fieldErrors = Object.entries(responseData)
-          .map(([field, value]) => {
-            if (Array.isArray(value)) {
-              return `${field}: ${value.join(', ')}`
-            }
-            return `${field}: ${String(value)}`
-          })
-          .join(' | ')
-        errorMessage = fieldErrors
-      }
-
-      if (!errorMessage) {
-        errorMessage = error.message || 'Unknown error'
-      }
-
+      const errorMessage = error?.message || 'Unknown error'
       setMessage(`Failed to create post: ${errorMessage}`)
     } finally {
       setSaving(false)
