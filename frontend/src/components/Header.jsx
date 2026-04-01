@@ -649,7 +649,7 @@ export default function Header() {
               <button
                 type="button"
                 onClick={() => setOpenDropdown(null)}
-                className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-violet-200 bg-white text-lg text-violet-700 transition hover:bg-violet-100"
+                className="hamburger-icon-btn inline-flex items-center justify-center bg-transparent p-0 text-3xl font-bold leading-none text-white [text-shadow:0_0_10px_rgba(0,0,0,0.45)] transition-all duration-200 hover:scale-105 hover:bg-transparent hover:text-pink-300 focus:bg-transparent focus-visible:outline-none active:bg-transparent"
                 aria-label="Close navigation menu"
               >
                 ×

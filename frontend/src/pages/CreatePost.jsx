@@ -819,7 +819,7 @@ export default function CreatePost() {
                           imageInputRef.current.value = ''
                         }
                       }}
-                      className="absolute right-3 top-3 z-10 inline-flex items-center justify-center bg-transparent p-0 text-2xl font-bold leading-none text-white [text-shadow:0_0_10px_rgba(0,0,0,0.45)] transition-all duration-200 hover:scale-105 hover:text-pink-300 focus-visible:outline-none"
+                      className="absolute right-3 top-3 z-10 inline-flex items-center justify-center bg-transparent p-0 text-2xl font-bold leading-none text-white [text-shadow:0_0_10px_rgba(0,0,0,0.45)] transition-all duration-200 hover:scale-105 hover:bg-transparent hover:text-pink-300 focus:bg-transparent focus-visible:outline-none active:bg-transparent"
                     >
                       ×
                     </button>
