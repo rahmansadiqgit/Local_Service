@@ -453,7 +453,7 @@ export default function CreatePost() {
             >
               Create Post
             </h2>
-            <p className="mt-0.5 text-xs text-violet-800/80 sm:text-sm">Publish a new available or demand listing.</p>
+            <p className="mt-0.5 text-xs font-semibold text-violet-800/80 sm:text-sm">Publish a new available or demand listing.</p>
           </div>
           <img
             src="/images/create_post.png"

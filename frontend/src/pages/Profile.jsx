@@ -146,7 +146,7 @@ export default function Profile() {
               >
                 Profile
               </h2>
-              <p className="mt-0.5 text-xs text-violet-800/80 sm:text-sm">Manage your Localix profile information.</p>
+              <p className="mt-0.5 text-xs font-semibold text-violet-800/80 sm:text-sm">Manage your Localix profile information.</p>
             </div>
             <img
               src="/images/profile.png"

@@ -273,7 +273,7 @@ export default function HelpCentre() {
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.45),transparent_58%)]" />
         <div className="relative px-6 py-3.5 pr-32 sm:px-8 sm:py-4 sm:pr-36 lg:pr-40">
           <h2 className="text-xl font-extrabold tracking-tight text-violet-900 sm:text-3xl">Help Centre</h2>
-          <p className="mt-0.5 text-xs text-violet-800/80 sm:text-sm">
+          <p className="mt-0.5 text-xs font-semibold text-violet-800/80 sm:text-sm">
             Find answers to common Localix issues and usage questions.
           </p>
           <img

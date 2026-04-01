@@ -397,7 +397,7 @@ export default function Connections() {
             >
               Connections
             </h2>
-            <p className="mt-0.5 text-xs text-violet-800/80 sm:text-sm">Manage your Localix network.</p>
+            <p className="mt-0.5 text-xs font-semibold text-violet-800/80 sm:text-sm">Manage your Localix network.</p>
           </div>
           <img
             src="/images/connections.png"

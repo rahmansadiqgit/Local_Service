@@ -184,7 +184,7 @@ export default function EditProfile() {
           <h2 className="text-xl font-extrabold tracking-tight text-violet-900 sm:text-3xl" style={{ fontFamily: "'Sora', 'Trebuchet MS', sans-serif" }}>
             Edit Profile
           </h2>
-          <p className="mt-0.5 text-xs text-violet-800/80 sm:text-sm">Update your public information and profile photo.</p>
+          <p className="mt-0.5 text-xs font-semibold text-violet-800/80 sm:text-sm">Update your public information and profile photo.</p>
           <img
             src="/images/edit_profile.png"
             alt="Edit profile header illustration"

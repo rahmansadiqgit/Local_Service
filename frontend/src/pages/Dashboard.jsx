@@ -1057,7 +1057,7 @@ export default function Dashboard() {
             >
               {id ? `${profile?.name || 'User'}'s Dashboard` : 'Dashboard'}
             </h2>
-            <p className="mt-0.5 text-xs text-violet-800/80">
+            <p className="mt-0.5 text-xs font-semibold text-violet-800/80">
               {id ? `Overview of ${profile?.name || 'their'} Localix activity.` : 'Overview of your Localix activity.'}
             </p>
           </div>

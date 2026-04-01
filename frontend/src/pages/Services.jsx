@@ -47,7 +47,7 @@ export default function Services() {
         <div className="relative px-6 py-3.5 pr-40 sm:px-8 sm:py-4 sm:pr-44 lg:pr-48">
           <div>
             <h2 className="text-xl font-extrabold tracking-tight text-violet-900 sm:text-3xl">Services</h2>
-            <p className="mt-0.5 text-xs text-violet-800/80 sm:text-sm">Explore popular service categories available in Localix.</p>
+            <p className="mt-0.5 text-xs font-semibold text-violet-800/80 sm:text-sm">Explore popular service categories available in Localix.</p>
           </div>
           <img
             src="/images/services.png"
