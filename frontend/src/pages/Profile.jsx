@@ -83,7 +83,7 @@ export default function Profile() {
             onClick={() => setSettingsOpen((prev) => !prev)}
             aria-label="Open profile settings"
             aria-expanded={settingsOpen}
-            className="settings-gear-btn rounded-full border border-violet-300 bg-white/85 p-2.5 text-violet-700 shadow-sm transition hover:bg-violet-100 hover:text-violet-700 hover:shadow-md"
+            className="settings-gear-btn rounded-full border border-violet-300 bg-white/85 p-2.5 text-violet-700 shadow-sm transition-all duration-200 hover:border-pink-300 hover:bg-pink-100/90 hover:text-pink-700 hover:shadow-[0_0_16px_rgba(236,72,153,0.45)]"
           >
             <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.9">
               <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.757.426 1.757 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.757-2.924 1.757-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.757-.426-1.757-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
@@ -100,7 +100,7 @@ export default function Profile() {
                     setSettingsOpen(false)
                     navigate('/profile/edit')
                   }}
-                  className="w-full rounded-lg px-2 py-1.5 text-left text-sm font-medium text-slate-700 transition hover:bg-violet-100 hover:text-violet-700"
+                  className="w-full rounded-lg px-2 py-1.5 text-left text-sm font-medium text-slate-700 transition-all duration-200 hover:bg-pink-100/90 hover:text-pink-700 hover:shadow-[0_0_14px_rgba(236,72,153,0.35)]"
                 >
                   Edit Profile
                 </button>
@@ -110,7 +110,7 @@ export default function Profile() {
                     setSettingsOpen(false)
                     navigate('/profile/change-password')
                   }}
-                  className="w-full rounded-lg px-2 py-1.5 text-left text-sm font-medium text-slate-700 transition hover:bg-violet-100 hover:text-violet-700"
+                  className="w-full rounded-lg px-2 py-1.5 text-left text-sm font-medium text-slate-700 transition-all duration-200 hover:bg-pink-100/90 hover:text-pink-700 hover:shadow-[0_0_14px_rgba(236,72,153,0.35)]"
                 >
                   Change Password
                 </button>
@@ -120,7 +120,7 @@ export default function Profile() {
                     setSettingsOpen(false)
                     navigate('/report')
                   }}
-                  className="w-full rounded-lg px-2 py-1.5 text-left text-sm font-medium text-slate-700 transition hover:bg-violet-100 hover:text-violet-700"
+                  className="w-full rounded-lg px-2 py-1.5 text-left text-sm font-medium text-slate-700 transition-all duration-200 hover:bg-pink-100/90 hover:text-pink-700 hover:shadow-[0_0_14px_rgba(236,72,153,0.35)]"
                 >
                   Report a Problem
                 </button>
