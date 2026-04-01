@@ -64,7 +64,7 @@ export default function Services() {
             className="card border border-violet-200/80 bg-gradient-to-br from-white via-violet-50/40 to-fuchsia-50/40"
           >
             <h3 className="text-lg font-bold text-violet-900">{group.title}</h3>
-            <p className="mt-1 text-xs text-slate-600">{group.subtitle}</p>
+            <p className="mt-1 text-xs font-bold text-slate-600">{group.subtitle}</p>
             <ul className="mt-4 flex flex-wrap gap-2.5 text-sm">
               {group.items.map((item) => (
                 <li

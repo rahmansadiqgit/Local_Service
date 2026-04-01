@@ -46,7 +46,7 @@ export default function ResetPassword() {
           >
             Reset Password
           </h2>
-          <p className="mt-0.5 overflow-hidden text-ellipsis whitespace-nowrap text-[10px] text-violet-800/80 sm:text-xs">Get a reset link by email.</p>
+          <p className="mt-0.5 overflow-hidden text-ellipsis whitespace-nowrap text-[10px] font-bold text-violet-800/80 sm:text-xs">Get a reset link by email.</p>
           <img
             src="/images/reset_pass.png"
             alt="Reset password header illustration"

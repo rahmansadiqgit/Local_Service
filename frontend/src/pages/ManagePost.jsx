@@ -1063,7 +1063,7 @@ export default function ManagePost() {
         </div>
         <div className="min-w-0">
           <p className="truncate text-sm font-bold text-white">{title}</p>
-          <p className="truncate text-xs text-slate-300">{subtitle}</p>
+          <p className="truncate text-xs font-bold text-slate-300">{subtitle}</p>
         </div>
       </div>
       <div className="flex items-start gap-3">
