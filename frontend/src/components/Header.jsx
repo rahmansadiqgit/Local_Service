@@ -360,6 +360,8 @@ export default function Header() {
 
   const dropdownItemClass =
     "block rounded-xl px-4 py-2.5 text-sm font-semibold !text-slate-700 transition hover:bg-orange-100 hover:!text-orange-700"
+  const sidebarItemClass =
+    "block rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:border-orange-200 hover:bg-orange-50 hover:text-orange-700"
 
   const logoSlotClass = "group relative z-10 ml-[10px] flex h-10 w-52 shrink-0 items-center md:w-60 lg:w-64"
 
@@ -577,38 +579,71 @@ export default function Header() {
               <button
                 onClick={() => toggleDropdown("menu")}
                 className={iconButtonClass}
+                aria-label="Open navigation menu"
+                aria-expanded={openDropdown === "menu"}
               >
                 ☰
               </button>
-              {openDropdown === "menu" && (
-                <div className={`${dropdownPanelClass} w-56`}>
-                  <Link
-                    to="/connections"
-                    onClick={() => setOpenDropdown(null)}
-                    className={dropdownItemClass}
-                  >
-                    Connections
-                  </Link>
-                  <Link
-                    to="/erp"
-                    onClick={() => setOpenDropdown(null)}
-                    className={dropdownItemClass}
-                  >
-                    ERP
-                  </Link>
-                  <Link
-                    to="/cart"
-                    onClick={() => setOpenDropdown(null)}
-                    className={dropdownItemClass}
-                  >
-                    Your Cart
-                  </Link>
-                </div>
-              )}
             </div>
           )}
         </div>
       </div>
+
+      {isAuthenticated && openDropdown === "menu" && (
+        <div className="fixed inset-0 z-50" data-header-dropdown>
+          <button
+            type="button"
+            className="absolute inset-0 bg-slate-900/45 backdrop-blur-[1px]"
+            onClick={() => setOpenDropdown(null)}
+            aria-label="Close navigation menu overlay"
+          />
+
+          <aside className="absolute right-0 top-0 h-full w-[300px] max-w-[86vw] border-l border-white/30 bg-gradient-to-b from-white to-violet-50 p-4 shadow-2xl">
+            <div className="mb-4 flex items-center justify-between">
+              <p className="text-sm font-extrabold uppercase tracking-[0.14em] text-violet-700">Menu</p>
+              <button
+                type="button"
+                onClick={() => setOpenDropdown(null)}
+                className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-violet-200 bg-white text-lg text-violet-700 transition hover:bg-violet-100"
+                aria-label="Close navigation menu"
+              >
+                ×
+              </button>
+            </div>
+
+            <nav className="space-y-2">
+              <Link
+                to="/help-centre"
+                onClick={() => setOpenDropdown(null)}
+                className={sidebarItemClass}
+              >
+                Help Centre
+              </Link>
+              <Link
+                to="/connections"
+                onClick={() => setOpenDropdown(null)}
+                className={sidebarItemClass}
+              >
+                Connections
+              </Link>
+              <Link
+                to="/erp"
+                onClick={() => setOpenDropdown(null)}
+                className={sidebarItemClass}
+              >
+                ERP
+              </Link>
+              <Link
+                to="/cart"
+                onClick={() => setOpenDropdown(null)}
+                className={sidebarItemClass}
+              >
+                Your Cart
+              </Link>
+            </nav>
+          </aside>
+        </div>
+      )}
     </header>
   )
 }

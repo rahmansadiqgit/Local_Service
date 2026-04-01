@@ -118,16 +118,6 @@ export default function Profile() {
                   type="button"
                   onClick={() => {
                     setSettingsOpen(false)
-                    navigate('/help-centre')
-                  }}
-                  className="w-full rounded-lg px-2 py-1.5 text-left text-sm font-medium text-slate-700 transition hover:bg-violet-100 hover:text-violet-700"
-                >
-                  Help Centre
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSettingsOpen(false)
                     navigate('/report')
                   }}
                   className="w-full rounded-lg px-2 py-1.5 text-left text-sm font-medium text-slate-700 transition hover:bg-violet-100 hover:text-violet-700"
