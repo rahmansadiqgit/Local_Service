@@ -176,6 +176,31 @@ const helpFaqs = [
     answer:
       'Use clear titles, detailed descriptions, accurate location, realistic pricing, and maintain good ratings and response speed.',
   },
+  {
+    question: 'Why does my session expire and ask me to log in again?',
+    answer:
+      'For security, access tokens expire after a period. Log in again to continue, and avoid clearing browser storage if you want to stay signed in longer.',
+  },
+  {
+    question: 'Can I change the email address of my account?',
+    answer:
+      'If email change is not available directly in your profile, submit a request from Report a Problem including your current and new email details.',
+  },
+  {
+    question: 'Why does my uploaded image look too large or cropped?',
+    answer:
+      'Different cards use fixed preview areas. Use a clear centered image and moderate resolution for better display across devices.',
+  },
+  {
+    question: 'What should I include in a good problem report?',
+    answer:
+      'Add exact steps, page name, expected result, actual result, and if possible a screenshot. This helps support reproduce and solve faster.',
+  },
+  {
+    question: 'How do I know if my action was saved successfully?',
+    answer:
+      'Watch for success messages, updated data in the same page, and refreshed entries in feed or management pages after your action.',
+  },
 ]
 
 export default function HelpCentre() {
@@ -204,19 +229,36 @@ export default function HelpCentre() {
           <img
             src="/images/help_centre.png"
             alt="Help Centre header illustration"
-            className="pointer-events-none absolute right-4 top-1/2 h-28 w-28 -translate-y-1/2 object-contain sm:h-32 sm:w-32 lg:h-36 lg:w-36"
+            className="pointer-events-none absolute right-4 top-1/2 h-32 w-32 -translate-y-1/2 object-contain sm:h-36 sm:w-36 lg:h-40 lg:w-40"
           />
         </div>
       </section>
 
-      <section className="card border border-violet-200/80 bg-gradient-to-br from-[#efe6ff]/85 via-[#e7dcff]/78 to-[#f3e9ff]/80 shadow-lg">
-        <label className="text-xs font-semibold uppercase tracking-[0.12em] text-violet-700">Search questions</label>
-        <input
-          value={search}
-          onChange={(event) => setSearch(event.target.value)}
-          placeholder="Search by keyword, for example: login, post, ERP, cart"
-          className="mt-1.5 w-full rounded-xl border border-violet-200 bg-white/90 px-3 py-2 text-sm text-slate-800 shadow-sm focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-200"
-        />
+      <section className="relative overflow-hidden rounded-3xl border border-white/45 bg-gradient-to-r from-orange-200/45 via-amber-100/35 to-orange-300/35 p-4 shadow-[0_14px_30px_rgba(251,146,60,0.22)] sm:p-5">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.45),transparent_52%)]" />
+        <div className="absolute -left-10 -top-10 h-24 w-24 rounded-full bg-white/35 blur-2xl" />
+        <div className="absolute -right-10 -bottom-10 h-24 w-24 rounded-full bg-orange-200/45 blur-2xl" />
+        <div className="relative mb-3 flex items-center justify-between gap-3 border-b border-white/45 pb-3">
+          <p className="text-sm font-extrabold tracking-wide text-orange-900">Find Questions</p>
+          <p className="text-xs text-slate-600">Search by keyword from common Localix issues</p>
+        </div>
+
+        <div className="relative mt-1.5 flex flex-wrap items-center gap-2">
+          <input
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Search questions like login, post, ERP, cart"
+            className="h-11 min-w-[240px] flex-1 rounded-xl border border-white/50 bg-white/45 px-3 text-sm text-slate-800 shadow-sm placeholder:text-slate-500 focus:border-orange-300 focus:outline-none focus:ring-2 focus:ring-orange-200/80"
+          />
+          <button
+            type="button"
+            onClick={() => setSearch((prev) => String(prev || '').trim())}
+            className="inline-flex h-11 items-center justify-center rounded-lg bg-gradient-to-r from-violet-600 to-fuchsia-600 px-4 text-sm font-semibold text-white shadow-sm transition hover:from-violet-700 hover:to-fuchsia-700"
+          >
+            Search
+          </button>
+        </div>
+
         <p className="mt-2 text-xs text-slate-600">
           {filteredFaqs.length} question{filteredFaqs.length === 1 ? '' : 's'} found
         </p>
@@ -233,12 +275,7 @@ export default function HelpCentre() {
               key={`${item.question}-${index}`}
               className="card border border-violet-200/80 bg-gradient-to-r from-white via-violet-50/45 to-fuchsia-50/45"
             >
-              <summary className="cursor-pointer list-none text-sm font-bold text-violet-900">
-                <span className="mr-2 inline-flex h-6 w-6 items-center justify-center rounded-full bg-violet-100 text-xs font-extrabold text-violet-700">
-                  {index + 1}
-                </span>
-                {item.question}
-              </summary>
+              <summary className="cursor-pointer list-none text-sm font-bold text-violet-900">{item.question}</summary>
               <p className="mt-3 text-sm leading-6 text-slate-700">{item.answer}</p>
             </details>
           ))
