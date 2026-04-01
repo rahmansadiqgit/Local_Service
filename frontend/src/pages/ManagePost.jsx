@@ -139,7 +139,7 @@ export default function ManagePost() {
 
   const loadPosts = useCallback(async () => {
     try {
-      const [myPostRes, allPostRes, skillRes, expertiseRes, productRes, erpRes] = await Promise.all([
+      const [myPostRes, allPostRes, skillRes, expertiseRes, productRes, erpRes] = await Promise.allSettled([
         api.get('/posts/?mine=1'),
         api.get('/posts/'),
         api.get('/skills/'),
@@ -148,12 +148,35 @@ export default function ManagePost() {
         api.get('/erp/'),
       ])
 
-      const mineIds = new Set((myPostRes.data || []).map((post) => post.id))
-      const erpPostIds = new Set((erpRes.data || []).map((item) => item.post))
+      const getData = (result, fallback = []) => {
+        return result?.status === 'fulfilled' ? (result.value?.data ?? fallback) : fallback
+      }
+
+      const myPosts = getData(myPostRes)
+      const allPosts = getData(allPostRes)
+      const skillsData = getData(skillRes)
+      const expertisesData = getData(expertiseRes)
+      const productsData = getData(productRes)
+      const erpData = getData(erpRes)
+
+      const failedEndpoints = []
+      if (myPostRes.status === 'rejected') failedEndpoints.push('my posts')
+      if (allPostRes.status === 'rejected') failedEndpoints.push('all posts')
+      if (skillRes.status === 'rejected') failedEndpoints.push('skills')
+      if (expertiseRes.status === 'rejected') failedEndpoints.push('expertises')
+      if (productRes.status === 'rejected') failedEndpoints.push('products')
+      if (erpRes.status === 'rejected') failedEndpoints.push('erp')
+
+      if (failedEndpoints.length > 0) {
+        showMessage(`Some data failed to load: ${failedEndpoints.join(', ')}`, 'error')
+      }
+
+      const mineIds = new Set((myPosts || []).map((post) => post.id))
+      const erpPostIds = new Set((erpData || []).map((item) => item.post))
       const manageableIds = new Set([...erpPostIds])
       const selectedPostId = Number(id)
       const hasSelectedPostId = Number.isFinite(selectedPostId) && selectedPostId > 0
-      const manageablePosts = (allPostRes.data || []).filter((post) => {
+      const manageablePosts = (allPosts || []).filter((post) => {
         if (manageableIds.has(post.id)) return true
         if (hasSelectedPostId && Number(post.id) === selectedPostId) return true
         return false
@@ -161,10 +184,10 @@ export default function ManagePost() {
 
       setOwnPostIds(mineIds)
       setPosts(manageablePosts)
-      setSkills(skillRes.data)
-      setExpertises(expertiseRes.data)
-      setProducts(productRes.data)
-      setErpItems(erpRes.data)
+      setSkills(skillsData)
+      setExpertises(expertisesData)
+      setProducts(productsData)
+      setErpItems(erpData)
     } catch (error) {
       console.error(error)
       showMessage('Error loading posts', 'error')
@@ -696,22 +719,36 @@ export default function ManagePost() {
     try {
       const existing = erpByPost[post.id]
       let erpRecord = existing
+      const payload = {
+        post: post.id,
+        total_cost: Number(submittedSnapshot.totals?.grand || 0),
+        configuration_snapshot: submittedSnapshot,
+        is_configured: false,
+      }
 
       if (existing) {
-        const { data } = await api.patch(`/erp/${existing.id}/`, {
-          total_cost: Number(submittedSnapshot.totals?.grand || 0),
-          configuration_snapshot: submittedSnapshot,
-          is_configured: false,
-        })
-        erpRecord = data
-        setErpItems((prev) => prev.map((item) => (item.id === data.id ? data : item)))
-      } else {
-        const payload = {
-          post: post.id,
-          total_cost: Number(submittedSnapshot.totals?.grand || 0),
-          configuration_snapshot: submittedSnapshot,
-          is_configured: false,
+        try {
+          const { data } = await api.patch(`/erp/${existing.id}/`, {
+            total_cost: Number(submittedSnapshot.totals?.grand || 0),
+            configuration_snapshot: submittedSnapshot,
+            is_configured: false,
+          })
+          erpRecord = data
+          setErpItems((prev) => prev.map((item) => (item.id === data.id ? data : item)))
+        } catch (patchError) {
+          const statusCode = patchError?.response?.status
+          if (statusCode === 404 || statusCode === 403 || statusCode === 400) {
+            const { data } = await api.post('/erp/', payload)
+            erpRecord = data
+            setErpItems((prev) => {
+              const exists = prev.some((item) => item.id === data.id)
+              return exists ? prev.map((item) => (item.id === data.id ? data : item)) : [...prev, data]
+            })
+          } else {
+            throw patchError
+          }
         }
+      } else {
         const { data } = await api.post('/erp/', payload)
         erpRecord = data
         setErpItems((prev) => [...prev, data])
@@ -740,6 +777,9 @@ export default function ManagePost() {
       if (statusCode === 403) {
         showMessage('Failed submission: you are not allowed to submit this application.', 'error')
       } else if (statusCode === 400 && detail) {
+        const text = typeof detail === 'string' ? detail : JSON.stringify(detail)
+        showMessage(`Failed submission: ${text}`, 'error')
+      } else if (detail) {
         const text = typeof detail === 'string' ? detail : JSON.stringify(detail)
         showMessage(`Failed submission: ${text}`, 'error')
       } else {
@@ -880,22 +920,37 @@ export default function ManagePost() {
     }
 
     const existing = erpByPost[post.id]
+    const payload = {
+      post: post.id,
+      total_cost: total,
+      configuration_snapshot: snapshot,
+      is_configured: true,
+    }
+
     try {
       if (existing) {
-        const { data } = await api.patch(`/erp/${existing.id}/`, {
-          total_cost: total,
-          configuration_snapshot: snapshot,
-          is_configured: true,
-        })
-        setErpItems((prev) => prev.map((item) => (item.id === data.id ? data : item)))
-        showMessage('Booking confirmed and ERP task updated', 'success')
-      } else {
-        const payload = {
-          post: post.id,
-          total_cost: total,
-          configuration_snapshot: snapshot,
-          is_configured: true,
+        try {
+          const { data } = await api.patch(`/erp/${existing.id}/`, {
+            total_cost: total,
+            configuration_snapshot: snapshot,
+            is_configured: true,
+          })
+          setErpItems((prev) => prev.map((item) => (item.id === data.id ? data : item)))
+          showMessage('Booking confirmed and ERP task updated', 'success')
+        } catch (patchError) {
+          const statusCode = patchError?.response?.status
+          if (statusCode === 404 || statusCode === 403 || statusCode === 400) {
+            const { data } = await api.post('/erp/', payload)
+            setErpItems((prev) => {
+              const exists = prev.some((item) => item.id === data.id)
+              return exists ? prev.map((item) => (item.id === data.id ? data : item)) : [...prev, data]
+            })
+            showMessage('Booking confirmed and ERP task created', 'success')
+          } else {
+            throw patchError
+          }
         }
+      } else {
         const { data } = await api.post('/erp/', payload)
         setErpItems((prev) => [...prev, data])
         showMessage('Booking confirmed and ERP task created', 'success')
@@ -906,7 +961,9 @@ export default function ManagePost() {
       }, 250)
     } catch (error) {
       console.error(error)
-      showMessage('Failed to manage ERP task', 'error')
+      const detail = error?.response?.data
+      const text = detail ? (typeof detail === 'string' ? detail : JSON.stringify(detail)) : ''
+      showMessage(text ? `Failed to manage ERP task: ${text}` : 'Failed to manage ERP task', 'error')
     }
   }
 
