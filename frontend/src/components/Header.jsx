@@ -355,7 +355,7 @@ export default function Header() {
   const dropdownItemClass =
     "block rounded-xl px-4 py-2.5 text-sm font-semibold !text-slate-700 transition hover:bg-orange-100 hover:!text-orange-700"
 
-  const logoSlotClass = "group relative z-10 flex h-10 w-36 shrink-0 items-center md:w-44 lg:w-48"
+  const logoSlotClass = "group relative z-10 ml-[10px] flex h-10 w-52 shrink-0 items-center md:w-60 lg:w-64"
 
   return (
     <header className="sticky top-0 z-40 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 shadow-lg">
@@ -365,7 +365,7 @@ export default function Header() {
           <img
             src="/images/logo.png"
             alt="Localix logo"
-            className="pointer-events-none h-full w-full object-contain object-left drop-shadow-md transition-transform duration-200 [transform:scale(1.38)] group-hover:[transform:scale(1.46)]"
+            className="pointer-events-none h-full w-full origin-left object-contain object-left drop-shadow-md transition-transform duration-200 [transform:scale(1.74)] group-hover:[transform:scale(1.8)]"
           />
         </Link>
 
@@ -548,7 +548,7 @@ export default function Header() {
               )}
             </div>
           ) : (
-            <>
+            <div className="flex items-center gap-3 -translate-x-[20px]">
               <Link
                 to="/login"
                 className="header-auth-btn rounded-full border border-white/50 bg-white/95 px-5 py-2 text-sm font-semibold text-indigo-600 shadow-md transition-all duration-200 hover:-translate-y-0.5 hover:bg-yellow-100 hover:shadow-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-yellow-200 focus-visible:ring-offset-2 focus-visible:ring-offset-indigo-500"
@@ -562,7 +562,7 @@ export default function Header() {
               >
                 Register
               </Link>
-            </>
+            </div>
           )}
 
           {/* Hamburger */}
