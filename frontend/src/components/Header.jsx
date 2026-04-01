@@ -210,6 +210,12 @@ export default function Header() {
     return parsed.toLocaleString()
   }
 
+  const getVisibleNotificationMessage = (value) => {
+    const text = String(value || "")
+    // Keep link payload for routing, but remove it from visible notification copy.
+    return text.replace(/\s*post\s+link:\s*[^\s]+\s*/i, " ").replace(/\s{2,}/g, " ").trim()
+  }
+
   const handleMarkAllAsRead = async () => {
     const unreadItems = notifications.filter((item) => item && !item.is_read)
     if (!unreadItems.length) return
@@ -487,7 +493,7 @@ export default function Header() {
                               )}
                             </div>
                           </div>
-                          <p className="mt-0.5 text-xs">{item.message || ""}</p>
+                          <p className="mt-0.5 text-xs">{getVisibleNotificationMessage(item.message)}</p>
                           <p className="mt-1 text-[11px] text-slate-500">{formatNotificationTime(item.created_at)}</p>
                         </div>
                       ))}

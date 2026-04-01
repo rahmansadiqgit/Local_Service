@@ -271,7 +271,12 @@ export default function ERP() {
     try {
       const { data } = await api.patch(`/erp/${erp.id}/update_stage/`, { stage })
       setErpItems((prev) => prev.map((item) => (item.id === data.id ? data : item)))
-      notify('ERP Status Updated', `Task ${erp.id} moved to ${stage}.`)
+      const bookingTitle =
+        erp?.configuration_snapshot?.post?.title || postMap[erp.post]?.post_title || postMap[erp.post]?.post_name || `Booking ${erp.id}`
+      notify(
+        'Booking Status Updated',
+        `Booking #${erp.id} for "${bookingTitle}" has moved to ${stage}. Check your Booking Tracker for the latest details. Post link: /erp?erp_id=${erp.id}`,
+      )
     } catch (error) {
       console.error(error)
     }

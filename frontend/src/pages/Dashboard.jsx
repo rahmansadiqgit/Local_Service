@@ -631,17 +631,23 @@ export default function Dashboard() {
           })
         }
       } else {
-        const erpDetail = await api.get(`/erp/${erpId}/`)
-        const current = erpDetail?.data || {}
-        const snapshot = { ...(current.configuration_snapshot || {}) }
-        const submission = { ...(snapshot.application_submission || {}) }
-        submission.status = 'rejected'
-        submission.rejected_at = new Date().toISOString()
-        snapshot.application_submission = submission
-        await api.patch(`/erp/${erpId}/`, {
-          configuration_snapshot: snapshot,
-          is_configured: false,
-        })
+        try {
+          await api.post(`/erp/${erpId}/reject_application/`)
+        } catch (rejectError) {
+          if (rejectError?.response?.status !== 404) throw rejectError
+
+          const erpDetail = await api.get(`/erp/${erpId}/`)
+          const current = erpDetail?.data || {}
+          const snapshot = { ...(current.configuration_snapshot || {}) }
+          const submission = { ...(snapshot.application_submission || {}) }
+          submission.status = 'rejected'
+          submission.rejected_at = new Date().toISOString()
+          snapshot.application_submission = submission
+          await api.patch(`/erp/${erpId}/`, {
+            configuration_snapshot: snapshot,
+            is_configured: false,
+          })
+        }
       }
 
       await refreshApplicationData(profile?.id)
