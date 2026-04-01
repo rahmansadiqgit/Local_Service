@@ -288,6 +288,14 @@ export default function Header() {
     const message = String(item?.message || "")
     const messageLower = message.toLowerCase()
 
+    if (title.includes("password changed") || messageLower.includes("password")) {
+      return "/profile"
+    }
+
+    if (title.includes("post created") || messageLower.includes("post created")) {
+      return "/dashboard"
+    }
+
     // Prefer an explicit in-message link when available.
     const postLinkMatch = message.match(/post\s+link:\s*([^\s]+)/i)
     if (postLinkMatch && postLinkMatch[1]) {
@@ -317,6 +325,32 @@ export default function Header() {
   const handleNotificationClick = (item) => {
     const target = getNotificationTarget(item)
     if (!target) return
+
+    if (item?.id && !item?.is_read) {
+      setNotifications((prev) =>
+        prev.map((notification) =>
+          notification.id === item.id
+            ? {
+                ...notification,
+                is_read: true,
+              }
+            : notification,
+        ),
+      )
+      api.patch(`/notifications/${item.id}/`, { is_read: true }).catch((error) => {
+        console.error("Failed to mark notification as read:", error)
+        setNotifications((prev) =>
+          prev.map((notification) =>
+            notification.id === item.id
+              ? {
+                  ...notification,
+                  is_read: false,
+                }
+              : notification,
+          ),
+        )
+      })
+    }
 
     if (String(target).startsWith("http://") || String(target).startsWith("https://")) {
       window.open(target, "_blank", "noopener,noreferrer")
