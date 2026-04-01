@@ -1,4 +1,5 @@
-import { Navigate, Route, Routes } from 'react-router-dom'
+import { useEffect } from 'react'
+import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import Footer from './components/Footer'
 import Header from './components/Header'
 import ProtectedRoute from './components/ProtectedRoute'
@@ -22,6 +23,12 @@ import Services from './pages/Services'
 import YourCart from './pages/YourCart'
 
 export default function App() {
+  const location = useLocation()
+
+  useEffect(() => {
+    window.scrollTo(0, 0)
+  }, [location.pathname, location.search])
+
   return (
     <div className="min-h-screen text-slate-900 ">
       
