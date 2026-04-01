@@ -361,14 +361,18 @@ export default function Header() {
   const dropdownItemClass =
     "block rounded-xl px-4 py-2.5 text-sm font-semibold !text-slate-700 transition hover:bg-orange-100 hover:!text-orange-700"
 
+  const logoSlotClass = "group relative z-10 ml-[10px] flex h-10 w-52 shrink-0 items-center md:w-60 lg:w-64"
+
   return (
     <header className="sticky top-0 z-40 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 shadow-lg">
-      <div className="relative mx-auto flex max-w-7xl items-center justify-between px-4 py-4">
+      <div className="relative mx-auto flex w-full max-w-screen-2xl items-center justify-between px-4 py-4 sm:px-6 lg:px-8">
         {/* Logo */}
-        <Link to="/" className="flex items-center gap-2 group">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white text-indigo-600 font-extrabold shadow-md transition-transform group-hover:scale-110">
-            LX
-          </div>
+        <Link to="/" className={logoSlotClass} aria-label="Localix home">
+          <img
+            src="/images/logo.png"
+            alt="Localix logo"
+            className="pointer-events-none h-full w-full origin-left object-contain object-left drop-shadow-md transition-transform duration-200 [transform:scale(1.74)] group-hover:[transform:scale(1.8)]"
+          />
         </Link>
 
         {/* Title */}
@@ -382,7 +386,7 @@ export default function Header() {
         </div>
 
         {/* Right */}
-        <div className="flex items-center gap-3">
+        <div className="relative z-10 ml-auto flex items-center gap-3 md:translate-x-2 lg:translate-x-3">
           {/* Notifications */}
           {isAuthenticated && (
             <div className="relative" data-header-dropdown>
@@ -550,7 +554,7 @@ export default function Header() {
               )}
             </div>
           ) : (
-            <>
+            <div className="flex items-center gap-3 -translate-x-[20px]">
               <Link
                 to="/login"
                 className="header-auth-btn rounded-full border border-white/50 bg-white/95 px-5 py-2 text-sm font-semibold text-indigo-600 shadow-md transition-all duration-200 hover:-translate-y-0.5 hover:bg-yellow-100 hover:shadow-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-yellow-200 focus-visible:ring-offset-2 focus-visible:ring-offset-indigo-500"
@@ -564,7 +568,7 @@ export default function Header() {
               >
                 Register
               </Link>
-            </>
+            </div>
           )}
 
           {/* Hamburger */}
