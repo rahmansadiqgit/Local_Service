@@ -15,6 +15,7 @@ import Login from './pages/Login'
 import ManagePost from './pages/ManagePost'
 import Profile from './pages/Profile'
 import EditProfile from './pages/EditProfile'
+import EditPost from './pages/EditPost'
 import ChangePasswordPage from './pages/ChangePasswordPage'
 import ReportProblem from './pages/ReportProblem'
 import Register from './pages/Register'
@@ -60,6 +61,7 @@ export default function App() {
                 <Route path="/profile/change-password" element={<ChangePasswordPage />} />
                 <Route path="/profile/:id" element={<Profile />} />
               <Route path="/create-post" element={<CreatePost />} />
+              <Route path="/edit-post/:id" element={<EditPost />} />
               <Route path="/manage-post" element={<ManagePost />} />
               <Route path="/manage-post/:id" element={<ManagePost />} />
               <Route path="/connections" element={<Connections />} />

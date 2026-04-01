@@ -314,6 +314,21 @@ class PostViewSet(viewsets.ModelViewSet):
             message=f"You have successfully created your post: {post_title}.",
         )
 
+    def perform_update(self, serializer):
+        post = self.get_object()
+        actor = self.request.user
+        owner = getattr(post, "owner", None)
+        if not actor or not owner or int(actor.id) != int(owner.id):
+            raise PermissionDenied("Only the post owner can edit this post.")
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        actor = self.request.user
+        owner = getattr(instance, "owner", None)
+        if not actor or not owner or int(actor.id) != int(owner.id):
+            raise PermissionDenied("Only the post owner can delete this post.")
+        instance.delete()
+
 
 class SkillViewSet(viewsets.ModelViewSet):
     queryset = Skill.objects.all() 

@@ -513,6 +513,21 @@ export default function HomeFeed() {
   const handleAction = async (post, actionType) => {
     setActionMessage('')
 
+    if (actionType === 'edit') {
+      if (!isAuthenticated) {
+        navigate('/login')
+        return
+      }
+
+      const postOwnerId = post.owner_id || post.owner
+      if (!currentUserId || String(postOwnerId) !== String(currentUserId)) {
+        setActionMessage('You can edit only your own posts.')
+        return
+      }
+      navigate(`/edit-post/${post.id}`)
+      return
+    }
+
     const postOwnerId = post.owner_id || post.owner
     if (currentUserId && String(postOwnerId) === String(currentUserId)) {
       setActionMessage("You can't apply or book your own post.")

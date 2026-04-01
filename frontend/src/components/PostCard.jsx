@@ -277,13 +277,12 @@ export default function PostCard({
       <div className="mt-auto flex flex-wrap items-center justify-start gap-2.5">
         <button
           type="button"
-          onClick={() => onAction?.(post, post.post_type === 'Demand' ? 'apply' : 'book')}
-          disabled={isOwnPost}
+          onClick={() => onAction?.(post, isOwnPost ? 'edit' : post.post_type === 'Demand' ? 'apply' : 'book')}
 
-          className="rounded-full bg-gradient-to-r from-sky-600 to-blue-700 px-5 py-2 text-sm font-semibold text-white shadow-md transition hover:from-sky-700 hover:to-blue-800 focus:outline-none focus:ring-2 focus:ring-sky-300 disabled:cursor-not-allowed disabled:opacity-50"
+          className="rounded-full bg-gradient-to-r from-sky-600 to-blue-700 px-5 py-2 text-sm font-semibold text-white shadow-md transition hover:from-sky-700 hover:to-blue-800 focus:outline-none focus:ring-2 focus:ring-sky-300"
 
         >
-          {isOwnPost ? 'Your Post' : post.post_type === 'Demand' ? 'Apply' : 'Book'}
+          {isOwnPost ? 'Edit' : post.post_type === 'Demand' ? 'Apply' : 'Book'}
         </button>
         {!isOwnPost && (
           <button
