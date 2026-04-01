@@ -952,7 +952,7 @@ export default function CreatePost() {
                   <option value="monthly">Monthly</option>
                 </select>
               </div>
-              {isDemand && row.unit ? (
+              {isDemand ? (
                 <div>
                   <label className="text-xs font-semibold text-black">Needed Hire Unit</label>
                   <input
