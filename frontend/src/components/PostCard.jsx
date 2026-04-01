@@ -180,7 +180,7 @@ export default function PostCard({
 
   return (
     <div
-      className="card relative flex h-full flex-col space-y-3 overflow-hidden border border-slate-200 p-4 text-black shadow-sm transition-shadow hover:shadow-lg sm:p-5"
+      className="card relative flex h-full flex-col space-y-3 overflow-visible border border-slate-200 p-4 text-black shadow-sm transition-shadow hover:shadow-lg sm:p-5"
       style={{
         background: 'linear-gradient(135deg, #f8fafc 0%, #e3d5e5 45%, #8763ac 100%)',
       }}
@@ -330,7 +330,7 @@ export default function PostCard({
           <div
             className="flex flex-col overflow-hidden rounded-2xl border border-violet-200/80 shadow-xl backdrop-blur-md"
             style={{
-              maxHeight: 'calc(100% - 7.5rem)',
+              maxHeight: 'min(78vh, 46rem)',
               background: 'linear-gradient(135deg, #c9b6ff 0%, #e6d7ff 60%, #f2eaff 100%)',
               backgroundColor: 'rgba(236, 225, 255, 0.82)',
               boxShadow: '0 8px 32px 0 rgba(31, 38, 135, 0.12)',

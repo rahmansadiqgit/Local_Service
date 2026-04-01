@@ -845,7 +845,7 @@ export default function Dashboard() {
         </div>
 
         {isExpanded && (
-          <div className="mt-3 space-y-3 rounded-xl border border-violet-200/70 bg-white/70 p-3">
+          <div className="mt-3 max-h-[70vh] space-y-3 overflow-y-auto rounded-xl border border-violet-200/70 bg-white/70 p-3 pr-2">
             {hasExpertise && (
               <div className="space-y-2">
                 <p className="text-sm font-semibold text-slate-700">Expertise</p>
