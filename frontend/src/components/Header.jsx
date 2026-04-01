@@ -554,12 +554,6 @@ export default function Header() {
                   >
                     Dashboard
                   </Link>
-                  <button
-                    onClick={handleLogout}
-                    className="w-full rounded-xl px-4 py-2.5 text-left text-sm font-semibold text-slate-700 transition hover:bg-orange-100 hover:text-orange-700"
-                  >
-                    Logout
-                  </button>
                 </div>
               )}
             </div>
@@ -656,6 +650,16 @@ export default function Header() {
               >
                 Help Centre
               </Link>
+              <button
+                type="button"
+                onClick={() => {
+                  setOpenDropdown(null)
+                  handleLogout()
+                }}
+                className="w-full rounded-xl border border-white/65 bg-white/70 px-4 py-3 text-left text-sm font-semibold text-[#ff0000] transition hover:border-orange-200 hover:bg-orange-50/80 hover:text-[#ff0000]"
+              >
+                Logout
+              </button>
             </nav>
             </div>
           </aside>
