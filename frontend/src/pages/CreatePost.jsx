@@ -698,7 +698,7 @@ export default function CreatePost() {
           {expertises.map((row, index) => (
             <div key={`expertise-${index}`} className={`grid gap-4 ${isDemand ? 'lg:grid-cols-6' : 'lg:grid-cols-5'}`}>
               <div>
-                <label className="text-xs font-semibold text-black">{isDemand ? 'Expertise Name' : 'Skill/Experties Name'}</label>
+                <label className="text-xs font-semibold text-black">{isDemand ? 'Skill/Experties Name' : 'Skill/Experties Name'}</label>
                 <input
                   placeholder={isDemand ? 'e.g., Electricians, Teachers' : 'e.g., Electricians, Teachers'}
                   value={row.name}
@@ -889,7 +889,11 @@ export default function CreatePost() {
                 <div>
                   <label className="text-xs font-semibold text-black">Specific Service Description</label>
                   <textarea
-                    placeholder="Enter specific service description (What you offer?)"
+                    placeholder={
+                      isDemand
+                        ? 'Enter specific service description (What do you want?)'
+                        : 'Enter specific service description (What you offer?)'
+                    }
                     value={row.description}
                     onChange={(event) =>
                       setServices((prev) =>
@@ -981,7 +985,11 @@ export default function CreatePost() {
                 <div>
                   <label className="text-xs font-semibold text-black">Specific Product Description</label>
                   <textarea
-                    placeholder="Enter specific product description (Actual value of your product)"
+                    placeholder={
+                      isDemand
+                        ? 'Enter specific product description (Actually what type of product?)'
+                        : 'Enter specific product description (Actual value of your product)'
+                    }
                     value={row.description}
                     onChange={(event) =>
                       setProducts((prev) =>
