@@ -306,7 +306,7 @@ export default function CreatePost() {
     })
 
     if (showExpertiseSection && expertiseDurationMissing) {
-      setMessage(isDemand ? 'Please select Hire Unit for all expertise rows.' : 'Please select Work Type for all expertise rows.')
+      setMessage(isDemand ? 'Please select Hire Unit for all expertise rows.' : 'Please select Service Duration Unit for all expertise rows.')
       setSaving(false)
       return
     }
@@ -681,7 +681,7 @@ export default function CreatePost() {
         {showExpertiseSection && (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <p className="text-base font-bold text-slate-700 dark:text-slate-200">Expertise</p>
+            <p className="text-base font-bold text-slate-700 dark:text-slate-200">{isDemand ? 'Expertise' : 'Experties'}</p>
             <button
               type="button"
               onClick={() =>
@@ -698,7 +698,7 @@ export default function CreatePost() {
           {expertises.map((row, index) => (
             <div key={`expertise-${index}`} className={`grid gap-4 ${isDemand ? 'lg:grid-cols-6' : 'lg:grid-cols-5'}`}>
               <div>
-                <label className="text-xs font-semibold text-black">{isDemand ? 'Expertise Name' : 'Skill / Expertise Name'}</label>
+                <label className="text-xs font-semibold text-black">{isDemand ? 'Expertise Name' : 'Skill/Experties Name'}</label>
                 <input
                   placeholder={isDemand ? 'e.g., Electricians, Teachers' : 'e.g., Electricians, Teachers'}
                   value={row.name}
@@ -713,7 +713,7 @@ export default function CreatePost() {
                 />
               </div>
               <div>
-                <label className="text-xs font-semibold text-black">{isDemand ? 'Preferred Experience' : 'Experience'}</label>
+                <label className="text-xs font-semibold text-black">{isDemand ? 'Preferred Experience' : 'Your Experience'}</label>
                 <input
                   type="text"
                   placeholder={isDemand ? '(Optional) e.g., 6 years' : '(Optional) e.g., 6 years'}
@@ -729,7 +729,7 @@ export default function CreatePost() {
                 />
               </div>
               <div>
-                <label className="text-xs font-semibold text-black">{isDemand ? 'Hire Unit' : 'Work Type'}</label>
+                <label className="text-xs font-semibold text-black">{isDemand ? 'Hire Unit' : 'Service Duration Unit'}</label>
                 <select
                   value={row.unit}
                   onChange={(event) =>
@@ -746,7 +746,7 @@ export default function CreatePost() {
                     className="bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white"
                     style={{ backgroundColor: '#7c3aed', color: '#ffffff' }}
                   >
-                    {isDemand ? 'Select hire unit' : 'Select duration'}
+                    {isDemand ? 'Select hire unit' : 'Select service duration unit'}
                   </option>
                   <option value="hourly">Hourly</option>
                   <option value="daily">Daily</option>
@@ -788,7 +788,7 @@ export default function CreatePost() {
                         : row.unit === 'monthly'
                           ? 'Your Monthly Budget (BDT)'
                           : 'Your Budget (BDT)'
-                    : 'Charge (BDT)'}
+                        : 'Charge (BDT) Per Unit'}
                 </label>
                 <input
                   type="text"
@@ -802,7 +802,7 @@ export default function CreatePost() {
                           : row.unit === 'monthly'
                             ? 'Enter your monthly budget (BDT)'
                             : 'Enter your budget (BDT)'
-                      : 'Enter charge amount (BDT)'
+                        : 'Enter charge amount per unit (BDT)'
                   }
                   value={row.cost}
                   onChange={(event) =>
@@ -889,7 +889,7 @@ export default function CreatePost() {
                 <div>
                   <label className="text-xs font-semibold text-black">Specific Service Description</label>
                   <textarea
-                    placeholder="Enter specific service description"
+                    placeholder="Enter specific service description (What you offer?)"
                     value={row.description}
                     onChange={(event) =>
                       setServices((prev) =>
@@ -904,7 +904,7 @@ export default function CreatePost() {
                 </div>
               )}
               <div>
-                <label className="text-xs font-semibold text-black">{isDemand ? 'Your Budget (BDT)' : 'Service Cost (BDT)'}</label>
+                <label className="text-xs font-semibold text-black">{isDemand ? 'Your Budget (BDT)' : 'Service Charge (BDT)'}</label>
                 <div className="flex gap-2">
                   <input
                     type="text"
@@ -956,8 +956,8 @@ export default function CreatePost() {
               key={`product-${index}`}
               className={`grid gap-4 ${isDemand
                 ? showProductDescriptionField
-                  ? 'lg:grid-cols-4'
-                  : 'lg:grid-cols-3'
+                  ? 'lg:grid-cols-5'
+                  : 'lg:grid-cols-4'
                 : showProductDescriptionField
                   ? 'lg:grid-cols-5'
                   : 'lg:grid-cols-4'}`}
@@ -981,7 +981,7 @@ export default function CreatePost() {
                 <div>
                   <label className="text-xs font-semibold text-black">Specific Product Description</label>
                   <textarea
-                    placeholder="Enter specific product description"
+                    placeholder="Enter specific product description (Actual value of your product)"
                     value={row.description}
                     onChange={(event) =>
                       setProducts((prev) =>
@@ -995,39 +995,37 @@ export default function CreatePost() {
                   />
                 </div>
               )}
-              {!isDemand && (
-                <div>
-                  <label className="text-xs font-semibold text-black">Unit</label>
-                  <select
-                    value={row.unit}
-                    onChange={(event) =>
-                      setProducts((prev) =>
-                        prev.map((item, i) => (i === index ? { ...item, unit: event.target.value } : item)),
-                      )
-                    }
-                    className={profileLikeSelectClass}
-                  >
-                    <option
-                      value=""
-                      className="bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white"
-                      style={{ backgroundColor: '#7c3aed', color: '#ffffff' }}
-                    >
-                      Select unit
-                    </option>
-                    {COMMON_PRODUCT_UNITS.map((unitOption) => (
-                      <option key={unitOption} value={unitOption}>
-                        {unitOption}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
               <div>
-                <label className="text-xs font-semibold text-black">{isDemand ? 'Your Budget (BDT)' : 'Cost per Unit'}</label>
+                <label className="text-xs font-semibold text-black">{isDemand ? 'Demanded Product Unit' : 'Available Product Unit'}</label>
+                <select
+                  value={row.unit}
+                  onChange={(event) =>
+                    setProducts((prev) =>
+                      prev.map((item, i) => (i === index ? { ...item, unit: event.target.value } : item)),
+                    )
+                  }
+                  className={profileLikeSelectClass}
+                >
+                  <option
+                    value=""
+                    className="bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white"
+                    style={{ backgroundColor: '#7c3aed', color: '#ffffff' }}
+                  >
+                    {isDemand ? 'Select demanded unit' : 'Select unit'}
+                  </option>
+                  {COMMON_PRODUCT_UNITS.map((unitOption) => (
+                    <option key={unitOption} value={unitOption}>
+                      {unitOption}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-black">{isDemand ? 'Budget per Unit (BDT)' : 'Cost Per Unit (BDT)'}</label>
                 <input
                   type="text"
                   inputMode="decimal"
-                  placeholder={isDemand ? 'Enter your budget (BDT)' : 'Enter cost per quantity'}
+                  placeholder={isDemand ? 'Enter budget per unit (BDT)' : 'Enter cost per quantity'}
                   value={row.cost_per_unit}
                   onChange={(event) =>
                     setProducts((prev) =>
