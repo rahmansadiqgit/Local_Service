@@ -554,12 +554,6 @@ export default function Header() {
                   >
                     Dashboard
                   </Link>
-                  <button
-                    onClick={handleLogout}
-                    className="w-full rounded-xl px-4 py-2.5 text-left text-sm font-semibold text-slate-700 transition hover:bg-orange-100 hover:text-orange-700"
-                  >
-                    Logout
-                  </button>
                 </div>
               )}
             </div>
