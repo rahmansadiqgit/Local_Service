@@ -350,7 +350,7 @@ export default function Header() {
       : null
 
   const iconButtonClass =
-    "rounded-full bg-white/90 p-2 shadow-md hover:bg-orange-100 hover:scale-105 hover:shadow-lg transition-all duration-200"
+    "inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/90 shadow-md transition-all duration-200 hover:scale-105 hover:bg-orange-100 hover:shadow-lg"
 
   const avatarButtonClass =
     "h-10 w-10 shrink-0 rounded-full shadow-md hover:scale-105 hover:shadow-lg transition-all duration-200 flex items-center justify-center"
@@ -543,13 +543,6 @@ export default function Header() {
                     className={dropdownItemClass}
                   >
                     Dashboard
-                  </Link>
-                  <Link
-                    to="/help-centre"
-                    onClick={() => setOpenDropdown(null)}
-                    className={dropdownItemClass}
-                  >
-                    Help Centre
                   </Link>
                   <button
                     onClick={handleLogout}
