@@ -366,7 +366,7 @@ export default function Header() {
   const getSidebarItemClass = (path) => {
     const isActive = location.pathname === path || location.pathname.startsWith(`${path}/`)
     if (isActive) {
-      return "block rounded-xl border border-violet-300 bg-gradient-to-r from-violet-100 to-fuchsia-100 px-4 py-3 text-sm font-extrabold text-violet-800 shadow-sm"
+      return "block rounded-xl border border-violet-300 bg-white/80 px-4 py-3 text-sm font-semibold text-slate-700 shadow-sm"
     }
     return "block rounded-xl border border-white/65 bg-white/70 px-4 py-3 text-sm font-semibold text-slate-700 transition hover:border-orange-200 hover:bg-orange-50/80 hover:text-orange-700"
   }

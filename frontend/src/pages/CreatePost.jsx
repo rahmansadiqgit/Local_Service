@@ -453,7 +453,7 @@ export default function CreatePost() {
             >
               Create Post
             </h2>
-            <p className="mt-0.5 text-xs text-violet-800/80 sm:text-sm">Publish a new available or demand listing.</p>
+            <p className="mt-0.5 text-xs font-semibold text-violet-800/80 sm:text-sm">Publish a new available or demand listing.</p>
           </div>
           <img
             src="/images/create_post.png"
@@ -588,8 +588,8 @@ export default function CreatePost() {
 
             <div>
               <label className="text-xs font-semibold text-black">Image</label>
-              <div className="mt-1 flex items-start gap-4">
-                <div className="flex flex-col items-start gap-2">
+              <div className="mt-1 space-y-3">
+                <div className="flex items-center gap-3">
                   <label className={primaryButtonClass}>
                     Choose File
                     <input
@@ -601,30 +601,33 @@ export default function CreatePost() {
                     />
                   </label>
                   {imageFile && (
-                    <span className="flex items-center gap-2 text-sm text-slate-600">
+                    <span className="max-w-[230px] truncate text-sm text-slate-600" title={imageFile.name}>
                       {imageFile.name}
-                      <button
-                        type="button"
-                        aria-label="Remove selected image"
-                        onClick={() => {
-                          setImageFile(null)
-                          if (imageInputRef.current) {
-                            imageInputRef.current.value = ''
-                          }
-                        }}
-                        className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-gradient-to-r from-violet-600 to-fuchsia-600 text-xs font-bold text-white shadow-sm transition hover:from-violet-700 hover:to-fuchsia-700"
-                      >
-                        x
-                      </button>
                     </span>
                   )}
                 </div>
                 {previewUrl && (
-                  <div className="rounded-lg border border-slate-200 bg-slate-50 p-2 shadow-sm">
+                  <div
+                    className="relative overflow-hidden rounded-xl border border-slate-200 bg-white/80 p-2 shadow-sm"
+                    style={{ width: '4in', height: '4in', maxWidth: '100%' }}
+                  >
+                    <button
+                      type="button"
+                      aria-label="Remove selected image"
+                      onClick={() => {
+                        setImageFile(null)
+                        if (imageInputRef.current) {
+                          imageInputRef.current.value = ''
+                        }
+                      }}
+                      className="absolute right-3 top-3 z-10 inline-flex items-center justify-center bg-transparent p-0 text-2xl font-bold leading-none text-white [text-shadow:0_0_10px_rgba(0,0,0,0.45)] transition-all duration-200 hover:scale-105 hover:text-pink-300 focus-visible:outline-none"
+                    >
+                      ×
+                    </button>
                     <img
                       src={previewUrl}
                       alt="Preview"
-                      className="h-20 w-20 rounded-lg object-cover"
+                      className="h-full w-full rounded-xl object-cover"
                     />
                   </div>
                 )}

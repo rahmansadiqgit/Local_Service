@@ -201,6 +201,56 @@ const helpFaqs = [
     answer:
       'Watch for success messages, updated data in the same page, and refreshed entries in feed or management pages after your action.',
   },
+  {
+    question: 'Why does Create Post fail when I click submit?',
+    answer:
+      'Usually one or more required fields are missing or invalid. Recheck post type, title/name, and any required cost/input fields, then submit again.',
+  },
+  {
+    question: 'Can I create a post without adding image or website link?',
+    answer:
+      'Yes, image and website link are optional in most cases. You can publish with text details first and update later from Manage Post.',
+  },
+  {
+    question: 'Why are costs not showing correctly in feed filters?',
+    answer:
+      'Cost range depends on linked skills/products data. If those sections are empty or zero, min/max cost filters may not behave as expected.',
+  },
+  {
+    question: 'How can I clear all feed filters quickly?',
+    answer:
+      'Manually reset search, location, radius, cost, and rating fields to blank/default values. Then refresh the feed list.',
+  },
+  {
+    question: 'Why does clicking a notification open a different page than expected?',
+    answer:
+      'Notifications route by message content (ERP, cart, connection, or direct post link). If content is incomplete, fallback navigation may send you to dashboard.',
+  },
+  {
+    question: 'Can I use one account on multiple devices?',
+    answer:
+      'Yes, but frequent login/logout across devices can rotate tokens and end older sessions. Re-login if a session becomes invalid.',
+  },
+  {
+    question: 'What file types are safest for profile and post images?',
+    answer:
+      'Use standard formats like JPG, JPEG, or PNG for best compatibility and faster loading in browser and mobile views.',
+  },
+  {
+    question: 'Why does the app feel slow sometimes?',
+    answer:
+      'Slow network, large image uploads, or backend load can delay responses. Refresh once, reduce image size, and retry during a stable connection.',
+  },
+  {
+    question: 'How do I safely share my post with others?',
+    answer:
+      'Open the post and share the direct post link. Avoid sharing personal contact details publicly unless necessary.',
+  },
+  {
+    question: 'What should I do if I find incorrect user information?',
+    answer:
+      'Do not engage in conflict inside comments/messages. Use Report a Problem with the user/post context so the support team can review.',
+  },
 ]
 
 export default function HelpCentre() {
@@ -223,7 +273,7 @@ export default function HelpCentre() {
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.45),transparent_58%)]" />
         <div className="relative px-6 py-3.5 pr-32 sm:px-8 sm:py-4 sm:pr-36 lg:pr-40">
           <h2 className="text-xl font-extrabold tracking-tight text-violet-900 sm:text-3xl">Help Centre</h2>
-          <p className="mt-0.5 text-xs text-violet-800/80 sm:text-sm">
+          <p className="mt-0.5 text-xs font-semibold text-violet-800/80 sm:text-sm">
             Find answers to common Localix issues and usage questions.
           </p>
           <img
