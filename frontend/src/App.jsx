@@ -9,6 +9,7 @@ import CreatePost from './pages/CreatePost'
 import Dashboard from './pages/Dashboard'
 import ERP from './pages/ERP'
 import HomeFeed from './pages/HomeFeed'
+import HelpCentre from './pages/HelpCentre'
 import About from './pages/About'
 import Login from './pages/Login'
 import ManagePost from './pages/ManagePost'
@@ -44,6 +45,7 @@ export default function App() {
             <Route path="/feed" element={<HomeFeed />} />
             <Route path="/services" element={<Services />} />
             <Route path="/about" element={<About />} />
+            <Route path="/help-centre" element={<HelpCentre />} />
             <Route path="/report" element={<ReportProblem />} />
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
