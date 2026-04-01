@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import api from '../api/client'
+import LocationPickerMap from '../components/LocationPickerMap'
 import useAuth from '../context/useAuth'
 
 const CATEGORY_OPTIONS = ['Expertise', 'Services', 'Product']
@@ -22,12 +23,23 @@ const COMMON_PRODUCT_UNITS = [
   'feet',
 ]
 
+const toCoordinateOrNull = (value) => {
+  if (value === null || value === undefined) return null
+  const normalized = String(value).trim()
+  if (!normalized) return null
+  const parsed = Number(normalized)
+  return Number.isFinite(parsed) ? parsed : null
+}
+
 export default function EditPost() {
   const { id } = useParams()
   const navigate = useNavigate()
   const { user } = useAuth()
 
   const imageInputRef = useRef(null)
+  const postTypeMenuRef = useRef(null)
+  const categoryMenuRef = useRef(null)
+  const geocodeRequestRef = useRef(0)
 
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -41,6 +53,8 @@ export default function EditPost() {
     description: '',
     brand_company_name: '',
     location: '',
+    latitude: '',
+    longitude: '',
     website_link: '',
     image: '',
   })
@@ -56,9 +70,23 @@ export default function EditPost() {
 
   const [imageFile, setImageFile] = useState(null)
   const [previewUrl, setPreviewUrl] = useState('')
+  const [showPostTypeMenu, setShowPostTypeMenu] = useState(false)
+  const [showCategoryMenu, setShowCategoryMenu] = useState(false)
+  const [headerImageSrc, setHeaderImageSrc] = useState('/images/edit_post.jpeg')
+  const [locationLoading, setLocationLoading] = useState(false)
 
   const postId = Number(id)
   const isDemand = post.post_type === 'Demand'
+
+  const currentImageName = useMemo(() => {
+    if (!post.image) return ''
+    try {
+      const rawName = String(post.image).split('/').pop() || ''
+      return decodeURIComponent(rawName)
+    } catch {
+      return String(post.image).split('/').pop() || ''
+    }
+  }, [post.image])
 
   const toMediaUrl = (value) => {
     if (!value) return ''
@@ -80,6 +108,86 @@ export default function EditPost() {
     }
     setPreviewUrl('')
   }, [imageFile])
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (postTypeMenuRef.current && !postTypeMenuRef.current.contains(event.target)) {
+        setShowPostTypeMenu(false)
+      }
+      if (categoryMenuRef.current && !categoryMenuRef.current.contains(event.target)) {
+        setShowCategoryMenu(false)
+      }
+    }
+
+    if (showPostTypeMenu || showCategoryMenu) {
+      document.addEventListener('mousedown', handleClickOutside)
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [showPostTypeMenu, showCategoryMenu])
+
+  const geocodeLocationQuery = async (rawQuery, { replaceInputText = false } = {}) => {
+    const query = String(rawQuery || '').trim()
+    if (query.length < 2) return false
+
+    const requestId = ++geocodeRequestRef.current
+    setLocationLoading(true)
+
+    try {
+      const urls = [
+        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(`${query}, Bangladesh`)}&format=jsonv2&limit=1&countrycodes=bd`,
+        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=jsonv2&limit=1&countrycodes=bd`,
+        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=jsonv2&limit=1`,
+      ]
+
+      let first = null
+      for (const url of urls) {
+        const response = await fetch(url, { headers: { Accept: 'application/json' } })
+        if (!response.ok) continue
+        const data = await response.json()
+        first = Array.isArray(data) ? data[0] : null
+        if (first?.lat && first?.lon) break
+      }
+
+      if (!first?.lat || !first?.lon) return false
+      if (requestId !== geocodeRequestRef.current) return false
+
+      setPost((prev) => {
+        if (prev.location?.trim() !== query) return prev
+        return {
+          ...prev,
+          latitude: String(first.lat),
+          longitude: String(first.lon),
+          location: replaceInputText ? (first.display_name || prev.location) : prev.location,
+        }
+      })
+
+      return true
+    } catch {
+      return false
+    } finally {
+      if (requestId === geocodeRequestRef.current) {
+        setLocationLoading(false)
+      }
+    }
+  }
+
+  useEffect(() => {
+    const query = post.location?.trim()
+    const hasCoordinates =
+      toCoordinateOrNull(post.latitude) !== null &&
+      toCoordinateOrNull(post.longitude) !== null
+
+    if (!query || hasCoordinates || isLocked) return
+
+    const timeoutId = setTimeout(async () => {
+      await geocodeLocationQuery(query, { replaceInputText: false })
+    }, 700)
+
+    return () => clearTimeout(timeoutId)
+  }, [post.location, post.latitude, post.longitude, isLocked])
 
   useEffect(() => {
     let active = true
@@ -130,6 +238,8 @@ export default function EditPost() {
           description: String(foundPost.description || ''),
           brand_company_name: String(foundPost.brand_company_name || ''),
           location: String(foundPost.location || ''),
+          latitude: '',
+          longitude: '',
           website_link: String(foundPost.website_link || ''),
           image: foundPost.image || '',
         })
@@ -231,6 +341,75 @@ export default function EditPost() {
       setPost((current) => ({ ...current, post_name: next.join(', ') }))
       return next
     })
+  }
+
+  const handleLocationInputChange = (event) => {
+    const value = event.target.value
+    setPost((prev) => ({ ...prev, location: value, latitude: '', longitude: '' }))
+    setShowPostTypeMenu(false)
+    setShowCategoryMenu(false)
+  }
+
+  const handleLocationInputBlur = async () => {
+    if (isLocked) return
+    const query = post.location?.trim()
+    const hasCoordinates =
+      toCoordinateOrNull(post.latitude) !== null &&
+      toCoordinateOrNull(post.longitude) !== null
+
+    if (!query || hasCoordinates) return
+    await geocodeLocationQuery(query, { replaceInputText: true })
+  }
+
+  const handleLocationInputKeyDown = async (event) => {
+    if (isLocked) return
+    if (event.key !== 'Enter') return
+    event.preventDefault()
+    const query = post.location?.trim()
+    if (!query) return
+    await geocodeLocationQuery(query, { replaceInputText: true })
+  }
+
+  const handleMapLocationPick = async (lat, lng) => {
+    if (isLocked) return
+    setPost((prev) => ({
+      ...prev,
+      latitude: String(lat),
+      longitude: String(lng),
+      location: `Lat ${lat.toFixed(5)}, Lng ${lng.toFixed(5)}`,
+    }))
+
+    setLocationLoading(true)
+    try {
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}`,
+        { headers: { Accept: 'application/json' } },
+      )
+      if (!response.ok) return
+      const data = await response.json()
+      const resolvedLocation =
+        data?.display_name ||
+        [
+          data?.address?.suburb,
+          data?.address?.city || data?.address?.town || data?.address?.village,
+          data?.address?.state,
+          data?.address?.country,
+        ]
+          .filter(Boolean)
+          .join(', ')
+
+      if (resolvedLocation) {
+        setPost((prev) => ({ ...prev, location: resolvedLocation }))
+      }
+    } finally {
+      setLocationLoading(false)
+    }
+  }
+
+  const handlePostTypeSelect = (value) => {
+    if (isLocked) return
+    setPost((prev) => ({ ...prev, post_type: value }))
+    setShowPostTypeMenu(false)
   }
 
   const handleSave = async (event) => {
@@ -352,8 +531,15 @@ export default function EditPost() {
             </p>
           </div>
           <img
-            src="/images/edit_post.jpeg"
+            src={headerImageSrc}
             alt="Edit post header illustration"
+            onError={() => {
+              setHeaderImageSrc((prev) => {
+                if (prev === '/images/edit_post.jpeg') return '/images/edit_post.png'
+                if (prev === '/images/edit_post.png') return '/images/create_post.png'
+                return '/images/create_post.png'
+              })
+            }}
             className="pointer-events-none absolute right-4 top-1/2 h-28 w-28 -translate-y-1/2 object-contain sm:h-32 sm:w-32 lg:h-36 lg:w-36"
           />
         </div>
@@ -372,33 +558,82 @@ export default function EditPost() {
             <div className="grid gap-4 lg:grid-cols-2">
               <div>
                 <label className="text-xs font-semibold text-black">Post Type</label>
-                <select
-                  value={post.post_type}
-                  onChange={(event) => setPost((prev) => ({ ...prev, post_type: event.target.value }))}
-                  className={profileLikeSelectClass}
-                >
-                  {POST_TYPE_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value}>{option.label}</option>
-                  ))}
-                </select>
+                <div className="relative mt-1" ref={postTypeMenuRef}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowPostTypeMenu((prev) => !prev)
+                      setShowCategoryMenu(false)
+                    }}
+                    className={`${profileLikeInputClass} flex items-center justify-between text-left`}
+                  >
+                    <span className="text-slate-900">
+                      {POST_TYPE_OPTIONS.find((option) => option.value === post.post_type)?.label || 'Select post type'}
+                    </span>
+                    <span className="text-slate-500">▾</span>
+                  </button>
+
+                  {showPostTypeMenu && (
+                    <div className="absolute z-20 mt-1 w-full overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg">
+                      {POST_TYPE_OPTIONS.map((option) => {
+                        const checked = post.post_type === option.value
+                        return (
+                          <button
+                            key={option.value}
+                            type="button"
+                            onClick={() => handlePostTypeSelect(option.value)}
+                            className="flex w-full items-center justify-between px-3 py-2 text-left text-sm transition-colors hover:bg-violet-50/60 first:rounded-t-xl last:rounded-b-xl"
+                          >
+                            <span>{option.label}</span>
+                            <span className={`text-base font-bold ${checked ? 'text-blue-600' : 'text-slate-300'}`}>
+                              {checked ? '✓' : '○'}
+                            </span>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
               </div>
 
               <div>
                 <label className="text-xs font-semibold text-black">Post Categories</label>
-                <div className="mt-1.5 flex flex-wrap gap-2">
-                  {CATEGORY_OPTIONS.map((category) => {
-                    const selected = selectedCategories.includes(category)
-                    return (
-                      <button
-                        key={category}
-                        type="button"
-                        onClick={() => toggleCategory(category)}
-                        className={`rounded-full px-3 py-1 text-xs font-semibold ${selected ? 'bg-violet-600 text-white' : 'border border-violet-300 bg-white text-violet-700'}`}
-                      >
-                        {category}
-                      </button>
-                    )
-                  })}
+                <div className="relative mt-1" ref={categoryMenuRef}>
+                  <button
+                    type="button"
+                    onClick={() => setShowCategoryMenu((prev) => !prev)}
+                    className={`${profileLikeInputClass} flex items-center justify-between text-left`}
+                  >
+                    <span className={selectedCategories.length ? 'text-slate-900' : 'text-slate-500'}>
+                      {selectedCategories.length ? selectedCategories.join(', ') : 'Select one or multiple categories'}
+                    </span>
+                    <span className="text-slate-500">▾</span>
+                  </button>
+
+                  {showCategoryMenu && (
+                    <div className="absolute z-20 mt-1 w-full overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg">
+                      {CATEGORY_OPTIONS.map((category) => {
+                        const checked = selectedCategories.includes(category)
+                        return (
+                          <label
+                            key={category}
+                            className="flex cursor-pointer items-center justify-between px-3 py-2 text-sm transition-colors hover:bg-violet-50/60 first:rounded-t-xl last:rounded-b-xl"
+                          >
+                            <span>{category}</span>
+                            <span className={`text-base font-bold ${checked ? 'text-blue-600' : 'text-slate-300'}`}>
+                              {checked ? '✓' : '○'}
+                            </span>
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={() => toggleCategory(category)}
+                              className="hidden"
+                            />
+                          </label>
+                        )
+                      })}
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -407,33 +642,110 @@ export default function EditPost() {
                 <input
                   value={post.post_title}
                   onChange={(event) => setPost((prev) => ({ ...prev, post_title: event.target.value }))}
+                  onFocus={() => setShowCategoryMenu(false)}
                   className={profileLikeInputClass}
                 />
               </div>
 
-              <div>
-                <label className="text-xs font-semibold text-black">Brand / Company</label>
-                <input
-                  value={post.brand_company_name}
-                  onChange={(event) => setPost((prev) => ({ ...prev, brand_company_name: event.target.value }))}
+              <div className="lg:col-span-2">
+                <label className="text-xs font-semibold text-black">Description</label>
+                <textarea
+                  value={post.description}
+                  onChange={(event) => setPost((prev) => ({ ...prev, description: event.target.value }))}
+                  onFocus={() => setShowCategoryMenu(false)}
+                  rows={3}
                   className={profileLikeInputClass}
                 />
               </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="text-xs font-semibold text-black">Brand / Company</label>
+                  <input
+                    value={post.brand_company_name}
+                    onChange={(event) => setPost((prev) => ({ ...prev, brand_company_name: event.target.value }))}
+                    onFocus={() => setShowCategoryMenu(false)}
+                    className={profileLikeInputClass}
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-black">Image</label>
+                  <div className="mt-1 space-y-3">
+                    <div className="flex items-center gap-3">
+                      <label className={primaryButtonClass}>
+                        Choose File
+                        <input
+                          ref={imageInputRef}
+                          type="file"
+                          accept="image/*"
+                          onChange={(event) => setImageFile(event.target.files?.[0] || null)}
+                          className="hidden"
+                        />
+                      </label>
+                      {imageFile ? (
+                        <span className="max-w-[230px] truncate text-sm text-slate-600" title={imageFile.name}>{imageFile.name}</span>
+                      ) : currentImageName ? (
+                        <span className="max-w-[230px] truncate text-sm text-slate-600" title={currentImageName}>{currentImageName}</span>
+                      ) : null}
+                    </div>
+
+                    {previewUrl ? (
+                      <div className="relative overflow-hidden rounded-xl border border-slate-200 bg-white/80 p-2 shadow-sm" style={{ width: '4in', height: '4in', maxWidth: '100%' }}>
+                        <button
+                          type="button"
+                          aria-label="Remove selected image"
+                          onClick={() => {
+                            setImageFile(null)
+                            if (imageInputRef.current) imageInputRef.current.value = ''
+                          }}
+                          className="absolute right-3 top-3 z-10 inline-flex items-center justify-center bg-transparent p-0 text-2xl font-bold leading-none text-white [text-shadow:0_0_10px_rgba(0,0,0,0.45)] transition-all duration-200 hover:scale-105 hover:text-pink-300 focus-visible:outline-none"
+                        >
+                          ×
+                        </button>
+                        <img src={previewUrl} alt="Preview" className="h-full w-full rounded-xl object-cover" />
+                      </div>
+                    ) : post.image ? (
+                      <div className="relative overflow-hidden rounded-xl border border-slate-200 bg-white/80 p-2 shadow-sm" style={{ width: '4in', height: '4in', maxWidth: '100%' }}>
+                        <img src={toMediaUrl(post.image)} alt="Current" className="h-full w-full rounded-xl object-cover" />
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-black">Website</label>
+                  <input
+                    value={post.website_link}
+                    onChange={(event) => setPost((prev) => ({ ...prev, website_link: event.target.value }))}
+                    onFocus={() => setShowCategoryMenu(false)}
+                    className={profileLikeInputClass}
+                  />
+                </div>
+              </div>
+
               <div>
                 <label className="text-xs font-semibold text-black">Location</label>
                 <input
                   value={post.location}
-                  onChange={(event) => setPost((prev) => ({ ...prev, location: event.target.value }))}
+                  onChange={handleLocationInputChange}
+                  onBlur={handleLocationInputBlur}
+                  onKeyDown={handleLocationInputKeyDown}
+                  onFocus={() => setShowCategoryMenu(false)}
+                  placeholder="Type location or pick from map"
                   className={profileLikeInputClass}
                 />
-              </div>
-              <div className="lg:col-span-2">
-                <label className="text-xs font-semibold text-black">Website</label>
-                <input
-                  value={post.website_link}
-                  onChange={(event) => setPost((prev) => ({ ...prev, website_link: event.target.value }))}
-                  className={profileLikeInputClass}
-                />
+                {locationLoading && <p className="mt-1 text-[11px] text-slate-600">Resolving location...</p>}
+                <div className="mt-2">
+                  <LocationPickerMap
+                    latitude={post.latitude}
+                    longitude={post.longitude}
+                    onPick={handleMapLocationPick}
+                    mapSizeInches={5}
+                    selectedZoom={14}
+                    popupText="Confirm this location?"
+                  />
+                </div>
               </div>
             </div>
 
@@ -456,68 +768,86 @@ export default function EditPost() {
                 </div>
                 {expertises.map((row, index) => (
                   <div key={`expertise-${index}`} className={`grid gap-4 ${isDemand ? 'lg:grid-cols-6' : 'lg:grid-cols-5'}`}>
-                    <input
-                      value={row.name}
-                      onChange={(event) =>
-                        setExpertises((prev) => prev.map((item, i) => (i === index ? { ...item, name: event.target.value } : item)))
-                      }
-                      placeholder="Skill/Experties Name"
-                      className={profileLikeInputClass}
-                    />
-                    <input
-                      value={row.experience}
-                      onChange={(event) =>
-                        setExpertises((prev) => prev.map((item, i) => (i === index ? { ...item, experience: event.target.value } : item)))
-                      }
-                      placeholder={isDemand ? 'Preferred Experience' : 'Your Experience'}
-                      className={profileLikeInputClass}
-                    />
-                    <select
-                      value={row.unit}
-                      onChange={(event) =>
-                        setExpertises((prev) => prev.map((item, i) => (i === index ? { ...item, unit: event.target.value } : item)))
-                      }
-                      className={profileLikeSelectClass}
-                    >
-                      <option value="">{isDemand ? 'Select hire unit' : 'Select service duration unit'}</option>
-                      <option value="hourly">Hourly</option>
-                      <option value="daily">Daily</option>
-                      <option value="monthly">Monthly</option>
-                    </select>
-                    {isDemand && row.unit ? (
+                    <div>
+                      <label className="text-xs font-semibold text-black">{isDemand ? 'Skill/Experties Name' : 'Skill/Experties Name'}</label>
                       <input
-                        value={row.needed_budget_unit}
+                        value={row.name}
                         onChange={(event) =>
-                          setExpertises((prev) => prev.map((item, i) => (i === index ? { ...item, needed_budget_unit: event.target.value } : item)))
+                          setExpertises((prev) => prev.map((item, i) => (i === index ? { ...item, name: event.target.value } : item)))
                         }
-                        placeholder="Needed Hire Unit"
+                        placeholder="e.g., Electricians, Teachers"
                         className={profileLikeInputClass}
                       />
+                    </div>
+                    <div>
+                      <label className="text-xs font-semibold text-black">{isDemand ? 'Preferred Experience' : 'Your Experience'}</label>
+                      <input
+                        value={row.experience}
+                        onChange={(event) =>
+                          setExpertises((prev) => prev.map((item, i) => (i === index ? { ...item, experience: event.target.value } : item)))
+                        }
+                        placeholder="(Optional) e.g., 6 years"
+                        className={profileLikeInputClass}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-semibold text-black">{isDemand ? 'Hire Unit' : 'Service Duration Unit'}</label>
+                      <select
+                        value={row.unit}
+                        onChange={(event) =>
+                          setExpertises((prev) => prev.map((item, i) => (i === index ? { ...item, unit: event.target.value } : item)))
+                        }
+                        className={profileLikeSelectClass}
+                      >
+                        <option value="">{isDemand ? 'Select hire unit' : 'Select service duration unit'}</option>
+                        <option value="hourly">Hourly</option>
+                        <option value="daily">Daily</option>
+                        <option value="monthly">Monthly</option>
+                      </select>
+                    </div>
+                    {isDemand && row.unit ? (
+                      <div>
+                        <label className="text-xs font-semibold text-black">Needed Hire Unit</label>
+                        <input
+                          value={row.needed_budget_unit}
+                          onChange={(event) =>
+                            setExpertises((prev) => prev.map((item, i) => (i === index ? { ...item, needed_budget_unit: event.target.value } : item)))
+                          }
+                          placeholder="Needed Hire Unit"
+                          className={profileLikeInputClass}
+                        />
+                      </div>
                     ) : null}
-                    <div className="flex gap-2">
+                    <div>
+                      <label className="text-xs font-semibold text-black">{isDemand ? 'Your Budget (BDT)' : 'Charge (BDT) Per Unit'}</label>
                       <input
                         value={row.cost}
                         onChange={(event) =>
                           setExpertises((prev) => prev.map((item, i) => (i === index ? { ...item, cost: event.target.value } : item)))
                         }
-                        placeholder={isDemand ? 'Your Budget (BDT)' : 'Charge (BDT) Per Unit'}
+                        placeholder={isDemand ? 'Enter your budget (BDT)' : 'Enter charge amount per unit (BDT)'}
                         className={profileLikeInputClass}
                       />
-                      <input
-                        value={row.available_person}
-                        onChange={(event) =>
-                          setExpertises((prev) => prev.map((item, i) => (i === index ? { ...item, available_person: event.target.value } : item)))
-                        }
-                        placeholder={isDemand ? 'Required Person' : 'Available Person'}
-                        className={profileLikeInputClass}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setExpertises((prev) => prev.filter((_, i) => i !== index))}
-                        className={`${removeButtonClass} mt-1.5`}
-                      >
-                        Remove
-                      </button>
+                    </div>
+                    <div>
+                      <label className="text-xs font-semibold text-black">{isDemand ? 'Required Person' : 'Available Person'}</label>
+                      <div className="flex gap-2">
+                        <input
+                          value={row.available_person}
+                          onChange={(event) =>
+                            setExpertises((prev) => prev.map((item, i) => (i === index ? { ...item, available_person: event.target.value } : item)))
+                          }
+                          placeholder={isDemand ? 'Enter required persons' : 'Enter available persons'}
+                          className={profileLikeInputClass}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setExpertises((prev) => prev.filter((_, i) => i !== index))}
+                          className={`${removeButtonClass} mt-1.5`}
+                        >
+                          Remove
+                        </button>
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -525,20 +855,89 @@ export default function EditPost() {
             )}
 
             {showServicesSection && (
-              <div className="space-y-3">
+              <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <p className="text-base font-bold text-slate-700">Services</p>
-                  <button type="button" onClick={() => setServices((prev) => [...prev, { service_name: '', description: '', cost_per_unit: '' }])} className={addRowButtonClass}>Add Row</button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setServices((prev) => [
+                        ...prev,
+                        { service_name: '', description: '', cost_per_unit: '' },
+                      ])
+                    }
+                    className={addRowButtonClass}
+                  >
+                    Add Row
+                  </button>
                 </div>
                 {services.map((row, index) => (
-                  <div key={`service-${index}`} className={`grid gap-4 ${showServiceDescriptionField ? 'lg:grid-cols-3' : 'lg:grid-cols-2'}`}>
-                    <input value={row.service_name} onChange={(event) => setServices((prev) => prev.map((item, i) => i === index ? { ...item, service_name: event.target.value } : item))} placeholder="Service Name" className={profileLikeInputClass} />
+                  <div
+                    key={`service-${index}`}
+                    className={`grid gap-4 ${showServiceDescriptionField ? 'lg:grid-cols-3' : 'lg:grid-cols-2'}`}
+                  >
+                    <div>
+                      <label className="text-xs font-semibold text-black">Service Name</label>
+                      <input
+                        placeholder="e.g., Plumbing, Tutoring"
+                        value={row.service_name}
+                        onChange={(event) =>
+                          setServices((prev) =>
+                            prev.map((item, i) =>
+                              i === index ? { ...item, service_name: event.target.value } : item,
+                            ),
+                          )
+                        }
+                        className={profileLikeInputClass}
+                      />
+                    </div>
                     {showServiceDescriptionField && (
-                      <textarea value={row.description} onChange={(event) => setServices((prev) => prev.map((item, i) => i === index ? { ...item, description: event.target.value } : item))} rows={3} placeholder={isDemand ? 'Enter specific service description (What do you want?)' : 'Enter specific service description (What you offer?)'} className={profileLikeInputClass} />
+                      <div>
+                        <label className="text-xs font-semibold text-black">Specific Service Description</label>
+                        <textarea
+                          placeholder={
+                            isDemand
+                              ? 'Enter specific service description (What do you want?)'
+                              : 'Enter specific service description (What you offer?)'
+                          }
+                          value={row.description}
+                          onChange={(event) =>
+                            setServices((prev) =>
+                              prev.map((item, i) =>
+                                i === index ? { ...item, description: event.target.value } : item,
+                              ),
+                            )
+                          }
+                          rows={3}
+                          className={profileLikeInputClass}
+                        />
+                      </div>
                     )}
-                    <div className="flex gap-2">
-                      <input value={row.cost_per_unit} onChange={(event) => setServices((prev) => prev.map((item, i) => i === index ? { ...item, cost_per_unit: event.target.value } : item))} placeholder={isDemand ? 'Your Budget (BDT)' : 'Service Charge (BDT)'} className={profileLikeInputClass} />
-                      <button type="button" onClick={() => setServices((prev) => prev.filter((_, i) => i !== index))} className={`${removeButtonClass} mt-1.5`}>Remove</button>
+                    <div>
+                      <label className="text-xs font-semibold text-black">{isDemand ? 'Your Budget (BDT)' : 'Service Charge (BDT)'}</label>
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          inputMode="decimal"
+                          placeholder={isDemand ? 'Enter your budget (BDT)' : 'Enter service cost (BDT)'}
+                          value={row.cost_per_unit}
+                          onChange={(event) =>
+                            setServices((prev) =>
+                              prev.map((item, i) =>
+                                i === index ? { ...item, cost_per_unit: event.target.value } : item,
+                              ),
+                            )
+                          }
+                          className={profileLikeInputClass}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setServices((prev) => prev.filter((_, i) => i !== index))}
+                          className={`${removeButtonClass} mt-1.5`}
+                        >
+                          Remove
+                        </button>
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -546,39 +945,132 @@ export default function EditPost() {
             )}
 
             {showProductsSection && (
-              <div className="space-y-3">
+              <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <p className="text-base font-bold text-slate-700">Products</p>
-                  <button type="button" onClick={() => setProducts((prev) => [...prev, { product_name: '', description: '', unit: '', cost_per_unit: '', available_units: 0 }])} className={addRowButtonClass}>Add Row</button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setProducts((prev) => [
+                        ...prev,
+                        { product_name: '', description: '', unit: '', cost_per_unit: '', available_units: 0 },
+                      ])
+                    }
+                    className={addRowButtonClass}
+                  >
+                    Add Row
+                  </button>
                 </div>
                 {products.map((row, index) => (
-                  <div key={`product-${index}`} className={`grid gap-4 ${showProductDescriptionField ? 'lg:grid-cols-5' : 'lg:grid-cols-4'}`}>
-                    <input value={row.product_name} onChange={(event) => setProducts((prev) => prev.map((item, i) => i === index ? { ...item, product_name: event.target.value } : item))} placeholder="Product Name" className={profileLikeInputClass} />
+                  <div
+                    key={`product-${index}`}
+                    className={`grid gap-4 ${isDemand
+                      ? showProductDescriptionField
+                        ? 'lg:grid-cols-5'
+                        : 'lg:grid-cols-4'
+                      : showProductDescriptionField
+                        ? 'lg:grid-cols-5'
+                        : 'lg:grid-cols-4'}`}
+                  >
+                    <div>
+                      <label className="text-xs font-semibold text-black">Product Name</label>
+                      <input
+                        placeholder="e.g., Laptop, Book"
+                        value={row.product_name}
+                        onChange={(event) =>
+                          setProducts((prev) =>
+                            prev.map((item, i) =>
+                              i === index ? { ...item, product_name: event.target.value } : item,
+                            ),
+                          )
+                        }
+                        className={profileLikeInputClass}
+                      />
+                    </div>
                     {showProductDescriptionField && (
-                      <textarea value={row.description} onChange={(event) => setProducts((prev) => prev.map((item, i) => i === index ? { ...item, description: event.target.value } : item))} rows={3} placeholder={isDemand ? 'Enter specific product description (Actually what type of product?)' : 'Enter specific product description (Actual value of your product)'} className={profileLikeInputClass} />
+                      <div>
+                        <label className="text-xs font-semibold text-black">Specific Product Description</label>
+                        <textarea
+                          placeholder={
+                            isDemand
+                              ? 'Enter specific product description (Actually what type of product?)'
+                              : 'Enter specific product description (Actual value of your product)'
+                          }
+                          value={row.description}
+                          onChange={(event) =>
+                            setProducts((prev) =>
+                              prev.map((item, i) =>
+                                i === index ? { ...item, description: event.target.value } : item,
+                              ),
+                            )
+                          }
+                          rows={3}
+                          className={profileLikeInputClass}
+                        />
+                      </div>
                     )}
-                    <select value={row.unit} onChange={(event) => setProducts((prev) => prev.map((item, i) => i === index ? { ...item, unit: event.target.value } : item))} className={profileLikeSelectClass}>
-                      <option value="">{isDemand ? 'Select demanded unit' : 'Select unit'}</option>
-                      {COMMON_PRODUCT_UNITS.map((unitOption) => (
-                        <option key={unitOption} value={unitOption}>{unitOption}</option>
-                      ))}
-                    </select>
-                    <input value={row.cost_per_unit} onChange={(event) => setProducts((prev) => prev.map((item, i) => i === index ? { ...item, cost_per_unit: event.target.value } : item))} placeholder={isDemand ? 'Budget per Unit (BDT)' : 'Cost Per Unit (BDT)'} className={profileLikeInputClass} />
-                    <input
-                      value={row.available_units}
-                      onChange={(event) =>
-                        setProducts((prev) => prev.map((item, i) => (i === index ? { ...item, available_units: event.target.value } : item)))
-                      }
-                      placeholder={isDemand ? 'Required Quantity' : 'Available Quantity'}
-                      className={profileLikeInputClass}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setProducts((prev) => prev.filter((_, i) => i !== index))}
-                      className={`${removeButtonClass} mt-1.5`}
-                    >
-                      Remove
-                    </button>
+                    <div>
+                      <label className="text-xs font-semibold text-black">{isDemand ? 'Demanded Product Unit' : 'Available Product Unit'}</label>
+                      <select
+                        value={row.unit}
+                        onChange={(event) =>
+                          setProducts((prev) =>
+                            prev.map((item, i) => (i === index ? { ...item, unit: event.target.value } : item)),
+                          )
+                        }
+                        className={profileLikeSelectClass}
+                      >
+                        <option value="">{isDemand ? 'Select demanded unit' : 'Select unit'}</option>
+                        {COMMON_PRODUCT_UNITS.map((unitOption) => (
+                          <option key={unitOption} value={unitOption}>
+                            {unitOption}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-xs font-semibold text-black">{isDemand ? 'Budget per Unit (BDT)' : 'Cost Per Unit (BDT)'}</label>
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        placeholder={isDemand ? 'Enter budget per unit (BDT)' : 'Enter cost per quantity'}
+                        value={row.cost_per_unit}
+                        onChange={(event) =>
+                          setProducts((prev) =>
+                            prev.map((item, i) =>
+                              i === index ? { ...item, cost_per_unit: event.target.value } : item,
+                            ),
+                          )
+                        }
+                        className={profileLikeInputClass}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-semibold text-black">{isDemand ? 'Required Quantity' : 'Available Quantity'}</label>
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          placeholder={isDemand ? 'Enter required quantity' : 'Enter available quantity'}
+                          value={row.available_units}
+                          onChange={(event) =>
+                            setProducts((prev) =>
+                              prev.map((item, i) =>
+                                i === index ? { ...item, available_units: event.target.value } : item,
+                              ),
+                            )
+                          }
+                          className={profileLikeInputClass}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setProducts((prev) => prev.filter((_, i) => i !== index))}
+                          className={`${removeButtonClass} mt-1.5`}
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -586,13 +1078,14 @@ export default function EditPost() {
           </>
         )}
 
+        {isLocked && (
         <div className="space-y-4">
           <div>
             <label className="text-xs font-semibold text-black">Description</label>
             <textarea
               value={post.description}
               onChange={(event) => setPost((prev) => ({ ...prev, description: event.target.value }))}
-              rows={4}
+              rows={3}
               className={profileLikeInputClass}
             />
           </div>
@@ -610,16 +1103,38 @@ export default function EditPost() {
                   className="hidden"
                 />
               </label>
-              {imageFile && <span className="max-w-[230px] truncate text-sm text-slate-600">{imageFile.name}</span>}
+              {imageFile ? (
+                <span className="max-w-[230px] truncate text-sm text-slate-600" title={imageFile.name}>{imageFile.name}</span>
+              ) : currentImageName ? (
+                <span className="max-w-[230px] truncate text-sm text-slate-600" title={currentImageName}>{currentImageName}</span>
+              ) : null}
             </div>
 
             {(previewUrl || post.image) && (
-              <div className="mt-3 w-fit max-w-full rounded-xl border border-slate-200 bg-white/80 p-2 shadow-sm" style={{ width: '4in', height: '4in', maxWidth: '100%' }}>
-                <img src={previewUrl || toMediaUrl(post.image)} alt="Preview" className="h-full w-full rounded-xl object-cover" />
-              </div>
+              previewUrl ? (
+                <div className="relative overflow-hidden rounded-xl border border-slate-200 bg-white/80 p-2 shadow-sm" style={{ width: '4in', height: '4in', maxWidth: '100%' }}>
+                  <button
+                    type="button"
+                    aria-label="Remove selected image"
+                    onClick={() => {
+                      setImageFile(null)
+                      if (imageInputRef.current) imageInputRef.current.value = ''
+                    }}
+                    className="absolute right-3 top-3 z-10 inline-flex items-center justify-center bg-transparent p-0 text-2xl font-bold leading-none text-white [text-shadow:0_0_10px_rgba(0,0,0,0.45)] transition-all duration-200 hover:scale-105 hover:text-pink-300 focus-visible:outline-none"
+                  >
+                    ×
+                  </button>
+                  <img src={previewUrl} alt="Preview" className="h-full w-full rounded-xl object-cover" />
+                </div>
+              ) : (
+                <div className="relative overflow-hidden rounded-xl border border-slate-200 bg-white/80 p-2 shadow-sm" style={{ width: '4in', height: '4in', maxWidth: '100%' }}>
+                  <img src={toMediaUrl(post.image)} alt="Current" className="h-full w-full rounded-xl object-cover" />
+                </div>
+              )
             )}
           </div>
         </div>
+        )}
 
         <div className="flex flex-col items-center gap-2">
           <button type="submit" disabled={saving} className="inline-flex items-center rounded-xl bg-gradient-to-r from-violet-600 to-fuchsia-600 px-6 py-2.5 text-sm font-semibold text-white shadow-md transition hover:from-violet-700 hover:to-fuchsia-700 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50">
