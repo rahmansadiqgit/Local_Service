@@ -355,14 +355,18 @@ export default function Header() {
   const dropdownItemClass =
     "block rounded-xl px-4 py-2.5 text-sm font-semibold !text-slate-700 transition hover:bg-orange-100 hover:!text-orange-700"
 
+  const logoSlotClass = "group relative flex h-10 w-32 md:w-40 lg:w-44 shrink-0 items-center overflow-hidden"
+
   return (
     <header className="sticky top-0 z-40 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 shadow-lg">
       <div className="relative mx-auto flex max-w-7xl items-center justify-between px-4 py-4">
         {/* Logo */}
-        <Link to="/" className="flex items-center gap-2 group">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white text-indigo-600 font-extrabold shadow-md transition-transform group-hover:scale-110">
-            LX
-          </div>
+        <Link to="/" className={logoSlotClass} aria-label="Localix home">
+          <img
+            src="/images/logo.png"
+            alt="Localix logo"
+            className="pointer-events-none h-full w-full object-contain object-left drop-shadow-md transition-transform duration-200 [transform:scale(1.55)] group-hover:[transform:scale(1.65)]"
+          />
         </Link>
 
         {/* Title */}
