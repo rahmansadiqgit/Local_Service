@@ -355,17 +355,17 @@ export default function Header() {
   const dropdownItemClass =
     "block rounded-xl px-4 py-2.5 text-sm font-semibold !text-slate-700 transition hover:bg-orange-100 hover:!text-orange-700"
 
-  const logoSlotClass = "group relative flex h-10 w-32 md:w-40 lg:w-44 shrink-0 items-center overflow-hidden"
+  const logoSlotClass = "group relative z-10 flex h-10 w-36 shrink-0 items-center md:w-44 lg:w-48"
 
   return (
     <header className="sticky top-0 z-40 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 shadow-lg">
-      <div className="relative mx-auto flex max-w-7xl items-center justify-between px-4 py-4">
+      <div className="relative mx-auto flex w-full max-w-screen-2xl items-center justify-between px-4 py-4 sm:px-6 lg:px-8">
         {/* Logo */}
         <Link to="/" className={logoSlotClass} aria-label="Localix home">
           <img
             src="/images/logo.png"
             alt="Localix logo"
-            className="pointer-events-none h-full w-full object-contain object-left drop-shadow-md transition-transform duration-200 [transform:scale(1.55)] group-hover:[transform:scale(1.65)]"
+            className="pointer-events-none h-full w-full object-contain object-left drop-shadow-md transition-transform duration-200 [transform:scale(1.38)] group-hover:[transform:scale(1.46)]"
           />
         </Link>
 
@@ -380,7 +380,7 @@ export default function Header() {
         </div>
 
         {/* Right */}
-        <div className="flex items-center gap-3">
+        <div className="relative z-10 ml-auto flex items-center gap-3 md:translate-x-2 lg:translate-x-3">
           {/* Notifications */}
           {isAuthenticated && (
             <div className="relative" data-header-dropdown>
