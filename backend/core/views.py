@@ -1657,7 +1657,33 @@ class ERPViewSet(viewsets.ModelViewSet):
         assign = request.data.get("assign", True)
         should_assign = bool(assign)
 
+
         ids = set(role_bucket.get("assignee_ids") or [])
+        expertise_updated = False
+        # Only update available_person for expertise role in demand posts
+        if role == "expertise":
+            post = getattr(erp, "post", None)
+            if post and str(getattr(post, "post_type", "")).strip().lower() == "demand":
+                from core.models import Expertise
+                # Find the expertise row for this ERP and user (assume 1:1 mapping by post and user)
+                expertise_qs = Expertise.objects.filter(post=post)
+                # If you have a way to map user to a specific expertise row, add logic here
+                # For now, decrement the first available expertise with available_person > 0
+                if should_assign:
+                    for exp in expertise_qs.order_by("id"):
+                        if exp.available_person > 0:
+                            exp.available_person -= 1
+                            exp.save(update_fields=["available_person"])
+                            expertise_updated = True
+                            break
+                else:
+                    # On unassign, increment the first expertise with available_person < original
+                    for exp in expertise_qs.order_by("id"):
+                        exp.available_person += 1
+                        exp.save(update_fields=["available_person"])
+                        expertise_updated = True
+                        break
+
         if should_assign:
             ids.add(request.user.id)
         else:

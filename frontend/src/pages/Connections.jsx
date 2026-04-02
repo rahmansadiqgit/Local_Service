@@ -226,6 +226,7 @@ export default function Connections() {
       setErpItems((prev) => prev.map((item) => (item.id === data.id ? data : item)))
       setMessage(assign ? 'You assigned yourself successfully.' : 'You removed yourself successfully.')
       await loadOverview()
+      window.dispatchEvent(new Event('localix:notifications-refresh'))
     } catch (error) {
       console.error(error)
       setMessage('Failed to update self assignment.')

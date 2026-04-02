@@ -196,8 +196,17 @@ export default function ManagePost() {
     }
   }, [id, showMessage])
 
+
   useEffect(() => {
     loadPosts()
+    // Listen for global refresh event to always reload post data after booking/application changes
+    const handleRefresh = () => {
+      loadPosts()
+    }
+    window.addEventListener('localix:notifications-refresh', handleRefresh)
+    return () => {
+      window.removeEventListener('localix:notifications-refresh', handleRefresh)
+    }
   }, [loadPosts])
 
   const handleDeletePost = async (postId) => {
@@ -1436,12 +1445,8 @@ export default function ManagePost() {
                             const persons = getExpertisePersonsValue(post.post_type, expertise)
                             const duration = getExpertiseDurationValue(post.post_type, expertise)
                             const remainingPeople = getRemainingExpertisePeople(post.id, expertise)
-                            const personsMax = post.post_type === 'Demand'
-                              ? Math.max(Number(expertise.available_person || 0), 0)
-                              : remainingPeople
-                            const durationMax = post.post_type === 'Demand'
-                              ? Math.max(Number(expertise.needed_budget_unit || 0), 0)
-                              : 365
+                            const personsMax = getRemainingExpertisePeople(post.id, expertise)
+                            const durationMax = getRemainingExpertiseDuration(post.id, expertise)
                             const enabled = isItemEnabled(post.id, 'expertise', expertise.id)
                             const requestedRate = Number(expertise.cost || 0)
                             const applyPeopleKey = `apply-expertise-${expertise.id}-people`
@@ -1492,14 +1497,14 @@ export default function ManagePost() {
                                           onChange={(val) => setApplicationValue(applyPeopleKey, val, personsMax)}
                                           max={personsMax}
                                           label="People you'll provide"
-                                          helperText={`Max ${personsMax} person (as requested)`}
+                                          helperText={`Max ${personsMax} person${post.post_type === 'Demand' ? ' (as requested)' : ' available'}`}
                                         />
                                         <CounterControl
                                           value={applyHours}
                                           onChange={(val) => setApplicationValue(applyHoursKey, val, durationMax)}
                                           max={durationMax}
                                           label="Hours you'll work"
-                                          helperText={`Max ${durationMax} hrs (as requested)`}
+                                          helperText={`Max ${durationMax} hrs${post.post_type === 'Demand' ? ' (as requested)' : ' available'}`}
                                         />
                                         <OfferRateInput
                                           value={applyRate}

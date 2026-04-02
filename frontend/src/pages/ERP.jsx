@@ -412,7 +412,10 @@ export default function ERP() {
       if (hasExpertiseCategory) {
         pendingTasks.push({
           label: `Assign Expertise in Members → Expertise${requiredExpertiseQty > 0 ? ` (required: ${requiredExpertiseQty})` : ''}`,
-          done: requiredExpertiseQty > 0 ? assignedExpertiseQty >= requiredExpertiseQty : hasWorkers,
+          done:
+            requiredExpertiseQty > 0
+              ? assignedExpertiseQty >= requiredExpertiseQty
+              : assignedExpertiseQty > 0 || hasWorkers,
           key: 'member_expertise',
         })
       }
