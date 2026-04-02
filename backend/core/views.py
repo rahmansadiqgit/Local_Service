@@ -1814,6 +1814,24 @@ class ERPViewSet(viewsets.ModelViewSet):
 
         return Response(self.get_serializer(erp).data)
 
+    @action(detail=True, methods=["post"])
+    def set_ready_product(self, request, pk=None):
+        erp = self.get_object()
+
+        if not erp.provider or erp.provider.id != request.user.id:
+            raise PermissionDenied("Only provider can update Ready product status.")
+
+        ready = self._to_bool(request.data.get("ready", False))
+
+        snapshot = self._as_dict(erp.configuration_snapshot)
+        workflow = self._as_dict(snapshot.get("workflow"))
+        workflow["ready_product_done"] = bool(ready)
+        workflow["ready_product_updated_at"] = timezone.now().isoformat()
+        snapshot["workflow"] = workflow
+        self._save_snapshot(erp, snapshot)
+
+        return Response(self.get_serializer(erp).data)
+
     @action(detail=True, methods=["patch"])
     def update_stage(self, request, pk=None):
         erp = self.get_object()
