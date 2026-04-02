@@ -2628,6 +2628,17 @@ class ConnectionViewSet(viewsets.GenericViewSet):
             ConnectionRole.SUPPLIER: "Delivery Man",
         }
 
+        connection_type_to_role = {
+            "delivery man": "delivery man",
+            "delivery": "delivery man",
+            "supplier": "delivery man",
+            "skill provider": "skill provider",
+            "skill providers": "skill provider",
+            "expertise": "expertise",
+        }
+        selected_role_text = connection_type_to_role.get(connection_type)
+        is_hired_view = connection_type in {"hired", "hired by", "hired_by"}
+
         # When requester removes, they are leaving the connection from their requested role.
         requester_side = next(
             (
@@ -2649,16 +2660,20 @@ class ConnectionViewSet(viewsets.GenericViewSet):
         if requester_side:
             actor_role_text = role_labels.get(requester_side.requested_role, "member")
             actor_role_title = role_labels_title.get(requester_side.requested_role, "Member")
-            actor_message = f"You have removed connection with {target_name}."
-            target_message = f"{actor_role_title} {actor_name} has removed connection from you."
+            if selected_role_text and not is_hired_view:
+                actor_message = f"You have removed connection with a {selected_role_text} {target_name}."
+            else:
+                actor_message = f"You have removed connection with {target_name}."
+            target_message = f"{actor_name} has removed connection from you."
         elif addressee_side:
             target_role_text = role_labels.get(addressee_side.requested_role, "member")
-            target_role_title = role_labels_title.get(addressee_side.requested_role, "Member")
-            if connection_type in {"hired", "hired by", "hired_by"}:
+            if selected_role_text and not is_hired_view:
+                actor_message = f"You have removed connection with a {selected_role_text} {target_name}."
+            elif is_hired_view:
                 actor_message = f"You have removed connection with {target_name}."
             else:
                 actor_message = f"You have removed a {target_role_text} named {target_name}."
-            target_message = f"{target_role_title} {actor_name} has removed connection from you."
+            target_message = f"{actor_name} has removed connection from you."
         else:
             actor_message = f"You have removed connection with {target_name}."
             target_message = f"{actor_name} removed your connection."
