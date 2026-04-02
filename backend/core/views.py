@@ -485,11 +485,17 @@ class ERPViewSet(viewsets.ModelViewSet):
             skill = skill_map.get(service_id)
             if not skill:
                 continue
+            # Skill.available_workers was removed from the data model, so there is
+            # no explicit service capacity to enforce by default.
+            # When capacity is not provided (<= 0), treat service bookings as unlimited.
+            total_capacity = self._to_int(getattr(skill, "available_workers", 0), default=0)
+            if total_capacity <= 0:
+                continue
             consumed = max(self._to_int(consumed_usage["services"].get(service_id, 0)), 0)
-            remaining = max(1 - consumed, 0)
+            remaining = max(total_capacity - consumed, 0)
             if requested_count > remaining:
                 errors.append(
-                    f'Service "{skill.skill_name}": already booked/given for this post.'
+                    f'Service "{skill.skill_name}": requested {requested_count}, only {remaining} remaining.'
                 )
 
         for key, requested_people in requested_usage["expertise_people"].items():
@@ -519,20 +525,8 @@ class ERPViewSet(viewsets.ModelViewSet):
                         f'Expertise "{row.skill_name}": requested {requested_people} people, only {remaining_people} remaining.'
                     )
 
-        for key, requested_duration in requested_usage["expertise_duration"].items():
-            source, row_id = key
-            if source != "expertise":
-                continue
-            row = expertise_map.get(row_id)
-            if not row:
-                continue
-            total_duration = max(self._to_int(getattr(row, "needed_budget_unit", 0)), 0)
-            consumed_duration = max(self._to_int(consumed_usage["expertise_duration"].get(key, 0)), 0)
-            remaining_duration = max(total_duration - consumed_duration, 0)
-            if requested_duration > remaining_duration:
-                errors.append(
-                    f'Expertise "{row.name}": requested duration {requested_duration}, only {remaining_duration} remaining.'
-                )
+        # Do not enforce global expertise duration depletion across bookings.
+        # Booking capacity is constrained by available people and product stock.
 
         if errors:
             raise ValidationError(
@@ -552,6 +546,48 @@ class ERPViewSet(viewsets.ModelViewSet):
         if post_type != "demand":
             return True
         return self._application_status(erp) in {"approved", "accepted", "confirmed"}
+
+    def _booking_status_from_snapshot(self, snapshot):
+        data = self._as_dict(snapshot)
+        submission = self._as_dict(data.get("booking_submission"))
+        return str(submission.get("status") or "").strip().lower()
+
+    def _booking_status(self, erp):
+        return self._booking_status_from_snapshot(getattr(erp, "configuration_snapshot", None))
+
+    def _is_supply_booking_approved(self, erp):
+        post_type = str(getattr(getattr(erp, "post", None), "post_type", "") or "").strip().lower()
+        if post_type != "supply":
+            return True
+        return self._booking_status(erp) in {"approved", "accepted", "confirmed"}
+
+    def _set_supply_booking_submission(self, snapshot, actor, status_value):
+        data = self._as_dict(snapshot)
+        submission = self._as_dict(data.get("booking_submission"))
+        now_iso = timezone.now().isoformat()
+        status_clean = str(status_value or "").strip().lower() or "submitted"
+
+        if status_clean in {"submitted", "pending"}:
+            submission["requested_by"] = int(actor.id)
+            submission["requested_at"] = now_iso
+            submission.pop("approved_by", None)
+            submission.pop("approved_at", None)
+            submission.pop("rejected_by", None)
+            submission.pop("rejected_at", None)
+            submission["status"] = "submitted"
+        elif status_clean in {"approved", "accepted", "confirmed"}:
+            submission["approved_by"] = int(actor.id)
+            submission["approved_at"] = now_iso
+            submission.pop("rejected_by", None)
+            submission.pop("rejected_at", None)
+            submission["status"] = "approved"
+        elif status_clean == "rejected":
+            submission["rejected_by"] = int(actor.id)
+            submission["rejected_at"] = now_iso
+            submission["status"] = "rejected"
+
+        data["booking_submission"] = submission
+        return data
 
     def _notify_booking_confirmation(self, erp, actor):
         if not erp:
@@ -611,6 +647,102 @@ class ERPViewSet(viewsets.ModelViewSet):
                 Notification.objects.bulk_create(notifications)
         except Exception:
             logger.exception("Failed to create booking notification for ERP %s", getattr(erp, "id", None))
+
+    def _notify_booking_request_sent(self, erp, actor):
+        if not erp:
+            return
+
+        post = getattr(erp, "post", None)
+        if not post:
+            return
+
+        post_type = str(getattr(post, "post_type", "") or "").strip().lower()
+        # This request-approval flow is for available/supply posts only.
+        if post_type != "supply":
+            return
+
+        post_title = (
+            getattr(post, "post_title", "")
+            or getattr(post, "post_name", "")
+            or "this post"
+        )
+
+        post_owner = getattr(post, "owner", None)
+        owner_name = getattr(post_owner, "name", "") or getattr(post_owner, "username", "") or "Post owner"
+        owner_link = f"/dashboard/{post_owner.id}" if post_owner else "/dashboard"
+        actor_name = getattr(actor, "name", "") or getattr(actor, "username", "") or "A user"
+
+        notifications = [
+            Notification(
+                user=actor,
+                title="✅ Booking Request Sent",
+                message=(
+                    f'Your request for "{post_title}" has been sent to the post owner [{owner_name}]({owner_link}). '
+                    "⏱ Waiting for approval. "
+                    f"Post link: /erp?erp_id={erp.id}"
+                ),
+            )
+        ]
+
+        if post_owner and int(post_owner.id) != int(actor.id):
+            notifications.append(
+                Notification(
+                    user=post_owner,
+                    title="🔔 New Booking Request",
+                    message=(
+                        f'You have a new booking request for "{post_title}" from [{actor_name}](/dashboard/{actor.id}), waiting for your response. '
+                        f"Post link: /erp?erp_id={erp.id}"
+                    ),
+                )
+            )
+
+        try:
+            Notification.objects.bulk_create(notifications)
+        except Exception:
+            logger.exception("Failed to create booking request notification for ERP %s", getattr(erp, "id", None))
+
+    def _is_supply_post(self, post):
+        return str(getattr(post, "post_type", "") or "").strip().lower() == "supply"
+
+    def _notify_supply_booking_decision(self, erp, actor, approved):
+        post = getattr(erp, "post", None)
+        if not post:
+            return
+
+        requester = getattr(erp, "receiver", None)
+        if not requester:
+            return
+
+        owner = getattr(post, "owner", None) or actor
+        owner_name = getattr(owner, "name", "") or getattr(owner, "username", "") or "Post owner"
+        owner_link = f"/dashboard/{owner.id}" if owner else "/dashboard"
+        post_title = (
+            getattr(post, "post_title", "")
+            or getattr(post, "post_name", "")
+            or "this post"
+        )
+
+        try:
+            if approved:
+                Notification.objects.create(
+                    user=requester,
+                    title="🎉 Booking Confirmed",
+                    message=(
+                        f'Your request for "{post_title}" has been accepted by the post owner [{owner_name}]({owner_link}). '
+                        f"Post link: /erp?erp_id={erp.id}"
+                    ),
+                )
+            else:
+                Notification.objects.create(
+                    user=requester,
+                    title="⚠️ Request Declined",
+                    message=(
+                        f'Your request for "{post_title}" was declined by the post owner [{owner_name}]({owner_link}). '
+                        "Post link: /feed"
+                    ),
+                )
+        except Exception:
+            logger.exception("Failed to create booking decision notification for ERP %s", getattr(erp, "id", None))
 
     @action(detail=True, methods=["post"], url_path="submit_application", url_name="submit_application")
     def submit_application(self, request, pk=None):
@@ -1014,14 +1146,35 @@ class ERPViewSet(viewsets.ModelViewSet):
                 data = self.get_serializer(existing).data
                 return Response(data, status=status.HTTP_200_OK)
 
-            if self._to_bool(serializer.validated_data.get("is_configured", False)):
-                self._validate_capacity_for_snapshot(
-                    post=post,
-                    snapshot=serializer.validated_data.get("configuration_snapshot") or {},
-                )
+            requested_is_configured = self._to_bool(serializer.validated_data.get("is_configured", False))
+            is_supply_post = self._is_supply_post(post)
+            snapshot_payload = serializer.validated_data.get("configuration_snapshot") or {}
 
-            instance = serializer.save(provider=provider, receiver=receiver, category=category)
-            if self._to_bool(serializer.validated_data.get("is_configured", False)):
+            save_kwargs = {
+                "provider": provider,
+                "receiver": receiver,
+                "category": category,
+            }
+
+            # Supply booking requests require owner acceptance, so keep them unconfigured until approval.
+            if requested_is_configured and is_supply_post:
+                save_kwargs["is_configured"] = False
+                save_kwargs["configuration_snapshot"] = self._set_supply_booking_submission(
+                    snapshot_payload,
+                    actor,
+                    "submitted",
+                )
+            else:
+                if requested_is_configured:
+                    self._validate_capacity_for_snapshot(
+                        post=post,
+                        snapshot=snapshot_payload,
+                    )
+
+            instance = serializer.save(**save_kwargs)
+            if requested_is_configured:
+                self._notify_booking_request_sent(instance, actor)
+            if requested_is_configured and not is_supply_post:
                 self._notify_booking_confirmation(instance, actor)
             data = self.get_serializer(instance).data
             headers = self.get_success_headers(data)
@@ -1035,17 +1188,40 @@ class ERPViewSet(viewsets.ModelViewSet):
     def partial_update(self, request, *args, **kwargs):
         try:
             instance = self.get_object()
+            was_configured = bool(instance.is_configured)
+            previous_booking_status = self._booking_status(instance)
             next_is_configured = self._to_bool(request.data.get("is_configured", instance.is_configured))
-            if next_is_configured:
+            is_supply_post = self._is_supply_post(instance.post)
+
+            if next_is_configured and not is_supply_post:
                 self._validate_capacity_for_snapshot(
                     post=instance.post,
                     snapshot=request.data.get("configuration_snapshot", instance.configuration_snapshot) or {},
                     exclude_erp_id=instance.id,
                 )
-            response = super().partial_update(request, *args, **kwargs)
-            if self._to_bool(request.data.get("is_configured", False)):
-                self._notify_booking_confirmation(self.get_object(), request.user)
-            return response
+
+            serializer = self.get_serializer(instance, data=request.data, partial=True)
+            serializer.is_valid(raise_exception=True)
+
+            save_kwargs = {}
+            if next_is_configured and is_supply_post:
+                snapshot_payload = serializer.validated_data.get("configuration_snapshot", instance.configuration_snapshot) or {}
+                save_kwargs["configuration_snapshot"] = self._set_supply_booking_submission(
+                    snapshot_payload,
+                    request.user,
+                    "submitted",
+                )
+                save_kwargs["is_configured"] = False
+
+            current = serializer.save(**save_kwargs)
+
+            if next_is_configured and is_supply_post and previous_booking_status not in {"submitted", "pending"}:
+                self._notify_booking_request_sent(current, request.user)
+
+            if self._to_bool(request.data.get("is_configured", False)) and not is_supply_post and not was_configured:
+                self._notify_booking_confirmation(current, request.user)
+
+            return Response(self.get_serializer(current).data)
         except (ValidationError, PermissionDenied):
             raise
         except Exception as exc:
@@ -1055,22 +1231,102 @@ class ERPViewSet(viewsets.ModelViewSet):
     def update(self, request, *args, **kwargs):
         try:
             instance = self.get_object()
+            was_configured = bool(instance.is_configured)
+            previous_booking_status = self._booking_status(instance)
             next_is_configured = self._to_bool(request.data.get("is_configured", instance.is_configured))
-            if next_is_configured:
+            is_supply_post = self._is_supply_post(instance.post)
+
+            if next_is_configured and not is_supply_post:
                 self._validate_capacity_for_snapshot(
                     post=instance.post,
                     snapshot=request.data.get("configuration_snapshot", instance.configuration_snapshot) or {},
                     exclude_erp_id=instance.id,
                 )
-            response = super().update(request, *args, **kwargs)
-            if self._to_bool(request.data.get("is_configured", False)):
-                self._notify_booking_confirmation(self.get_object(), request.user)
-            return response
+
+            serializer = self.get_serializer(instance, data=request.data)
+            serializer.is_valid(raise_exception=True)
+
+            save_kwargs = {}
+            if next_is_configured and is_supply_post:
+                snapshot_payload = serializer.validated_data.get("configuration_snapshot", instance.configuration_snapshot) or {}
+                save_kwargs["configuration_snapshot"] = self._set_supply_booking_submission(
+                    snapshot_payload,
+                    request.user,
+                    "submitted",
+                )
+                save_kwargs["is_configured"] = False
+
+            current = serializer.save(**save_kwargs)
+
+            if next_is_configured and is_supply_post and previous_booking_status not in {"submitted", "pending"}:
+                self._notify_booking_request_sent(current, request.user)
+
+            if self._to_bool(request.data.get("is_configured", False)) and not is_supply_post and not was_configured:
+                self._notify_booking_confirmation(current, request.user)
+
+            return Response(self.get_serializer(current).data)
         except (ValidationError, PermissionDenied):
             raise
         except Exception as exc:
             logger.exception("Unhandled ERP update error for user %s", getattr(request.user, "id", None))
             raise ValidationError({"detail": f"ERP update failed: {exc}"})
+
+    @action(detail=True, methods=["post"], url_path="approve_booking", url_name="approve_booking")
+    def approve_booking(self, request, pk=None):
+        erp = self.get_object()
+        actor = request.user
+        post = getattr(erp, "post", None)
+
+        if not post or not self._is_supply_post(post):
+            raise ValidationError({"detail": "Booking approval is only available for supply posts."})
+
+        owner = getattr(post, "owner", None)
+        if not owner or int(owner.id) != int(actor.id):
+            raise PermissionDenied("Only the post owner can approve this booking request.")
+
+        current_status = self._booking_status(erp)
+        if current_status not in {"submitted", "pending"}:
+            raise ValidationError({"detail": "Only pending booking requests can be approved."})
+
+        snapshot = self._set_supply_booking_submission(erp.configuration_snapshot, actor, "approved")
+        self._validate_capacity_for_snapshot(post=post, snapshot=snapshot, exclude_erp_id=erp.id)
+
+        erp.configuration_snapshot = snapshot
+        erp.is_configured = True
+        # Move approved supply bookings directly into active execution flow.
+        if str(erp.stage or "").strip().lower() == "pending":
+            erp.stage = "On Process"
+            erp.save(update_fields=["configuration_snapshot", "is_configured", "stage", "updated_at"])
+        else:
+            erp.save(update_fields=["configuration_snapshot", "is_configured", "updated_at"])
+
+        self._notify_supply_booking_decision(erp, actor, approved=True)
+        return Response(self.get_serializer(erp).data, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=["post"], url_path="reject_booking", url_name="reject_booking")
+    def reject_booking(self, request, pk=None):
+        erp = self.get_object()
+        actor = request.user
+        post = getattr(erp, "post", None)
+
+        if not post or not self._is_supply_post(post):
+            raise ValidationError({"detail": "Booking rejection is only available for supply posts."})
+
+        owner = getattr(post, "owner", None)
+        if not owner or int(owner.id) != int(actor.id):
+            raise PermissionDenied("Only the post owner can reject this booking request.")
+
+        current_status = self._booking_status(erp)
+        if current_status not in {"submitted", "pending"}:
+            raise ValidationError({"detail": "Only pending booking requests can be rejected."})
+
+        snapshot = self._set_supply_booking_submission(erp.configuration_snapshot, actor, "rejected")
+        erp.configuration_snapshot = snapshot
+        erp.is_configured = False
+        erp.save(update_fields=["configuration_snapshot", "is_configured", "updated_at"])
+
+        self._notify_supply_booking_decision(erp, actor, approved=False)
+        return Response(self.get_serializer(erp).data, status=status.HTTP_200_OK)
 
     def perform_create(self, serializer):
         actor = self.request.user

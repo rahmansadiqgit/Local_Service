@@ -30,6 +30,8 @@ export default function ERPTaskCard({
   onCompleteByReceiver,
   onRateParticipant,
   onRateProvider,
+  onApproveBooking,
+  onRejectBooking,
   onOpenOwner,
   toMediaUrl,
 }) {
@@ -62,9 +64,7 @@ export default function ERPTaskCard({
   const [providerFeedbackError, setProviderFeedbackError] = useState('')
   const [providerFeedbackSuccess, setProviderFeedbackSuccess] = useState('')
   const [isSubmittingProviderFeedback, setIsSubmittingProviderFeedback] = useState(false)
-
-  const phases = ['Pending', 'On Process', 'Completed']
-  const activePhaseIndex = phases.indexOf(erp.stage)
+  const [isDecidingBooking, setIsDecidingBooking] = useState(false)
 
   const snapshot = erp.configuration_snapshot || {}
   const snapshotPost = snapshot.post || {}
@@ -73,6 +73,16 @@ export default function ERPTaskCard({
   const snapshotProducts = Array.isArray(snapshot.products) ? snapshot.products : []
   const snapshotTotals = snapshot.totals || {}
   const supplierNote = String(snapshot?.notes?.supplier_note || snapshot?.supplier_note || '').trim()
+  const bookingSubmission = snapshot.booking_submission || {}
+  const bookingStatus = String(bookingSubmission?.status || '').trim().toLowerCase()
+  const isSupplyPost = String(post?.post_type || '').trim().toLowerCase() === 'supply'
+  const isBookingAwaitingApproval = isSupplyPost && (bookingStatus === 'submitted' || bookingStatus === 'pending')
+  const isBookingApproved = isSupplyPost && (bookingStatus === 'approved' || bookingStatus === 'accepted' || bookingStatus === 'confirmed')
+  const isBookingRejected = isSupplyPost && bookingStatus === 'rejected'
+
+  const phases = isSupplyPost ? ['Pending', 'Accepted', 'Completed'] : ['Pending', 'On Process', 'Completed']
+  const displayStage = isSupplyPost && erp.stage === 'On Process' && isBookingApproved ? 'Accepted' : erp.stage
+  const activePhaseIndex = phases.indexOf(displayStage)
 
   const hasRequiredRows = (rows) =>
     Array.isArray(rows) &&
@@ -181,6 +191,8 @@ export default function ERPTaskCard({
         ? 'Receiver'
         : 'Viewer'
   const isProvider = viewerRole === 'Provider'
+  const postOwnerId = Number(post?.owner_id || post?.owner || 0)
+  const isPostOwner = Number.isFinite(postOwnerId) && postOwnerId > 0 && Number(postOwnerId) === Number(currentUserId)
   const assignedMembersForSelectedRole = users.filter((user) =>
     selectedAssigneeIds.includes(Number(user.id)),
   )
@@ -269,7 +281,10 @@ export default function ERPTaskCard({
   const canLeaveTask = currentUserRoleResponsibilities.length > 0 && erp.stage !== 'Completed'
   const isReceiver = viewerRole === 'Receiver'
   const canUseMessenger = isProvider || isReceiver || currentUserRoleResponsibilities.length > 0
-  const canCompleteAsReceiver = isReceiver && erp.stage === 'On Process'
+  const onProcessChecklist = Array.isArray(phaseTasks?.['On Process']) ? phaseTasks['On Process'] : []
+  const isOnProcessReadyForCompletion =
+    onProcessChecklist.length === 0 || onProcessChecklist.every((task) => Boolean(task?.done))
+  const canCompleteAsReceiver = isReceiver && erp.stage === 'On Process' && isOnProcessReadyForCompletion
 
   const averageRatingByUser = (() => {
     const totals = new Map()
@@ -510,6 +525,7 @@ export default function ERPTaskCard({
   )
   const shouldPulseMembersButton = pendingMemberRoles.size > 0
   const shouldPulseActionsButton = openPendingTasks.length > 0 || shouldPulseMembersButton
+  const canUseActionsMenu = !isSupplyPost || isBookingApproved
 
   useEffect(() => {
     const handleOutsideClick = (event) => {
@@ -760,7 +776,7 @@ export default function ERPTaskCard({
             {roleLabel}
           </p>
           <div />
-          <span className={`rounded-full px-4 py-1.5 text-base font-bold ${stageStyle}`}>{erp.stage}</span>
+          <span className={`rounded-full px-4 py-1.5 text-base font-bold ${stageStyle}`}>{displayStage}</span>
         </div>
 
         <h2 className="relative mx-auto mt-3 w-full max-w-3xl text-center text-[2rem] font-bold leading-tight text-white drop-shadow-sm">
@@ -773,6 +789,24 @@ export default function ERPTaskCard({
         >
           {taskCategoryLabel}
         </p>
+
+        {isSupplyPost ? (
+          <div className="mt-2 flex justify-center">
+            {isBookingAwaitingApproval ? (
+              <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700">
+                Booking request pending owner approval
+              </span>
+            ) : isBookingApproved ? (
+              <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
+                Booking confirmed
+              </span>
+            ) : isBookingRejected ? (
+              <span className="rounded-full border border-rose-200 bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-700">
+                Booking request declined
+              </span>
+            ) : null}
+          </div>
+        ) : null}
 
         {currentUserRoleResponsibilities.length ? (
           <div className="relative mx-auto mt-3 w-full max-w-3xl rounded-2xl border border-white/35 bg-white/15 px-3 py-2 text-sm text-white shadow-sm backdrop-blur-sm">
@@ -864,7 +898,46 @@ export default function ERPTaskCard({
 
       <div className="relative grid grid-cols-3 items-center" data-erp-actions-root>
         <div className="justify-self-start">
-          {canCompleteAsReceiver ? (
+          {isBookingAwaitingApproval && isPostOwner && isProvider ? (
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                disabled={isDecidingBooking}
+                onClick={async () => {
+                  if (!onApproveBooking) return
+                  setIsDecidingBooking(true)
+                  try {
+                    await onApproveBooking(erp)
+                  } finally {
+                    setIsDecidingBooking(false)
+                  }
+                }}
+                className="rounded-full border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-sm font-semibold text-emerald-700 transition hover:border-emerald-400 hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isDecidingBooking ? 'Accepting...' : 'Accept'}
+              </button>
+              <button
+                type="button"
+                disabled={isDecidingBooking}
+                onClick={async () => {
+                  if (!onRejectBooking) return
+                  setIsDecidingBooking(true)
+                  try {
+                    await onRejectBooking(erp)
+                  } finally {
+                    setIsDecidingBooking(false)
+                  }
+                }}
+                className="rounded-full border border-rose-300 bg-rose-50 px-3 py-1.5 text-sm font-semibold text-rose-700 transition hover:border-rose-400 hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Reject
+              </button>
+            </div>
+          ) : isBookingAwaitingApproval && !isPostOwner ? (
+            <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700">
+              Waiting for owner response
+            </span>
+          ) : canCompleteAsReceiver ? (
             <button
               type="button"
               onClick={() => {
@@ -873,7 +946,7 @@ export default function ERPTaskCard({
               }}
               className="rounded-full border border-emerald-300 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-700 transition hover:border-emerald-400 hover:bg-emerald-100"
             >
-              Completed
+              Mark Completed
             </button>
           ) : shouldShowProviderParticipantRatingButton ? (
             <button
@@ -938,25 +1011,29 @@ export default function ERPTaskCard({
         </div>
 
         <div className="justify-self-end">
-          <button
-            type="button"
-            onClick={() => {
-              setIsActionsMenuOpen((prev) => !prev)
-              if (isActionsMenuOpen) {
-                setIsMembersMenuOpen(false)
-              }
-            }}
-            className={`rounded-full border px-4 py-2 text-sm font-semibold transition ${
-              shouldPulseActionsButton
-                ? 'animate-bounce border-rose-300 bg-rose-100 text-rose-700 hover:border-rose-400 hover:bg-rose-200'
-                : 'border-slate-300 bg-white text-slate-700 hover:border-slate-400'
-            }`}
-          >
-            Menu
-          </button>
+          {canUseActionsMenu ? (
+            <button
+              type="button"
+              onClick={() => {
+                setIsActionsMenuOpen((prev) => !prev)
+                if (isActionsMenuOpen) {
+                  setIsMembersMenuOpen(false)
+                }
+              }}
+              className={`rounded-full border px-4 py-2 text-sm font-semibold transition ${
+                shouldPulseActionsButton
+                  ? 'animate-bounce border-rose-300 bg-rose-100 text-rose-700 hover:border-rose-400 hover:bg-rose-200'
+                  : 'border-slate-300 bg-white text-slate-700 hover:border-slate-400'
+              }`}
+            >
+              Menu
+            </button>
+          ) : (
+            <span />
+          )}
         </div>
 
-        {isActionsMenuOpen ? (
+        {isActionsMenuOpen && canUseActionsMenu ? (
           <div className="absolute bottom-full right-0 z-30 mb-2 w-56 space-y-2 rounded-xl border border-slate-200 bg-white p-2 shadow-sm">
             <button
               type="button"
