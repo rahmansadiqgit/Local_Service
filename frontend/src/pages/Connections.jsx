@@ -182,7 +182,7 @@ export default function Connections() {
 
     if (deepLinkTarget.section === 'hired') {
       const target = hired.find(isSamePerson)
-      if (target) found = { person: target, type: 'Hired' }
+      if (target) found = { person: target, type: 'Hired By' }
     }
 
     if (!found && deepLinkTarget.section === 'members') {
@@ -203,7 +203,7 @@ export default function Connections() {
 
     if (!found) {
       const targetInHired = hired.find(isSamePerson)
-      if (targetInHired) found = { person: targetInHired, type: 'Hired' }
+      if (targetInHired) found = { person: targetInHired, type: 'Hired By' }
     }
 
     if (!found) {
@@ -345,7 +345,7 @@ export default function Connections() {
     }
   }
 
-  const handleRemoveConnection = async (person) => {
+  const handleRemoveConnection = async (person, connectionType = '') => {
     const personId = Number(person?.id)
     if (!personId) return
 
@@ -355,7 +355,10 @@ export default function Connections() {
 
     setRemoveConnectionLoading(String(personId))
     try {
-      await api.post('/connections/remove/', { target_user_id: personId })
+      await api.post('/connections/remove/', {
+        target_user_id: personId,
+        connection_type: String(connectionType || '').trim(),
+      })
       setMessage(`Connection removed with ${personName}.`)
       await loadOverview()
       setSelected((prev) => (prev && Number(prev.id) === personId ? null : prev))
@@ -470,7 +473,7 @@ export default function Connections() {
           type="button"
           onClick={(event) => {
             event.stopPropagation()
-            handleRemoveConnection(person)
+            handleRemoveConnection(person, type)
           }}
           disabled={removeConnectionLoading === String(person.id)}
           className="rounded-full border border-rose-200 px-3 py-1 text-xs font-semibold text-rose-700 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60"
@@ -514,12 +517,12 @@ export default function Connections() {
         <div className="space-y-6">
           <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <h3 className="text-lg font-semibold">Hired</h3>
+              <h3 className="text-lg font-semibold">Hired By</h3>
               <p className="text-xs text-slate-400">People who requested to connect with you.</p>
             </div>
             <div className="grid gap-4 lg:grid-cols-3">
               {overview.hired_connections.length ? (
-                overview.hired_connections.map((person) => renderCard(person, 'Hired'))
+                overview.hired_connections.map((person) => renderCard(person, 'Hired By'))
               ) : (
                 <p className="text-sm text-slate-500">No hired connections yet.</p>
               )}
