@@ -146,15 +146,27 @@ export default function Connections() {
     const params = new URLSearchParams(location.search)
     const section = String(params.get('section') || '').trim().toLowerCase()
     const name = String(params.get('name') || '').trim().toLowerCase()
+    const role = String(params.get('role') || '').trim().toLowerCase()
     return {
       section,
       name,
-      hasTarget: Boolean(name),
+      role,
+      hasNameTarget: Boolean(name),
     }
   }, [location.search])
 
   useEffect(() => {
-    if (!deepLinkTarget.hasTarget) return
+    if (deepLinkTarget.section === 'members') {
+      if (deepLinkTarget.role === 'supplier') {
+        setMemberCategory('Delivery Man')
+      } else if (deepLinkTarget.role === 'skill_provider') {
+        setMemberCategory('Skill Providers')
+      } else if (deepLinkTarget.role === 'expertise') {
+        setMemberCategory('Expertise')
+      }
+    }
+
+    if (!deepLinkTarget.hasNameTarget) return
 
     const isSamePerson = (person) => {
       const displayName = String(person?.name || person?.username || person?.email || '').trim().toLowerCase()

@@ -302,6 +302,11 @@ export default function Header() {
       return postLinkMatch[1].trim()
     }
 
+    const connectionLinkMatch = message.match(/connection\s+link:\s*([^\s]+)/i)
+    if (connectionLinkMatch && connectionLinkMatch[1]) {
+      return connectionLinkMatch[1].trim()
+    }
+
     if (
       title.includes("connection request") ||
       title.includes("connection added") ||
@@ -309,6 +314,12 @@ export default function Header() {
       title.includes("connection request accepted") ||
       messageLower.includes("connection")
     ) {
+      const acceptedByMatch = message.match(/^(.+?)\s+accepted\s+your\s+connection\s+request/i)
+      if (title.includes("connection request accepted") && acceptedByMatch?.[1]) {
+        const personName = acceptedByMatch[1].trim()
+        return `/connections?section=members&name=${encodeURIComponent(personName)}`
+      }
+
       const connectedWithMatch = message.match(/connected\s+with\s+(.+?)(?:\.|$)/i)
       if (title.includes("connection added") && connectedWithMatch?.[1]) {
         const personName = connectedWithMatch[1].trim()
