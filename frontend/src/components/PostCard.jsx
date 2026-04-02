@@ -163,6 +163,44 @@ export default function PostCard({
 
   const productRows = products
 
+  const isFullyBooked = useMemo(() => {
+    const checks = []
+
+    if (hasExpertiseCategory) {
+      const relevantExpertise = expertiseRows.filter((row) => Number(row?.id) > 0)
+      checks.push(
+        relevantExpertise.length > 0 &&
+          relevantExpertise.every((row) => Number(row?.available_person || 0) <= 0),
+      )
+    }
+
+    if (hasProductCategory) {
+      const relevantProducts = productRows.filter((row) => Number(row?.id) > 0)
+      checks.push(
+        relevantProducts.length > 0 &&
+          relevantProducts.every((row) => Number(row?.available_units || 0) <= 0),
+      )
+    }
+
+    if (hasServicesCategory && !hasExpertiseCategory && !hasProductCategory) {
+      const relevantServices = serviceRows.filter((row) => Number(row?.id) > 0)
+      checks.push(
+        relevantServices.length > 0 &&
+          relevantServices.every((row) => Boolean(row?.is_booked)),
+      )
+    }
+
+    if (!checks.length) return false
+    return checks.every(Boolean)
+  }, [
+    hasExpertiseCategory,
+    hasProductCategory,
+    hasServicesCategory,
+    expertiseRows,
+    productRows,
+    serviceRows,
+  ])
+
   const profileId = profile?.id ?? post?.owner_id ?? post?.owner
 
   const handleProfileNavigate = () => {
@@ -219,6 +257,11 @@ export default function PostCard({
           <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
             {post.post_type === 'Supply' ? 'Available' : post.post_type}
           </span>
+          {isFullyBooked ? (
+            <span className="rounded-full border border-rose-300 bg-rose-100 px-3 py-1 text-xs font-semibold text-rose-700">
+              Already booked
+            </span>
+          ) : null}
           {statusLabels.map((status) => (
             <div
               key={status}

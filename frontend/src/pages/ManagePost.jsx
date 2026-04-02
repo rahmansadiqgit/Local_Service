@@ -1046,6 +1046,7 @@ export default function ManagePost() {
   }
 
   const CounterControl = ({ value, onChange, max, label, helperText }) => {
+    const isLocked = Number(max || 0) <= 0
     return (
       <div className="rounded-xl border border-white/20 bg-white/5 p-3">
         <div className="flex items-center justify-between gap-3">
@@ -1057,7 +1058,10 @@ export default function ManagePost() {
             <button
               type="button"
               onClick={() => onChange(Math.max(0, value - 1))}
-              className="h-8 w-8 rounded-md border border-white/25 bg-white/10 text-white transition hover:bg-white/20"
+              disabled={isLocked}
+              className={`h-8 w-8 rounded-md border border-white/25 bg-white/10 text-white transition ${
+                isLocked ? 'cursor-not-allowed opacity-40' : 'hover:bg-white/20'
+              }`}
             >
               -
             </button>
@@ -1067,7 +1071,10 @@ export default function ManagePost() {
             <button
               type="button"
               onClick={() => onChange(Math.min(max, value + 1))}
-              className="h-8 w-8 rounded-md border border-white/25 bg-white/10 text-white transition hover:bg-white/20"
+              disabled={isLocked}
+              className={`h-8 w-8 rounded-md border border-white/25 bg-white/10 text-white transition ${
+                isLocked ? 'cursor-not-allowed opacity-40' : 'hover:bg-white/20'
+              }`}
             >
               +
             </button>
@@ -1122,18 +1129,21 @@ export default function ManagePost() {
     </span>
   )
 
-  const BookingItemHeader = ({ icon, title, subtitle, priceText, priceUnitText, checked, onToggle }) => (
+  const BookingItemHeader = ({ icon, title, subtitle, priceText, priceUnitText, checked, onToggle, disabled = false }) => (
     <div
-      role="button"
-      tabIndex={0}
-      onClick={onToggle}
+      role={disabled ? undefined : 'button'}
+      tabIndex={disabled ? -1 : 0}
+      onClick={disabled ? undefined : onToggle}
       onKeyDown={(event) => {
+        if (disabled) {
+          return
+        }
         if (event.key === 'Enter' || event.key === ' ') {
           event.preventDefault()
           onToggle()
         }
       }}
-      className="flex cursor-pointer items-start justify-between gap-3"
+      className={`flex items-start justify-between gap-3 ${disabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}
     >
       <div className="flex min-w-0 items-start gap-3">
         <div className="mt-0.5 flex h-9 w-9 items-center justify-center rounded-md border border-white/25 bg-white/20 text-base leading-none shadow-sm">
@@ -1152,8 +1162,10 @@ export default function ManagePost() {
         <input
           type="checkbox"
           checked={checked}
+          disabled={disabled}
           onChange={(event) => {
             event.stopPropagation()
+            if (disabled) return
             onToggle()
           }}
           className="mt-1 h-4 w-4 rounded border-slate-300 text-violet-600 focus:ring-violet-500"
@@ -1370,6 +1382,11 @@ export default function ManagePost() {
                             const applyPeople = getApplicationValue(applyPeopleKey, workersMax)
                             const applyHours = getApplicationValue(applyHoursKey, applyHoursMax)
                             const applyRate = getApplicationValue(applyRateKey, requestedRate)
+                            const originalPeople = Math.max(Number((skill.available_workers_original ?? skill.available_workers) || 0), 0)
+                            const originalHours = Math.max(Number((skill.needed_budget_unit_original ?? skill.needed_budget_unit) || 0), 0)
+                            const peopleExhausted = originalPeople > 0 && workersMax <= 0
+                            const hoursExhausted = originalHours > 0 && applyHoursMax <= 0
+                            const isSkillLocked = isApplyMode && (peopleExhausted || hoursExhausted)
                             const subtotal = isApplyMode
                               ? (enabled ? applyPeople * applyHours * applyRate : 0)
                               : (enabled ? workers * Number(skill.cost_per_unit || 0) : 0)
@@ -1387,12 +1404,22 @@ export default function ManagePost() {
                                   priceText={`৳ ${Number(skill.cost_per_unit || 0).toFixed(0)}`}
                                   priceUnitText={`per ${formatRateUnit(skill.unit).toLowerCase()}`}
                                   checked={enabled}
+                                  disabled={isSkillLocked}
                                   onToggle={() =>
+                                    isSkillLocked
+                                      ? null
+                                      :
                                     toggleItemEnabled(post.id, 'skill', skill.id, () => {
                                       setSkillWorkers((prev) => ({ ...prev, [`skill-${skill.id}`]: 0 }))
                                     })
                                   }
                                 />
+
+                                {isSkillLocked && (
+                                  <div className="mt-4 rounded-lg border border-rose-400/35 bg-rose-500/10 px-3 py-2 text-xs text-rose-100">
+                                    {post.post_type === 'Demand' ? 'Already Applied' : 'Already Booked'}
+                                  </div>
+                                )}
 
                                 {enabled && (
                                   <div className="mt-4 space-y-3 border-t border-white/15 pt-3">
@@ -1403,14 +1430,22 @@ export default function ManagePost() {
                                           onChange={(val) => setApplicationValue(applyPeopleKey, val, workersMax)}
                                           max={workersMax}
                                           label="People you'll provide"
-                                          helperText={`Max ${workersMax} person (as requested)`}
+                                          helperText={
+                                            isSkillLocked
+                                              ? (post.post_type === 'Demand' ? 'Already Applied' : 'Already Booked')
+                                              : `Max ${workersMax} person (as requested)`
+                                          }
                                         />
                                         <CounterControl
                                           value={applyHours}
                                           onChange={(val) => setApplicationValue(applyHoursKey, val, applyHoursMax)}
                                           max={applyHoursMax}
                                           label="Hours you'll work"
-                                          helperText={`Max ${applyHoursMax} hrs (as requested)`}
+                                          helperText={
+                                            isSkillLocked
+                                              ? (post.post_type === 'Demand' ? 'Already Applied' : 'Already Booked')
+                                              : `Max ${applyHoursMax} hrs (as requested)`
+                                          }
                                         />
                                         <OfferRateInput
                                           value={applyRate}
@@ -1455,6 +1490,11 @@ export default function ManagePost() {
                             const applyPeople = getApplicationValue(applyPeopleKey, personsMax)
                             const applyHours = getApplicationValue(applyHoursKey, durationMax)
                             const applyRate = getApplicationValue(applyRateKey, requestedRate)
+                            const originalPeople = Math.max(Number((expertise.available_person_original ?? expertise.available_person) || 0), 0)
+                            const requestedDuration = Math.max(Number(expertise.needed_budget_unit || 0), 0)
+                            const peopleExhausted = originalPeople > 0 && personsMax <= 0
+                            const durationExhausted = requestedDuration > 0 && durationMax <= 0
+                            const isExpertiseLocked = (post.post_type === 'Supply' && remainingPeople <= 0) || (isApplyMode && (peopleExhausted || durationExhausted))
                             const subtotal = isApplyMode
                               ? (enabled ? applyPeople * applyHours * applyRate : 0)
                               : (enabled ? persons * duration * Number(expertise.cost || 0) : 0)
@@ -1472,8 +1512,9 @@ export default function ManagePost() {
                                   priceText={`৳ ${Number(expertise.cost || 0).toFixed(0)}`}
                                   priceUnitText={`per ${formatRateUnit(expertise.unit).toLowerCase()}`}
                                   checked={enabled}
+                                  disabled={isExpertiseLocked}
                                   onToggle={() =>
-                                    (post.post_type === 'Supply' && !remainingPeople)
+                                    isExpertiseLocked
                                       ? null
                                       : toggleItemEnabled(post.id, 'expertise', expertise.id, () => {
                                           setExpertisePersons((prev) => ({ ...prev, [`expertise-${expertise.id}`]: 0 }))
@@ -1482,9 +1523,9 @@ export default function ManagePost() {
                                   }
                                 />
 
-                                {post.post_type === 'Supply' && !remainingPeople && (
+                                {isExpertiseLocked && (
                                   <div className="mt-4 rounded-lg border border-rose-400/35 bg-rose-500/10 px-3 py-2 text-xs text-rose-100">
-                                    Already booked all for expertise
+                                    {post.post_type === 'Demand' ? 'Already Applied' : 'Already Booked'}
                                   </div>
                                 )}
 
@@ -1497,14 +1538,22 @@ export default function ManagePost() {
                                           onChange={(val) => setApplicationValue(applyPeopleKey, val, personsMax)}
                                           max={personsMax}
                                           label="People you'll provide"
-                                          helperText={`Max ${personsMax} person${post.post_type === 'Demand' ? ' (as requested)' : ' available'}`}
+                                          helperText={
+                                            isExpertiseLocked
+                                              ? (post.post_type === 'Demand' ? 'Already Applied' : 'Already Booked')
+                                              : `Max ${personsMax} person${post.post_type === 'Demand' ? ' (as requested)' : ' available'}`
+                                          }
                                         />
                                         <CounterControl
                                           value={applyHours}
                                           onChange={(val) => setApplicationValue(applyHoursKey, val, durationMax)}
                                           max={durationMax}
                                           label="Hours you'll work"
-                                          helperText={`Max ${durationMax} hrs${post.post_type === 'Demand' ? ' (as requested)' : ' available'}`}
+                                          helperText={
+                                            isExpertiseLocked
+                                              ? (post.post_type === 'Demand' ? 'Already Applied' : 'Already Booked')
+                                              : `Max ${durationMax} hrs${post.post_type === 'Demand' ? ' (as requested)' : ' available'}`
+                                          }
                                         />
                                         <OfferRateInput
                                           value={applyRate}
@@ -1555,6 +1604,7 @@ export default function ManagePost() {
 
                           {(skillBreakdownByPost[post.id]?.services || []).map((service) => {
                             const enabled = isItemEnabled(post.id, 'service', service.id)
+                            const isServiceLocked = Boolean(service.is_fully_booked)
                             const requestedRate = Number(service.cost_per_unit || 0)
                             const applyRateKey = `apply-service-${service.id}-rate`
                             const applyRate = getApplicationValue(applyRateKey, requestedRate)
@@ -1575,8 +1625,15 @@ export default function ManagePost() {
                                   priceText={`৳ ${Number(service.cost_per_unit || 0).toFixed(0)}`}
                                   priceUnitText={`per ${formatRateUnit(service.unit).toLowerCase()}`}
                                   checked={enabled}
-                                  onToggle={() => toggleItemEnabled(post.id, 'service', service.id)}
+                                  disabled={isServiceLocked}
+                                  onToggle={() => (isServiceLocked ? null : toggleItemEnabled(post.id, 'service', service.id))}
                                 />
+
+                                {isServiceLocked && (
+                                  <div className="mt-4 rounded-lg border border-rose-400/35 bg-rose-500/10 px-3 py-2 text-xs text-rose-100">
+                                    {post.post_type === 'Demand' ? 'Already Applied' : 'Already Booked'}
+                                  </div>
+                                )}
 
                                 {isApplyMode && !enabled && (
                                   <div className="mt-4 rounded-lg border border-rose-400/35 bg-rose-500/10 px-3 py-2 text-xs text-rose-100">
@@ -1638,6 +1695,9 @@ export default function ManagePost() {
                             const applyRateKey = `apply-product-${product.id}-rate`
                             const applyQuantity = getApplicationValue(applyQuantityKey, unitsMax)
                             const applyRate = getApplicationValue(applyRateKey, requestedRate)
+                            const originalUnits = Math.max(Number((product.available_units_original ?? product.available_units) || 0), 0)
+                            const unitsExhausted = originalUnits > 0 && unitsMax <= 0
+                            const isProductLocked = (post.post_type === 'Supply' && remainingUnits <= 0) || (isApplyMode && unitsExhausted)
                             const subtotal = isApplyMode
                               ? (enabled ? applyQuantity * applyRate : 0)
                               : (enabled ? units * Number(product.cost_per_unit || 0) : 0)
@@ -1655,8 +1715,9 @@ export default function ManagePost() {
                                   priceText={`৳ ${Number(product.cost_per_unit || 0).toFixed(0)}`}
                                   priceUnitText={`per ${String(product.unit || 'unit').toLowerCase()}`}
                                   checked={enabled}
+                                  disabled={isProductLocked}
                                   onToggle={() =>
-                                    (post.post_type === 'Supply' && remainingUnits <= 0)
+                                    isProductLocked
                                       ? null
                                       : toggleItemEnabled(post.id, 'product', product.id, () => {
                                           setProductUnits((prev) => ({ ...prev, [`product-${product.id}`]: 0 }))
@@ -1664,9 +1725,9 @@ export default function ManagePost() {
                                   }
                                 />
 
-                                {post.post_type === 'Supply' && remainingUnits <= 0 && (
+                                {isProductLocked && (
                                   <div className="mt-4 rounded-lg border border-rose-400/35 bg-rose-500/10 px-3 py-2 text-xs text-rose-100">
-                                    Stock out
+                                    {post.post_type === 'Demand' ? 'Already Applied' : 'Already Booked'}
                                   </div>
                                 )}
 
@@ -1679,7 +1740,11 @@ export default function ManagePost() {
                                           onChange={(val) => setApplicationValue(applyQuantityKey, val, unitsMax)}
                                           max={unitsMax}
                                           label="Quantity you can supply"
-                                          helperText={`Max ${availableUnits} unit (as requested)`}
+                                          helperText={
+                                            isProductLocked
+                                              ? (post.post_type === 'Demand' ? 'Already Applied' : 'Already Booked')
+                                              : `Max ${availableUnits} unit (as requested)`
+                                          }
                                         />
                                         <OfferRateInput
                                           value={applyRate}
