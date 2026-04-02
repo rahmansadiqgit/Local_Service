@@ -679,7 +679,7 @@ class ERPViewSet(viewsets.ModelViewSet):
                 message=(
                     f'Your request for "{post_title}" has been sent to the post owner [{owner_name}]({owner_link}). '
                     "⏱ Waiting for approval. "
-                    f"Post link: /erp?erp_id={erp.id}"
+                    "Post link: /feed"
                 ),
             )
         ]
@@ -789,10 +789,11 @@ class ERPViewSet(viewsets.ModelViewSet):
         notifications = [
             Notification(
                 user=actor,
-                title="✅ Booking Request Sent" if is_demand_post else "Application Submitted",
+                title="✅ Application Request Sent" if is_demand_post else "Application Submitted",
                 message=(
                     f'Your request for "{post_title}" has been sent to the post owner '
-                    f'[{owner_name}]({owner_link}). ⏱ Waiting for approval.'
+                    f'[{owner_name}]({owner_link}). ⏱ Waiting for approval. '
+                    "Post link: /feed"
                 ) if is_demand_post else f"Your application was submitted successfully. Please wait for acceptance. (Post: '{post_title}')",
             )
         ]
