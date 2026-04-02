@@ -782,13 +782,17 @@ class ERPViewSet(viewsets.ModelViewSet):
         is_demand_post = str(getattr(post, "post_type", "") or "").strip().lower() == "demand"
         actor_name = getattr(actor, "name", "") or getattr(actor, "username", "") or "A user"
 
+        owner_name = getattr(post_owner, "name", "") or getattr(post_owner, "username", "") or "Post owner"
+        owner_link = f"/dashboard/{post_owner.id}" if post_owner else "/dashboard"
+        applicant_link = f"/dashboard/{actor.id}"
+
         notifications = [
             Notification(
                 user=actor,
-                title="Application Submitted",
+                title="✅ Booking Request Sent" if is_demand_post else "Application Submitted",
                 message=(
-                    f'Your application for "{post_title}" has been sent to the post owner for review. '
-                    "You'll be notified once a decision has been made."
+                    f'Your request for "{post_title}" has been sent to the post owner '
+                    f'[{owner_name}]({owner_link}). ⏱ Waiting for approval.'
                 ) if is_demand_post else f"Your application was submitted successfully. Please wait for acceptance. (Post: '{post_title}')",
             )
         ]
@@ -797,11 +801,11 @@ class ERPViewSet(viewsets.ModelViewSet):
             notifications.append(
                 Notification(
                     user=post_owner,
-                    title="New Application Received" if is_demand_post else "Someone applied to your post - review now",
+                    title="🔔 New Application Request" if is_demand_post else "Someone applied to your post - review now",
                     message=(
-                        f'{actor_name} has applied to your post "{post_title}". '
-                        "Review their application from your Dashboard and approve or reject to proceed. "
-                        "Post link: /dashboard"
+                        f'You have a new application request for your post "{post_title}" from '
+                        f'[{actor_name}]({applicant_link}) waiting for your response. '
+                        f"Post link: /erp?erp_id={erp.id}"
                     ) if is_demand_post else f"{actor_name} submitted an application for '{post_title}'. Open your dashboard to review and accept/reject. Post link: /dashboard",
                 )
             )
@@ -933,9 +937,10 @@ class ERPViewSet(viewsets.ModelViewSet):
             notifications.append(
                 Notification(
                     user=provider,
-                    title="Your Application Was Approved",
+                    title="🎉 Application Approved",
                     message=(
-                        f'Great news! Your application for "{post_title}" has been approved by {owner_name}. '
+                        f'Great news! Your request for "{post_title}" has been accepted by the post owner '
+                        f'[{owner_name}](/dashboard/{actor.id}). '
                         "Your Tracker is now active and ready for setup. "
                         f"Post link: /erp?erp_id={erp.id}"
                     ),
@@ -988,10 +993,11 @@ class ERPViewSet(viewsets.ModelViewSet):
             try:
                 Notification.objects.create(
                     user=provider,
-                    title="Application Not Accepted",
+                    title="⚠️ Request Declined",
                     message=(
-                        f'Unfortunately, your application for "{post_title}" was not accepted by the post owner at this time. '
-                        "You're welcome to explore other available posts."
+                        f'Your application request for "{post_title}" was declined by the post owner '
+                        f'[{owner_name}](/dashboard/{actor.id}). '
+                        "Post link: /feed"
                     ),
                 )
             except Exception:
