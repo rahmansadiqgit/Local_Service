@@ -66,9 +66,6 @@ export default function ERPTaskCard({
   const [isSubmittingProviderFeedback, setIsSubmittingProviderFeedback] = useState(false)
   const [isDecidingBooking, setIsDecidingBooking] = useState(false)
 
-  const phases = ['Pending', 'On Process', 'Completed']
-  const activePhaseIndex = phases.indexOf(erp.stage)
-
   const snapshot = erp.configuration_snapshot || {}
   const snapshotPost = snapshot.post || {}
   const snapshotExpertise = Array.isArray(snapshot.expertise) ? snapshot.expertise : []
@@ -82,6 +79,10 @@ export default function ERPTaskCard({
   const isBookingAwaitingApproval = isSupplyPost && (bookingStatus === 'submitted' || bookingStatus === 'pending')
   const isBookingApproved = isSupplyPost && (bookingStatus === 'approved' || bookingStatus === 'accepted' || bookingStatus === 'confirmed')
   const isBookingRejected = isSupplyPost && bookingStatus === 'rejected'
+
+  const phases = isSupplyPost ? ['Pending', 'Accepted', 'Completed'] : ['Pending', 'On Process', 'Completed']
+  const displayStage = isSupplyPost && erp.stage === 'On Process' && isBookingApproved ? 'Accepted' : erp.stage
+  const activePhaseIndex = phases.indexOf(displayStage)
 
   const hasRequiredRows = (rows) =>
     Array.isArray(rows) &&
@@ -280,7 +281,10 @@ export default function ERPTaskCard({
   const canLeaveTask = currentUserRoleResponsibilities.length > 0 && erp.stage !== 'Completed'
   const isReceiver = viewerRole === 'Receiver'
   const canUseMessenger = isProvider || isReceiver || currentUserRoleResponsibilities.length > 0
-  const canCompleteAsReceiver = isReceiver && erp.stage === 'On Process'
+  const onProcessChecklist = Array.isArray(phaseTasks?.['On Process']) ? phaseTasks['On Process'] : []
+  const isOnProcessReadyForCompletion =
+    onProcessChecklist.length === 0 || onProcessChecklist.every((task) => Boolean(task?.done))
+  const canCompleteAsReceiver = isReceiver && erp.stage === 'On Process' && isOnProcessReadyForCompletion
 
   const averageRatingByUser = (() => {
     const totals = new Map()
@@ -772,7 +776,7 @@ export default function ERPTaskCard({
             {roleLabel}
           </p>
           <div />
-          <span className={`rounded-full px-4 py-1.5 text-base font-bold ${stageStyle}`}>{erp.stage}</span>
+          <span className={`rounded-full px-4 py-1.5 text-base font-bold ${stageStyle}`}>{displayStage}</span>
         </div>
 
         <h2 className="relative mx-auto mt-3 w-full max-w-3xl text-center text-[2rem] font-bold leading-tight text-white drop-shadow-sm">
@@ -942,7 +946,7 @@ export default function ERPTaskCard({
               }}
               className="rounded-full border border-emerald-300 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-700 transition hover:border-emerald-400 hover:bg-emerald-100"
             >
-              Completed
+              Mark Completed
             </button>
           ) : shouldShowProviderParticipantRatingButton ? (
             <button
