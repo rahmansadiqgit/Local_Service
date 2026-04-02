@@ -281,10 +281,7 @@ export default function ERPTaskCard({
   const canLeaveTask = currentUserRoleResponsibilities.length > 0 && erp.stage !== 'Completed'
   const isReceiver = viewerRole === 'Receiver'
   const canUseMessenger = isProvider || isReceiver || currentUserRoleResponsibilities.length > 0
-  const onProcessChecklist = Array.isArray(phaseTasks?.['On Process']) ? phaseTasks['On Process'] : []
-  const isOnProcessReadyForCompletion =
-    onProcessChecklist.length === 0 || onProcessChecklist.every((task) => Boolean(task?.done))
-  const canCompleteAsReceiver = isReceiver && erp.stage === 'On Process' && isOnProcessReadyForCompletion
+  const canCompleteAsReceiver = isReceiver && erp.stage === 'On Process'
 
   const averageRatingByUser = (() => {
     const totals = new Map()
@@ -946,7 +943,7 @@ export default function ERPTaskCard({
               }}
               className="rounded-full border border-emerald-300 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-700 transition hover:border-emerald-400 hover:bg-emerald-100"
             >
-              Mark Completed
+             Completed
             </button>
           ) : shouldShowProviderParticipantRatingButton ? (
             <button
