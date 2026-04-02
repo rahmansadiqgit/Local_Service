@@ -844,7 +844,12 @@ export default function ManagePost() {
       window.dispatchEvent(new Event('localix:notifications-refresh'))
       showMessage('Your application was submitted successfully. Please wait for acceptance.', 'success')
       setTimeout(() => {
-        navigate('/erp')
+        const targetErpId = Number(erpRecord?.id || 0)
+        if (Number.isFinite(targetErpId) && targetErpId > 0) {
+          navigate(`/erp?erp_id=${targetErpId}`)
+        } else {
+          navigate('/erp')
+        }
       }, 500)
     } catch (error) {
       console.error(error)
@@ -1004,6 +1009,7 @@ export default function ManagePost() {
     }
 
     try {
+      let erpRecordId = null
       if (existing) {
         try {
           const { data } = await api.patch(`/erp/${existing.id}/`, {
@@ -1011,12 +1017,14 @@ export default function ManagePost() {
             configuration_snapshot: snapshot,
             is_configured: true,
           })
+          erpRecordId = Number(data?.id || 0)
           setErpItems((prev) => prev.map((item) => (item.id === data.id ? data : item)))
           showMessage('Booking request sent. Waiting for approval.', 'success')
         } catch (patchError) {
           const statusCode = patchError?.response?.status
           if (statusCode === 404 || statusCode === 403 || statusCode === 400) {
             const { data } = await api.post('/erp/', payload)
+            erpRecordId = Number(data?.id || 0)
             setErpItems((prev) => {
               const exists = prev.some((item) => item.id === data.id)
               return exists ? prev.map((item) => (item.id === data.id ? data : item)) : [...prev, data]
@@ -1028,6 +1036,7 @@ export default function ManagePost() {
         }
       } else {
         const { data } = await api.post('/erp/', payload)
+        erpRecordId = Number(data?.id || 0)
         setErpItems((prev) => [...prev, data])
         showMessage('Booking request sent. Waiting for approval.', 'success')
       }
@@ -1035,7 +1044,11 @@ export default function ManagePost() {
       window.dispatchEvent(new Event('localix:notifications-refresh'))
 
       setTimeout(() => {
-        navigate('/erp')
+        if (Number.isFinite(erpRecordId) && erpRecordId > 0) {
+          navigate(`/erp?erp_id=${erpRecordId}`)
+        } else {
+          navigate('/erp')
+        }
       }, 250)
     } catch (error) {
       console.error(error)
@@ -1045,8 +1058,18 @@ export default function ManagePost() {
     }
   }
 
-  const CounterControl = ({ value, onChange, max, label, helperText }) => {
-    const isLocked = Number(max || 0) <= 0
+  const CounterControl = ({ value, onChange, max, label, helperText, disabled = false }) => {
+    const isLocked = disabled || Number(max || 0) <= 0
+    const handleTypedValue = (rawValue) => {
+      const parsed = Number(rawValue)
+      if (!Number.isFinite(parsed)) {
+        onChange(0)
+        return
+      }
+      const next = Math.max(0, Math.min(Number(max || 0), Math.floor(parsed)))
+      onChange(next)
+    }
+
     return (
       <div className="rounded-xl border border-white/20 bg-white/5 p-3">
         <div className="flex items-center justify-between gap-3">
@@ -1065,9 +1088,18 @@ export default function ManagePost() {
             >
               -
             </button>
-            <div className="flex h-8 min-w-[44px] items-center justify-center rounded-md border border-white/25 bg-white/5 px-2 text-sm font-bold text-white">
-              {value}
-            </div>
+            <input
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              value={value}
+              disabled={isLocked}
+              onChange={(event) => handleTypedValue(event.target.value)}
+              onBlur={(event) => handleTypedValue(event.target.value)}
+              className={`h-8 min-w-[64px] rounded-md border border-white/25 bg-white/5 px-2 text-center text-sm font-bold text-white outline-none ${
+                isLocked ? 'cursor-not-allowed opacity-50' : 'focus:border-white/60'
+              }`}
+            />
             <button
               type="button"
               onClick={() => onChange(Math.min(max, value + 1))}
@@ -1383,10 +1415,8 @@ export default function ManagePost() {
                             const applyHours = getApplicationValue(applyHoursKey, applyHoursMax)
                             const applyRate = getApplicationValue(applyRateKey, requestedRate)
                             const originalPeople = Math.max(Number((skill.available_workers_original ?? skill.available_workers) || 0), 0)
-                            const originalHours = Math.max(Number((skill.needed_budget_unit_original ?? skill.needed_budget_unit) || 0), 0)
                             const peopleExhausted = originalPeople > 0 && workersMax <= 0
-                            const hoursExhausted = originalHours > 0 && applyHoursMax <= 0
-                            const isSkillLocked = isApplyMode && (peopleExhausted || hoursExhausted)
+                            const isSkillLocked = isApplyMode && peopleExhausted
                             const subtotal = isApplyMode
                               ? (enabled ? applyPeople * applyHours * applyRate : 0)
                               : (enabled ? workers * Number(skill.cost_per_unit || 0) : 0)
@@ -1429,9 +1459,10 @@ export default function ManagePost() {
                                           value={applyPeople}
                                           onChange={(val) => setApplicationValue(applyPeopleKey, val, workersMax)}
                                           max={workersMax}
+                                          disabled={peopleExhausted}
                                           label="People you'll provide"
                                           helperText={
-                                            isSkillLocked
+                                            peopleExhausted
                                               ? (post.post_type === 'Demand' ? 'Already Applied' : 'Already Booked')
                                               : `Max ${workersMax} person (as requested)`
                                           }
@@ -1442,9 +1473,7 @@ export default function ManagePost() {
                                           max={applyHoursMax}
                                           label="Hours you'll work"
                                           helperText={
-                                            isSkillLocked
-                                              ? (post.post_type === 'Demand' ? 'Already Applied' : 'Already Booked')
-                                              : `Max ${applyHoursMax} hrs (as requested)`
+                                            `Max ${applyHoursMax} hrs (as requested)`
                                           }
                                         />
                                         <OfferRateInput
@@ -1493,8 +1522,7 @@ export default function ManagePost() {
                             const originalPeople = Math.max(Number((expertise.available_person_original ?? expertise.available_person) || 0), 0)
                             const requestedDuration = Math.max(Number(expertise.needed_budget_unit || 0), 0)
                             const peopleExhausted = originalPeople > 0 && personsMax <= 0
-                            const durationExhausted = requestedDuration > 0 && durationMax <= 0
-                            const isExpertiseLocked = (post.post_type === 'Supply' && remainingPeople <= 0) || (isApplyMode && (peopleExhausted || durationExhausted))
+                            const isExpertiseLocked = (post.post_type === 'Supply' && remainingPeople <= 0) || (isApplyMode && peopleExhausted)
                             const subtotal = isApplyMode
                               ? (enabled ? applyPeople * applyHours * applyRate : 0)
                               : (enabled ? persons * duration * Number(expertise.cost || 0) : 0)
@@ -1537,9 +1565,10 @@ export default function ManagePost() {
                                           value={applyPeople}
                                           onChange={(val) => setApplicationValue(applyPeopleKey, val, personsMax)}
                                           max={personsMax}
+                                          disabled={peopleExhausted}
                                           label="People you'll provide"
                                           helperText={
-                                            isExpertiseLocked
+                                            peopleExhausted
                                               ? (post.post_type === 'Demand' ? 'Already Applied' : 'Already Booked')
                                               : `Max ${personsMax} person${post.post_type === 'Demand' ? ' (as requested)' : ' available'}`
                                           }
@@ -1550,9 +1579,7 @@ export default function ManagePost() {
                                           max={durationMax}
                                           label="Hours you'll work"
                                           helperText={
-                                            isExpertiseLocked
-                                              ? (post.post_type === 'Demand' ? 'Already Applied' : 'Already Booked')
-                                              : `Max ${durationMax} hrs${post.post_type === 'Demand' ? ' (as requested)' : ' available'}`
+                                            `Max ${durationMax} hrs${post.post_type === 'Demand' ? ' (as requested)' : ' available'}`
                                           }
                                         />
                                         <OfferRateInput
