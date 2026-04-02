@@ -45,7 +45,7 @@ export default function Login() {
           >
             Login
           </h2>
-          <p className="mt-0.5 text-xs text-violet-800/80 sm:text-sm">Access your Localix account.</p>
+          <p className="mt-0.5 text-xs font-semibold text-violet-800/80 sm:text-sm">Access your Localix account.</p>
           <img
             src="/images/log_in.png"
             alt="Login header illustration"

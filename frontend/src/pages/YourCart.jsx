@@ -141,7 +141,7 @@ export default function YourCart() {
             >
               Your Cart
             </h1>
-            <p className="mt-0.5 text-xs text-violet-800/80 sm:text-sm">
+            <p className="mt-0.5 text-xs font-semibold text-violet-800/80 sm:text-sm">
               Review saved posts, remove items, or book directly from here.
             </p>
             <p className="mt-2 text-xs font-semibold text-violet-900 sm:text-sm">

@@ -288,6 +288,14 @@ export default function Header() {
     const message = String(item?.message || "")
     const messageLower = message.toLowerCase()
 
+    if (title.includes("password changed") || messageLower.includes("password")) {
+      return "/profile"
+    }
+
+    if (title.includes("post created") || messageLower.includes("post created")) {
+      return "/dashboard"
+    }
+
     // Prefer an explicit in-message link when available.
     const postLinkMatch = message.match(/post\s+link:\s*([^\s]+)/i)
     if (postLinkMatch && postLinkMatch[1]) {
@@ -317,6 +325,32 @@ export default function Header() {
   const handleNotificationClick = (item) => {
     const target = getNotificationTarget(item)
     if (!target) return
+
+    if (item?.id && !item?.is_read) {
+      setNotifications((prev) =>
+        prev.map((notification) =>
+          notification.id === item.id
+            ? {
+                ...notification,
+                is_read: true,
+              }
+            : notification,
+        ),
+      )
+      api.patch(`/notifications/${item.id}/`, { is_read: true }).catch((error) => {
+        console.error("Failed to mark notification as read:", error)
+        setNotifications((prev) =>
+          prev.map((notification) =>
+            notification.id === item.id
+              ? {
+                  ...notification,
+                  is_read: false,
+                }
+              : notification,
+          ),
+        )
+      })
+    }
 
     if (String(target).startsWith("http://") || String(target).startsWith("https://")) {
       window.open(target, "_blank", "noopener,noreferrer")
@@ -350,7 +384,9 @@ export default function Header() {
       : null
 
   const iconButtonClass =
-    "rounded-full bg-white/90 p-2 shadow-md hover:bg-orange-100 hover:scale-105 hover:shadow-lg transition-all duration-200"
+    "inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/90 shadow-md transition-all duration-200 hover:scale-105 hover:bg-orange-100 hover:shadow-lg"
+  const hamburgerButtonClass =
+    "inline-flex shrink-0 items-center justify-center bg-transparent p-0 text-white [text-shadow:0_0_10px_rgba(255,255,255,0.75)] transition-all duration-200 hover:scale-105 hover:text-yellow-200 hover:[text-shadow:0_0_14px_rgba(255,255,255,0.9)] focus-visible:outline-none"
 
   const avatarButtonClass =
     "h-10 w-10 shrink-0 rounded-full shadow-md hover:scale-105 hover:shadow-lg transition-all duration-200 flex items-center justify-center"
@@ -359,7 +395,15 @@ export default function Header() {
     "absolute right-0 mt-3 rounded-2xl border border-white/60 bg-white/95 p-2 shadow-2xl backdrop-blur-sm"
 
   const dropdownItemClass =
-    "block rounded-xl px-4 py-2.5 text-sm font-semibold !text-slate-700 transition hover:bg-orange-100 hover:!text-orange-700"
+    "block rounded-xl border border-white/65 bg-white/70 px-4 py-3 text-sm font-semibold text-slate-700 transition hover:border-orange-200 hover:bg-orange-50/80 hover:text-orange-700"
+
+  const getSidebarItemClass = (path) => {
+    const isActive = location.pathname === path || location.pathname.startsWith(`${path}/`)
+    if (isActive) {
+      return "block rounded-xl border border-violet-300 bg-white/80 px-4 py-3 text-sm font-semibold text-slate-700 shadow-sm"
+    }
+    return "block rounded-xl border border-white/65 bg-white/70 px-4 py-3 text-sm font-semibold text-slate-700 transition hover:border-orange-200 hover:bg-orange-50/80 hover:text-orange-700"
+  }
 
   const logoSlotClass = "group relative z-10 ml-[10px] flex h-10 w-52 shrink-0 items-center md:w-60 lg:w-64"
 
@@ -544,12 +588,6 @@ export default function Header() {
                   >
                     Dashboard
                   </Link>
-                  <button
-                    onClick={handleLogout}
-                    className="w-full rounded-xl px-4 py-2.5 text-left text-sm font-semibold text-slate-700 transition hover:bg-orange-100 hover:text-orange-700"
-                  >
-                    Logout
-                  </button>
                 </div>
               )}
             </div>
@@ -576,39 +614,91 @@ export default function Header() {
             <div className="relative" data-header-dropdown>
               <button
                 onClick={() => toggleDropdown("menu")}
-                className={iconButtonClass}
+                className={`hamburger-icon-btn ${hamburgerButtonClass}`}
+                aria-label="Open navigation menu"
+                aria-expanded={openDropdown === "menu"}
               >
-                ☰
+                <svg viewBox="0 0 24 24" className="h-7 w-7" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+                  <path d="M3.5 6.5h17" />
+                  <path d="M3.5 12h17" />
+                  <path d="M3.5 17.5h17" />
+                </svg>
               </button>
-              {openDropdown === "menu" && (
-                <div className={`${dropdownPanelClass} w-56`}>
-                  <Link
-                    to="/connections"
-                    onClick={() => setOpenDropdown(null)}
-                    className={dropdownItemClass}
-                  >
-                    Connections
-                  </Link>
-                  <Link
-                    to="/erp"
-                    onClick={() => setOpenDropdown(null)}
-                    className={dropdownItemClass}
-                  >
-                    ERP
-                  </Link>
-                  <Link
-                    to="/cart"
-                    onClick={() => setOpenDropdown(null)}
-                    className={dropdownItemClass}
-                  >
-                    Your Cart
-                  </Link>
-                </div>
-              )}
             </div>
           )}
         </div>
       </div>
+
+      {isAuthenticated && openDropdown === "menu" && (
+        <div className="fixed inset-0 z-50" data-header-dropdown>
+          <button
+            type="button"
+            className="absolute inset-0 bg-slate-900/45 backdrop-blur-[1px]"
+            onClick={() => setOpenDropdown(null)}
+            aria-label="Close navigation menu overlay"
+          />
+
+          <aside className="absolute right-0 top-0 h-full w-[300px] max-w-[86vw] border-l border-white/35 bg-gradient-to-b from-pink-300/42 via-fuchsia-200/34 to-violet-300/42 p-4 shadow-2xl backdrop-blur-md">
+            <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.45),transparent_52%)]" />
+            <div className="pointer-events-none absolute -left-8 -top-8 h-20 w-20 rounded-full bg-white/30 blur-2xl" />
+            <div className="pointer-events-none absolute -right-8 -bottom-8 h-20 w-20 rounded-full bg-fuchsia-200/38 blur-2xl" />
+
+            <div className="relative">
+            <div className="mb-4 flex items-center justify-between">
+              <p className="text-sm font-extrabold tracking-wide text-orange-900">Menu</p>
+              <button
+                type="button"
+                onClick={() => setOpenDropdown(null)}
+                className="hamburger-icon-btn inline-flex items-center justify-center bg-transparent p-0 text-3xl font-bold leading-none text-white [text-shadow:0_0_10px_rgba(0,0,0,0.45)] transition-all duration-200 hover:scale-105 hover:bg-transparent hover:text-pink-300 focus:bg-transparent focus-visible:outline-none active:bg-transparent"
+                aria-label="Close navigation menu"
+              >
+                ×
+              </button>
+            </div>
+            <nav className="space-y-2">
+              <Link
+                to="/cart"
+                onClick={() => setOpenDropdown(null)}
+                className={getSidebarItemClass("/cart")}
+              >
+                Your Cart
+              </Link>
+              <Link
+                to="/erp"
+                onClick={() => setOpenDropdown(null)}
+                className={getSidebarItemClass("/erp")}
+              >
+                ERP
+              </Link>
+              <Link
+                to="/connections"
+                onClick={() => setOpenDropdown(null)}
+                className={getSidebarItemClass("/connections")}
+              >
+                Connections
+              </Link>
+              <Link
+                to="/help-centre"
+                onClick={() => setOpenDropdown(null)}
+                className={getSidebarItemClass("/help-centre")}
+              >
+                Help Centre
+              </Link>
+              <button
+                type="button"
+                onClick={() => {
+                  setOpenDropdown(null)
+                  handleLogout()
+                }}
+                className="w-full rounded-xl border border-white/65 bg-white/70 px-4 py-3 text-left text-sm font-semibold text-[#ff0000] transition hover:border-orange-200 hover:bg-orange-50/80 hover:text-[#ff0000]"
+              >
+                Logout
+              </button>
+            </nav>
+            </div>
+          </aside>
+        </div>
+      )}
     </header>
   )
 }

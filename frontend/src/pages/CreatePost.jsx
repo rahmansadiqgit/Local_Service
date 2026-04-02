@@ -295,6 +295,75 @@ export default function CreatePost() {
       return
     }
 
+    const isBlank = (value) => String(value ?? '').trim() === ''
+    const isValidNumber = (value) => Number.isFinite(Number(value))
+
+    if (showExpertiseSection) {
+      for (let index = 0; index < expertises.length; index += 1) {
+        const item = expertises[index]
+        const hasAnyValue = item.name || item.experience || String(item.unit || '').trim() || String(item.cost || '').trim() || String(item.available_person || '').trim() || String(item.needed_budget_unit || '').trim()
+
+        if (!hasAnyValue) continue
+
+        if (!isBlank(item.cost) && !isValidNumber(item.cost)) {
+          const fieldName = isDemand ? 'Your Budget (BDT)' : 'Charge (BDT) Per Unit'
+          setMessage(`Invalid value in Expertise row ${index + 1}: ${fieldName} must be a valid number.`)
+          setSaving(false)
+          return
+        }
+
+        if (!isBlank(item.available_person) && !isValidNumber(item.available_person)) {
+          const fieldName = isDemand ? 'Required Person' : 'Available Person'
+          setMessage(`Invalid value in Expertise row ${index + 1}: ${fieldName} must be a valid number.`)
+          setSaving(false)
+          return
+        }
+
+        if (isDemand && item.unit && !isBlank(item.needed_budget_unit) && !isValidNumber(item.needed_budget_unit)) {
+          setMessage(`Invalid value in Expertise row ${index + 1}: Needed Hire Unit must be a valid number.`)
+          setSaving(false)
+          return
+        }
+      }
+    }
+
+    if (showServicesSection) {
+      for (let index = 0; index < services.length; index += 1) {
+        const item = services[index]
+        const hasAnyValue = item.service_name || item.description || String(item.cost_per_unit || '').trim()
+        if (!hasAnyValue) continue
+
+        if (!isBlank(item.cost_per_unit) && !isValidNumber(item.cost_per_unit)) {
+          const fieldName = isDemand ? 'Your Budget (BDT)' : 'Service Charge (BDT)'
+          setMessage(`Invalid value in Services row ${index + 1}: ${fieldName} must be a valid number.`)
+          setSaving(false)
+          return
+        }
+      }
+    }
+
+    if (showProductsSection) {
+      for (let index = 0; index < products.length; index += 1) {
+        const item = products[index]
+        const hasAnyValue = item.product_name || item.description || String(item.unit || '').trim() || String(item.cost_per_unit || '').trim() || String(item.available_units || '').trim()
+        if (!hasAnyValue) continue
+
+        if (!isBlank(item.cost_per_unit) && !isValidNumber(item.cost_per_unit)) {
+          const fieldName = isDemand ? 'Budget per Unit (BDT)' : 'Cost Per Unit (BDT)'
+          setMessage(`Invalid value in Products row ${index + 1}: ${fieldName} must be a valid number.`)
+          setSaving(false)
+          return
+        }
+
+        if (!isBlank(item.available_units) && !isValidNumber(item.available_units)) {
+          const fieldName = isDemand ? 'Required Quantity' : 'Available Quantity'
+          setMessage(`Invalid value in Products row ${index + 1}: ${fieldName} must be a valid number.`)
+          setSaving(false)
+          return
+        }
+      }
+    }
+
     const expertiseDurationMissing = expertises.some((item) => {
       const hasAnyValue = item.name || item.experience || item.cost || String(item.available_person || '').trim()
       return hasAnyValue && !item.unit
@@ -306,7 +375,7 @@ export default function CreatePost() {
     })
 
     if (showExpertiseSection && expertiseDurationMissing) {
-      setMessage(isDemand ? 'Please select Hire Unit for all expertise rows.' : 'Please select Work Type for all expertise rows.')
+      setMessage(isDemand ? 'Please select Hire Unit for all expertise rows.' : 'Please select Service Duration Unit for all expertise rows.')
       setSaving(false)
       return
     }
@@ -328,6 +397,82 @@ export default function CreatePost() {
       return
     }
 
+    const toTitle = (value) =>
+      String(value || '')
+        .replace(/_/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .replace(/\b\w/g, (ch) => ch.toUpperCase())
+
+    const formatApiFieldError = (responseData, fieldLabelMap, contextLabel) => {
+      if (!responseData) return ''
+
+      if (typeof responseData === 'string') {
+        return `${contextLabel}: ${responseData}`
+      }
+
+      const detailMessage = responseData?.detail || responseData?.message
+      if (typeof detailMessage === 'string' && detailMessage.trim()) {
+        return `${contextLabel}: ${detailMessage.trim()}`
+      }
+
+      const lines = []
+      const collect = (value, path = []) => {
+        if (Array.isArray(value)) {
+          if (value.length === 0) return
+          const primitiveOnly = value.every((item) => item === null || ['string', 'number', 'boolean'].includes(typeof item))
+          if (primitiveOnly) {
+            lines.push({ path, message: value.map((item) => String(item)).join(', ') })
+            return
+          }
+          value.forEach((item, index) => collect(item, [...path, String(index + 1)]))
+          return
+        }
+
+        if (value && typeof value === 'object') {
+          Object.entries(value).forEach(([key, nested]) => collect(nested, [...path, key]))
+          return
+        }
+
+        if (value !== undefined && value !== null) {
+          lines.push({ path, message: String(value) })
+        }
+      }
+
+      collect(responseData)
+      if (!lines.length) return ''
+
+      const rendered = lines.map(({ path, message }) => {
+        let rowNumber = ''
+        let fieldKey = ''
+
+        if (path.length) {
+          if (/^\d+$/.test(path[0])) {
+            rowNumber = path[0]
+            fieldKey = path[1] || path[0]
+          } else {
+            fieldKey = path[0]
+          }
+        }
+
+        const fieldLabel = fieldLabelMap[fieldKey] || toTitle(fieldKey || 'field')
+        const rowLabel = rowNumber ? ` row ${rowNumber}` : ''
+        return `${contextLabel}${rowLabel}: ${fieldLabel} - ${message}`
+      })
+
+      return rendered.join(' | ')
+    }
+
+    const submitWithContext = async (requestFactory, contextLabel, fieldLabelMap) => {
+      try {
+        return await requestFactory()
+      } catch (requestError) {
+        const formatted = formatApiFieldError(requestError?.response?.data, fieldLabelMap, contextLabel)
+        const fallback = requestError?.message || 'Invalid input.'
+        throw new Error(formatted || `${contextLabel}: ${fallback}`)
+      }
+    }
+
     try {
       const payload = new FormData()
       Object.entries(post).forEach(([key, value]) => {
@@ -337,52 +482,124 @@ export default function CreatePost() {
         payload.append('image', imageFile)
       }
 
-      const { data: createdPost } = await api.post('/posts/', payload, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      })
+      const postFieldLabels = {
+        post_type: 'Post Type',
+        post_name: 'Post Categories',
+        post_title: 'Post Title',
+        description: 'Description',
+        brand_company_name: 'Brand / Company',
+        location: 'Location',
+        latitude: 'Latitude',
+        longitude: 'Longitude',
+        website_link: 'Website',
+        image: 'Image',
+      }
 
-      const validSkills = skills.filter((item) => item.skill_name && item.cost_per_unit)
-      const validExpertises = expertises.filter((item) => item.name && item.experience && item.unit && item.cost)
-      const validServices = services.filter((item) => item.service_name && item.cost_per_unit)
-      const validProducts = products.filter(
-        (item) => item.product_name && item.cost_per_unit && (post.post_type === 'Demand' || item.unit),
+      const { data: createdPost } = await submitWithContext(
+        () =>
+          api.post('/posts/', payload, {
+            headers: { 'Content-Type': 'multipart/form-data' },
+          }),
+        'Post',
+        postFieldLabels,
       )
 
-      await Promise.all([
-        ...validSkills.map((item) =>
-          api.post('/skills/', {
-            ...item,
-            skill_name: `__expertise__::${item.skill_name}`,
-            post: createdPost.id,
-          }),
-        ),
-        ...validExpertises.map((item) =>
-          api.post('/expertises/', {
-            name: item.name,
-            experience: item.experience,
-            unit: item.unit,
-            needed_budget_unit: Number(item.needed_budget_unit) || 0,
-            cost: Number(item.cost),
-            available_person: Number(item.available_person) || 0,
-            post: createdPost.id,
-          }),
-        ),
-        ...validServices.map((item) =>
-          api.post('/skills/', {
-            skill_name: `__service__::${item.service_name}`,
-            description: item.description,
-            cost_per_unit: item.cost_per_unit,
-            post: createdPost.id,
-          }),
-        ),
-        ...validProducts.map((item) =>
-          api.post('/products/', {
-            ...item,
-            unit: item.unit || (post.post_type === 'Demand' ? 'quantity' : item.unit),
-            post: createdPost.id,
-          }),
-        ),
-      ])
+      const validSkills = skills
+        .map((item, index) => ({ item, index }))
+        .filter(({ item }) => item.skill_name && item.cost_per_unit)
+      const validExpertises = expertises
+        .map((item, index) => ({ item, index }))
+        .filter(({ item }) => item.name && item.experience && item.unit && item.cost)
+      const validServices = services
+        .map((item, index) => ({ item, index }))
+        .filter(({ item }) => item.service_name && item.cost_per_unit)
+      const validProducts = products
+        .map((item, index) => ({ item, index }))
+        .filter(
+          ({ item }) => item.product_name && item.cost_per_unit && (post.post_type === 'Demand' || item.unit),
+        )
+
+      const expertiseSkillFieldLabels = {
+        skill_name: 'Skill/Experties Name',
+        cost_per_unit: isDemand ? 'Your Budget (BDT)' : 'Charge (BDT) Per Unit',
+      }
+      const expertiseFieldLabels = {
+        name: 'Skill/Experties Name',
+        experience: isDemand ? 'Preferred Experience' : 'Your Experience',
+        unit: isDemand ? 'Hire Unit' : 'Service Duration Unit',
+        needed_budget_unit: 'Needed Hire Unit',
+        cost: isDemand ? 'Your Budget (BDT)' : 'Charge (BDT) Per Unit',
+        available_person: isDemand ? 'Required Person' : 'Available Person',
+      }
+      const serviceFieldLabels = {
+        skill_name: 'Service Name',
+        description: 'Specific Service Description',
+        cost_per_unit: isDemand ? 'Your Budget (BDT)' : 'Service Charge (BDT)',
+      }
+      const productFieldLabels = {
+        product_name: 'Product Name',
+        description: 'Specific Product Description',
+        unit: isDemand ? 'Demanded Product Unit' : 'Available Product Unit',
+        cost_per_unit: isDemand ? 'Budget per Unit (BDT)' : 'Cost Per Unit (BDT)',
+        available_units: isDemand ? 'Required Quantity' : 'Available Quantity',
+      }
+
+      for (const { item, index } of validSkills) {
+        await submitWithContext(
+          () =>
+            api.post('/skills/', {
+              ...item,
+              skill_name: `__expertise__::${item.skill_name}`,
+              post: createdPost.id,
+            }),
+          `Expertise row ${index + 1}`,
+          expertiseSkillFieldLabels,
+        )
+      }
+
+      for (const { item, index } of validExpertises) {
+        await submitWithContext(
+          () =>
+            api.post('/expertises/', {
+              name: item.name,
+              experience: item.experience,
+              unit: item.unit,
+              needed_budget_unit: Number(item.needed_budget_unit) || 0,
+              cost: Number(item.cost),
+              available_person: Number(item.available_person) || 0,
+              post: createdPost.id,
+            }),
+          `Expertise row ${index + 1}`,
+          expertiseFieldLabels,
+        )
+      }
+
+      for (const { item, index } of validServices) {
+        await submitWithContext(
+          () =>
+            api.post('/skills/', {
+              skill_name: `__service__::${item.service_name}`,
+              description: item.description,
+              cost_per_unit: item.cost_per_unit,
+              post: createdPost.id,
+            }),
+          `Services row ${index + 1}`,
+          serviceFieldLabels,
+        )
+      }
+
+      for (const { item, index } of validProducts) {
+        await submitWithContext(
+          () =>
+            api.post('/products/', {
+              ...item,
+              unit: item.unit || (post.post_type === 'Demand' ? 'quantity' : item.unit),
+              post: createdPost.id,
+            }),
+          `Products row ${index + 1}`,
+          productFieldLabels,
+        )
+      }
       setMessage('Post created successfully.')
       setPost(initialPost)
       setSelectedCategories([])
@@ -397,25 +614,7 @@ export default function CreatePost() {
       navigate('/')
     } catch (error) {
       console.error(error)
-      const responseData = error.response?.data
-      let errorMessage = responseData?.detail || responseData?.message
-
-      if (!errorMessage && responseData && typeof responseData === 'object') {
-        const fieldErrors = Object.entries(responseData)
-          .map(([field, value]) => {
-            if (Array.isArray(value)) {
-              return `${field}: ${value.join(', ')}`
-            }
-            return `${field}: ${String(value)}`
-          })
-          .join(' | ')
-        errorMessage = fieldErrors
-      }
-
-      if (!errorMessage) {
-        errorMessage = error.message || 'Unknown error'
-      }
-
+      const errorMessage = error?.message || 'Unknown error'
       setMessage(`Failed to create post: ${errorMessage}`)
     } finally {
       setSaving(false)
@@ -453,7 +652,7 @@ export default function CreatePost() {
             >
               Create Post
             </h2>
-            <p className="mt-0.5 text-xs text-violet-800/80 sm:text-sm">Publish a new available or demand listing.</p>
+            <p className="mt-0.5 text-xs font-semibold text-violet-800/80 sm:text-sm">Publish a new available or demand listing.</p>
           </div>
           <img
             src="/images/create_post.png"
@@ -588,8 +787,8 @@ export default function CreatePost() {
 
             <div>
               <label className="text-xs font-semibold text-black">Image</label>
-              <div className="mt-1 flex items-start gap-4">
-                <div className="flex flex-col items-start gap-2">
+              <div className="mt-1 space-y-3">
+                <div className="flex items-center gap-3">
                   <label className={primaryButtonClass}>
                     Choose File
                     <input
@@ -601,30 +800,33 @@ export default function CreatePost() {
                     />
                   </label>
                   {imageFile && (
-                    <span className="flex items-center gap-2 text-sm text-slate-600">
+                    <span className="max-w-[230px] truncate text-sm text-slate-600" title={imageFile.name}>
                       {imageFile.name}
-                      <button
-                        type="button"
-                        aria-label="Remove selected image"
-                        onClick={() => {
-                          setImageFile(null)
-                          if (imageInputRef.current) {
-                            imageInputRef.current.value = ''
-                          }
-                        }}
-                        className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-gradient-to-r from-violet-600 to-fuchsia-600 text-xs font-bold text-white shadow-sm transition hover:from-violet-700 hover:to-fuchsia-700"
-                      >
-                        x
-                      </button>
                     </span>
                   )}
                 </div>
                 {previewUrl && (
-                  <div className="rounded-lg border border-slate-200 bg-slate-50 p-2 shadow-sm">
+                  <div
+                    className="relative overflow-hidden rounded-xl border border-slate-200 bg-white/80 p-2 shadow-sm"
+                    style={{ width: '4in', height: '4in', maxWidth: '100%' }}
+                  >
+                    <button
+                      type="button"
+                      aria-label="Remove selected image"
+                      onClick={() => {
+                        setImageFile(null)
+                        if (imageInputRef.current) {
+                          imageInputRef.current.value = ''
+                        }
+                      }}
+                      className="absolute right-3 top-3 z-10 inline-flex items-center justify-center bg-transparent p-0 text-2xl font-bold leading-none text-white [text-shadow:0_0_10px_rgba(0,0,0,0.45)] transition-all duration-200 hover:scale-105 hover:bg-transparent hover:text-pink-300 focus:bg-transparent focus-visible:outline-none active:bg-transparent"
+                    >
+                      ×
+                    </button>
                     <img
                       src={previewUrl}
                       alt="Preview"
-                      className="h-20 w-20 rounded-lg object-cover"
+                      className="h-full w-full rounded-xl object-cover"
                     />
                   </div>
                 )}
@@ -678,7 +880,7 @@ export default function CreatePost() {
         {showExpertiseSection && (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <p className="text-base font-bold text-slate-700 dark:text-slate-200">Expertise</p>
+            <p className="text-base font-bold text-slate-700 dark:text-slate-200">{isDemand ? 'Expertise' : 'Experties'}</p>
             <button
               type="button"
               onClick={() =>
@@ -695,7 +897,7 @@ export default function CreatePost() {
           {expertises.map((row, index) => (
             <div key={`expertise-${index}`} className={`grid gap-4 ${isDemand ? 'lg:grid-cols-6' : 'lg:grid-cols-5'}`}>
               <div>
-                <label className="text-xs font-semibold text-black">{isDemand ? 'Expertise Name' : 'Skill / Expertise Name'}</label>
+                <label className="text-xs font-semibold text-black">{isDemand ? 'Skill/Experties Name' : 'Skill/Experties Name'}</label>
                 <input
                   placeholder={isDemand ? 'e.g., Electricians, Teachers' : 'e.g., Electricians, Teachers'}
                   value={row.name}
@@ -710,7 +912,7 @@ export default function CreatePost() {
                 />
               </div>
               <div>
-                <label className="text-xs font-semibold text-black">{isDemand ? 'Preferred Experience' : 'Experience'}</label>
+                <label className="text-xs font-semibold text-black">{isDemand ? 'Preferred Experience' : 'Your Experience'}</label>
                 <input
                   type="text"
                   placeholder={isDemand ? '(Optional) e.g., 6 years' : '(Optional) e.g., 6 years'}
@@ -726,7 +928,7 @@ export default function CreatePost() {
                 />
               </div>
               <div>
-                <label className="text-xs font-semibold text-black">{isDemand ? 'Hire Unit' : 'Work Type'}</label>
+                <label className="text-xs font-semibold text-black">{isDemand ? 'Hire Unit' : 'Service Duration Unit'}</label>
                 <select
                   value={row.unit}
                   onChange={(event) =>
@@ -743,14 +945,14 @@ export default function CreatePost() {
                     className="bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white"
                     style={{ backgroundColor: '#7c3aed', color: '#ffffff' }}
                   >
-                    {isDemand ? 'Select hire unit' : 'Select duration'}
+                    {isDemand ? 'Select hire unit' : 'Select service duration unit'}
                   </option>
                   <option value="hourly">Hourly</option>
                   <option value="daily">Daily</option>
                   <option value="monthly">Monthly</option>
                 </select>
               </div>
-              {isDemand && row.unit ? (
+              {isDemand ? (
                 <div>
                   <label className="text-xs font-semibold text-black">Needed Hire Unit</label>
                   <input
@@ -785,7 +987,7 @@ export default function CreatePost() {
                         : row.unit === 'monthly'
                           ? 'Your Monthly Budget (BDT)'
                           : 'Your Budget (BDT)'
-                    : 'Charge (BDT)'}
+                        : 'Charge (BDT) Per Unit'}
                 </label>
                 <input
                   type="text"
@@ -799,7 +1001,7 @@ export default function CreatePost() {
                           : row.unit === 'monthly'
                             ? 'Enter your monthly budget (BDT)'
                             : 'Enter your budget (BDT)'
-                      : 'Enter charge amount (BDT)'
+                        : 'Enter charge amount per unit (BDT)'
                   }
                   value={row.cost}
                   onChange={(event) =>
@@ -886,7 +1088,11 @@ export default function CreatePost() {
                 <div>
                   <label className="text-xs font-semibold text-black">Specific Service Description</label>
                   <textarea
-                    placeholder="Enter specific service description"
+                    placeholder={
+                      isDemand
+                        ? 'Enter specific service description (What do you want?)'
+                        : 'Enter specific service description (What you offer?)'
+                    }
                     value={row.description}
                     onChange={(event) =>
                       setServices((prev) =>
@@ -901,7 +1107,7 @@ export default function CreatePost() {
                 </div>
               )}
               <div>
-                <label className="text-xs font-semibold text-black">{isDemand ? 'Your Budget (BDT)' : 'Service Cost (BDT)'}</label>
+                <label className="text-xs font-semibold text-black">{isDemand ? 'Your Budget (BDT)' : 'Service Charge (BDT)'}</label>
                 <div className="flex gap-2">
                   <input
                     type="text"
@@ -953,8 +1159,8 @@ export default function CreatePost() {
               key={`product-${index}`}
               className={`grid gap-4 ${isDemand
                 ? showProductDescriptionField
-                  ? 'lg:grid-cols-4'
-                  : 'lg:grid-cols-3'
+                  ? 'lg:grid-cols-5'
+                  : 'lg:grid-cols-4'
                 : showProductDescriptionField
                   ? 'lg:grid-cols-5'
                   : 'lg:grid-cols-4'}`}
@@ -978,7 +1184,11 @@ export default function CreatePost() {
                 <div>
                   <label className="text-xs font-semibold text-black">Specific Product Description</label>
                   <textarea
-                    placeholder="Enter specific product description"
+                    placeholder={
+                      isDemand
+                        ? 'Enter specific product description (Actually what type of product?)'
+                        : 'Enter specific product description (Actual value of your product)'
+                    }
                     value={row.description}
                     onChange={(event) =>
                       setProducts((prev) =>
@@ -992,39 +1202,37 @@ export default function CreatePost() {
                   />
                 </div>
               )}
-              {!isDemand && (
-                <div>
-                  <label className="text-xs font-semibold text-black">Unit</label>
-                  <select
-                    value={row.unit}
-                    onChange={(event) =>
-                      setProducts((prev) =>
-                        prev.map((item, i) => (i === index ? { ...item, unit: event.target.value } : item)),
-                      )
-                    }
-                    className={profileLikeSelectClass}
-                  >
-                    <option
-                      value=""
-                      className="bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white"
-                      style={{ backgroundColor: '#7c3aed', color: '#ffffff' }}
-                    >
-                      Select unit
-                    </option>
-                    {COMMON_PRODUCT_UNITS.map((unitOption) => (
-                      <option key={unitOption} value={unitOption}>
-                        {unitOption}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
               <div>
-                <label className="text-xs font-semibold text-black">{isDemand ? 'Your Budget (BDT)' : 'Cost per Unit'}</label>
+                <label className="text-xs font-semibold text-black">{isDemand ? 'Demanded Product Unit' : 'Available Product Unit'}</label>
+                <select
+                  value={row.unit}
+                  onChange={(event) =>
+                    setProducts((prev) =>
+                      prev.map((item, i) => (i === index ? { ...item, unit: event.target.value } : item)),
+                    )
+                  }
+                  className={profileLikeSelectClass}
+                >
+                  <option
+                    value=""
+                    className="bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white"
+                    style={{ backgroundColor: '#7c3aed', color: '#ffffff' }}
+                  >
+                    {isDemand ? 'Select demanded unit' : 'Select unit'}
+                  </option>
+                  {COMMON_PRODUCT_UNITS.map((unitOption) => (
+                    <option key={unitOption} value={unitOption}>
+                      {unitOption}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-black">{isDemand ? 'Budget per Unit (BDT)' : 'Cost Per Unit (BDT)'}</label>
                 <input
                   type="text"
                   inputMode="decimal"
-                  placeholder={isDemand ? 'Enter your budget (BDT)' : 'Enter cost per quantity'}
+                  placeholder={isDemand ? 'Enter budget per unit (BDT)' : 'Enter cost per quantity'}
                   value={row.cost_per_unit}
                   onChange={(event) =>
                     setProducts((prev) =>

@@ -1063,7 +1063,7 @@ export default function ManagePost() {
         </div>
         <div className="min-w-0">
           <p className="truncate text-sm font-bold text-white">{title}</p>
-          <p className="truncate text-xs text-slate-300">{subtitle}</p>
+          <p className="truncate text-xs font-bold text-slate-300">{subtitle}</p>
         </div>
       </div>
       <div className="flex items-start gap-3">
@@ -1133,7 +1133,7 @@ export default function ManagePost() {
               >
                 Following Post Details
               </h1>
-              <p className="mt-0.5 text-xs text-violet-800/80 sm:text-sm">Defaults follow requested post details. Values can be reduced, but cannot exceed required limits.</p>
+              <p className="mt-0.5 text-xs font-semibold text-violet-800/80 sm:text-sm">Defaults follow requested post details. Values can be reduced, but cannot exceed required limits.</p>
               <img
                 src="/images/manage_post.png"
                 alt="Manage post header illustration"

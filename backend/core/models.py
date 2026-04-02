@@ -51,7 +51,7 @@ class Post(models.Model):
     brand_company_name = models.CharField(max_length=255, blank=True)
     location = models.CharField(max_length=255, blank=True)
     image = models.ImageField(upload_to="post_images/", blank=True, null=True)
-    website_link = models.URLField(blank=True)
+    website_link = models.URLField(max_length=2048, blank=True)
 
     def __str__(self) -> str:
         return self.post_name

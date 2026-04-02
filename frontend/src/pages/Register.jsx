@@ -63,7 +63,7 @@ export default function Register() {
           >
             Register
           </h2>
-          <p className="mt-0.5 text-xs text-violet-800/80 sm:text-sm">Create a new Localix account.</p>
+          <p className="mt-0.5 text-xs font-semibold text-violet-800/80 sm:text-sm">Create a new Localix account.</p>
           <img
             src="/images/register.png"
             alt="Register header illustration"

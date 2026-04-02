@@ -19,7 +19,8 @@ export default function Dashboard() {
   const [expertises, setExpertises] = useState([])
   const [products, setProducts] = useState([])
   const [erpItems, setErpItems] = useState([])
-  const [expandedPostId, setExpandedPostId] = useState(null)
+  const [detailModalPostId, setDetailModalPostId] = useState(null)
+  const [detailModalSectionType, setDetailModalSectionType] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [deleteMessage, setDeleteMessage] = useState('')
@@ -579,6 +580,37 @@ export default function Dashboard() {
     return String(user.id) !== String(profile.id)
   }, [id, user?.id, profile?.id])
 
+  const selectedDetailPost = useMemo(() => {
+    if (!detailModalPostId) return null
+    return userPosts.find((post) => Number(post.id) === Number(detailModalPostId)) || null
+  }, [detailModalPostId, userPosts])
+
+  const openPostDetailsModal = (post, sectionType) => {
+    if (!post?.id) return
+    setDetailModalPostId(post.id)
+    setDetailModalSectionType(sectionType)
+  }
+
+  const closePostDetailsModal = () => {
+    setDetailModalPostId(null)
+    setDetailModalSectionType('')
+  }
+
+  useEffect(() => {
+    if (!detailModalPostId) return undefined
+
+    const handleEscape = (event) => {
+      if (event.key === 'Escape') {
+        closePostDetailsModal()
+      }
+    }
+
+    window.addEventListener('keydown', handleEscape)
+    return () => {
+      window.removeEventListener('keydown', handleEscape)
+    }
+  }, [detailModalPostId])
+
   const formatCurrency = (value) => {
     const parsed = Number(value || 0)
     if (!Number.isFinite(parsed)) return '৳0'
@@ -651,7 +683,8 @@ export default function Dashboard() {
       }
 
       await refreshApplicationData(profile?.id)
-      setExpandedPostId(postId)
+      setDetailModalPostId(postId)
+      setDetailModalSectionType('Demand')
       setApplicationActionMessage(
         isApprove
           ? 'Application confirmed. ERP task card is now active.'
@@ -723,7 +756,10 @@ export default function Dashboard() {
       setExpertises((prev) => prev.filter((item) => item.post !== postId))
       setProducts((prev) => prev.filter((item) => item.post !== postId))
       setRatings((prev) => prev.filter((item) => item.post !== postId))
-      setExpandedPostId((prev) => (prev === postId ? null : prev))
+      setDetailModalPostId((prev) => (prev === postId ? null : prev))
+      if (Number(detailModalPostId) === Number(postId)) {
+        setDetailModalSectionType('')
+      }
       setDeleteMessage('Post deleted successfully.')
       window.dispatchEvent(new Event('post-deleted'))
     } catch (deleteError) {
@@ -754,13 +790,12 @@ export default function Dashboard() {
     }
   }
 
-  const renderMiniPostCard = (post, sectionType) => {
-    const postImageSrc = toMediaUrl(post.image)
+  const renderPostDetailsContent = (post, sectionType) => {
+    if (!post) return null
+
     const isDemand = sectionType === 'Demand'
-    const rating = Number(averageRatingByPost[post.id] || 0).toFixed(2)
     const { hasExpertise, hasServices, hasProduct, expertiseRows, serviceRows, productRows, showServiceDescription, showProductDescription } =
       buildCategoryRows(post)
-    const isExpanded = expandedPostId === post.id
     const postOwnerId = Number(post.owner_id ?? post.owner)
     const postRatings = (ratingsByPost[post.id] || [])
       .filter((entry) => Number(entry?.provider) === postOwnerId)
@@ -768,6 +803,209 @@ export default function Dashboard() {
       .sort((left, right) => Number(right?.id || 0) - Number(left?.id || 0))
     const perPostRoleMap = roleLabelsByPostAndUser.get(Number(post.id)) || new Map()
     const postPendingApplications = pendingApplicationsByPost.get(Number(post.id)) || []
+
+    return (
+      <div className="space-y-3">
+        {hasExpertise && (
+          <div className="space-y-2 rounded-xl border border-violet-200/70 bg-white/80 p-3">
+            <p className="text-sm font-semibold text-slate-700">Expertise</p>
+            {expertiseRows.length ? (
+              <ExpertiseTable expertises={expertiseRows} postType={post.post_type} />
+            ) : (
+              <p className="text-sm text-slate-400">No expertise detail listed.</p>
+            )}
+          </div>
+        )}
+
+        {hasServices && (
+          <div className="space-y-2 rounded-xl border border-violet-200/70 bg-white/80 p-3">
+            <p className="text-sm font-semibold text-slate-700">Services</p>
+            {serviceRows.length ? (
+              <ServiceTable services={serviceRows} postType={post.post_type} showDescription={showServiceDescription} />
+            ) : (
+              <p className="text-sm text-slate-400">No services detail listed.</p>
+            )}
+          </div>
+        )}
+
+        {hasProduct && (
+          <div className="space-y-2 rounded-xl border border-violet-200/70 bg-white/80 p-3">
+            <p className="text-sm font-semibold text-slate-700">Product</p>
+            {productRows.length ? (
+              <ProductTable products={productRows} postType={post.post_type} showDescription={showProductDescription} />
+            ) : (
+              <p className="text-sm text-slate-400">No product detail listed.</p>
+            )}
+          </div>
+        )}
+
+        {!hasExpertise && !hasServices && !hasProduct && (
+          <p className="text-sm text-slate-400">No detail listed.</p>
+        )}
+
+        {isDemand && canDeletePosts && (
+          <div className="space-y-2 rounded-xl border border-amber-200 bg-amber-50/70 p-3">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-sm font-semibold text-amber-900">Submitted Applications</p>
+              <span className="rounded-full border border-amber-300 bg-white px-2 py-0.5 text-xs font-semibold text-amber-800">
+                {postPendingApplications.length} pending
+              </span>
+            </div>
+
+            {postPendingApplications.length === 0 ? (
+              <p className="text-sm text-slate-600">No pending applications for this demand post.</p>
+            ) : (
+              <div className="space-y-3">
+                {postPendingApplications.map((entry) => {
+                  const snapshot = entry?.configuration_snapshot || {}
+                  const applicant = entry?.applicant || {}
+                  const totals = entry?.totals || {}
+                  const expertiseRows = Array.isArray(snapshot?.expertise) ? snapshot.expertise : []
+                  const serviceRows = Array.isArray(snapshot?.services) ? snapshot.services : []
+                  const productRows = Array.isArray(snapshot?.products) ? snapshot.products : []
+                  const requesterNote = String(snapshot?.requester_note || snapshot?.notes?.requester_note || '').trim()
+
+                  return (
+                    <div key={`pending-app-${entry.erp_id}`} className="rounded-lg border border-amber-200 bg-white p-3">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <p className="text-sm font-semibold text-slate-900">
+                          Applicant: {applicant?.name || `User #${applicant?.id || '-'}`}
+                        </p>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => handleApproveApplication(entry.erp_id, post.id)}
+                            className="rounded-full border border-emerald-300 bg-emerald-600 px-3 py-1 text-xs font-semibold text-white transition hover:bg-emerald-700"
+                          >
+                            Accept
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleRejectApplication(entry.erp_id, post.id)}
+                            className="rounded-full border border-rose-300 bg-rose-600 px-3 py-1 text-xs font-semibold text-white transition hover:bg-rose-700"
+                          >
+                            Reject
+                          </button>
+                        </div>
+                      </div>
+
+                      <p className="mt-1 text-xs text-slate-500">Submitted at: {formatPostDate(entry?.submitted_at)}</p>
+
+                      <div className="mt-2 overflow-x-auto rounded-lg border border-slate-200">
+                        <table className="w-full min-w-[520px] border-collapse text-xs">
+                          <thead className="bg-slate-100 text-slate-700">
+                            <tr>
+                              <th className="border border-slate-200 px-2 py-1 text-left">Type</th>
+                              <th className="border border-slate-200 px-2 py-1 text-left">Name</th>
+                              <th className="border border-slate-200 px-2 py-1 text-left">Configuration</th>
+                              <th className="border border-slate-200 px-2 py-1 text-right">Line Total</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {expertiseRows.map((row) => (
+                              <tr key={`exp-${entry.erp_id}-${row.id}`} className="odd:bg-white even:bg-slate-50">
+                                <td className="border border-slate-200 px-2 py-1">Expertise</td>
+                                <td className="border border-slate-200 px-2 py-1">{row?.name || '-'}</td>
+                                <td className="border border-slate-200 px-2 py-1">
+                                  {Number(row?.offered_people || 0)} person x {Number(row?.offered_hours || 0)} hr at {formatCurrency(row?.offered_rate || 0)}
+                                </td>
+                                <td className="border border-slate-200 px-2 py-1 text-right">{formatCurrency(row?.line_total || 0)}</td>
+                              </tr>
+                            ))}
+                            {serviceRows.map((row) => (
+                              <tr key={`svc-${entry.erp_id}-${row.id}`} className="odd:bg-white even:bg-slate-50">
+                                <td className="border border-slate-200 px-2 py-1">Service</td>
+                                <td className="border border-slate-200 px-2 py-1">{row?.name || '-'}</td>
+                                <td className="border border-slate-200 px-2 py-1">
+                                  Charge: {formatCurrency(row?.offered_rate ?? row?.requested_rate ?? 0)}
+                                </td>
+                                <td className="border border-slate-200 px-2 py-1 text-right">{formatCurrency(row?.line_total || 0)}</td>
+                              </tr>
+                            ))}
+                            {productRows.map((row) => (
+                              <tr key={`prd-${entry.erp_id}-${row.id}`} className="odd:bg-white even:bg-slate-50">
+                                <td className="border border-slate-200 px-2 py-1">Product</td>
+                                <td className="border border-slate-200 px-2 py-1">{row?.name || '-'}</td>
+                                <td className="border border-slate-200 px-2 py-1">
+                                  {Number(row?.offered_quantity || 0)} {String(row?.unit || 'unit')} at {formatCurrency(row?.offered_rate || 0)}
+                                </td>
+                                <td className="border border-slate-200 px-2 py-1 text-right">{formatCurrency(row?.line_total || 0)}</td>
+                              </tr>
+                            ))}
+                            {expertiseRows.length === 0 && serviceRows.length === 0 && productRows.length === 0 ? (
+                              <tr>
+                                <td className="border border-slate-200 px-2 py-2 text-center text-slate-500" colSpan={4}>
+                                  No application configuration rows found.
+                                </td>
+                              </tr>
+                            ) : null}
+                          </tbody>
+                        </table>
+                      </div>
+
+                      <div className="mt-2 grid gap-2 sm:grid-cols-4">
+                        <div className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-xs text-slate-700">Expertise: {formatCurrency(totals?.expertise || 0)}</div>
+                        <div className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-xs text-slate-700">Service: {formatCurrency(totals?.services || 0)}</div>
+                        <div className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-xs text-slate-700">Product: {formatCurrency(totals?.products || 0)}</div>
+                        <div className="rounded-md border border-violet-300 bg-violet-50 px-2 py-1 text-xs font-semibold text-violet-800">Overall: {formatCurrency(totals?.grand || 0)}</div>
+                      </div>
+
+                      {requesterNote ? (
+                        <p className="mt-2 text-xs text-slate-700">
+                          <span className="font-semibold">Requester note:</span> {requesterNote}
+                        </p>
+                      ) : null}
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        <div className="space-y-2 rounded-xl border border-violet-200 bg-violet-50/50 p-3">
+          <p className="text-sm font-semibold text-violet-800">Ratings and Comments</p>
+          {postRatings.length ? (
+            <div className="space-y-2">
+              {postRatings.map((entry) => {
+                const reviewerId = Number(entry?.customer)
+                const targetId = Number(entry?.provider)
+                const reviewer = usersById.get(reviewerId)
+                const target = usersById.get(targetId)
+                const reviewerRoles = Array.from(perPostRoleMap.get(reviewerId) || [])
+
+                return (
+                  <div key={`post-rating-${post.id}-${entry.id}`} className="rounded-lg border border-violet-200 bg-white p-2">
+                    <p className="font-semibold text-slate-800">
+                      {reviewer?.name || reviewer?.username || `User #${reviewerId}`}
+                      {' -> '}
+                      {target?.name || target?.username || `User #${targetId}`}
+                    </p>
+                    {reviewerRoles.length ? (
+                      <p className="mt-0.5 text-[11px] text-slate-500">Role: {reviewerRoles.join(', ')}</p>
+                    ) : null}
+                    <p className="mt-1 text-sm text-slate-700">
+                      <span className="font-semibold">Rating:</span> {Number(entry?.rating_value || 0).toFixed(1)} / 5
+                    </p>
+                    <p className="mt-1 text-sm text-slate-700 whitespace-pre-wrap">
+                      <span className="font-semibold">Comment:</span> {entry?.review_text || '-'}
+                    </p>
+                  </div>
+                )
+              })}
+            </div>
+          ) : (
+            <p className="text-sm text-slate-500">No ratings/comments yet for this post.</p>
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  const renderMiniPostCard = (post, sectionType) => {
+    const postImageSrc = toMediaUrl(post.image)
+    const isDemand = sectionType === 'Demand'
+    const rating = Number(averageRatingByPost[post.id] || 0).toFixed(2)
 
     return (
       <article
@@ -824,228 +1062,41 @@ export default function Dashboard() {
             <div className="mt-1 flex items-center justify-between gap-2">
               <div>
                 {canDeletePosts && (
-                  <button
-                    type="button"
-                    onClick={() => handleDeletePost(post.id)}
-                    className="rounded-full border border-red-300 bg-red-600 px-3 py-1 text-[11px] font-semibold text-white transition hover:bg-red-700"
-                  >
-                    Delete
-                  </button>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => navigate(`/edit-post/${post.id}`)}
+                      className="rounded-full border border-sky-300 bg-sky-600 px-3 py-1 text-[11px] font-semibold text-white transition hover:bg-sky-700"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDeletePost(post.id)}
+                      className="rounded-full border border-red-300 bg-red-600 px-3 py-1 text-[11px] font-semibold text-white transition hover:bg-red-700"
+                    >
+                      Delete
+                    </button>
+                  </div>
                 )}
               </div>
               <button
                 type="button"
-                onClick={() => setExpandedPostId((prev) => (prev === post.id ? null : post.id))}
+                onClick={() => openPostDetailsModal(post, sectionType)}
                 className="rounded-full border border-violet-200 bg-violet-50 px-3 py-1 text-[11px] font-semibold text-violet-700 transition hover:bg-violet-100"
               >
-                {isExpanded ? 'Hide Details' : 'View Details'}
+                View Details
               </button>
             </div>
           </div>
         </div>
-
-        {isExpanded && (
-          <div className="mt-3 space-y-3 rounded-xl border border-violet-200/70 bg-white/70 p-3">
-            {hasExpertise && (
-              <div className="space-y-2">
-                <p className="text-sm font-semibold text-slate-700">Expertise</p>
-                {expertiseRows.length ? (
-                  <ExpertiseTable expertises={expertiseRows} postType={post.post_type} />
-                ) : (
-                  <p className="text-sm text-slate-400">No expertise detail listed.</p>
-                )}
-              </div>
-            )}
-
-            {hasServices && (
-              <div className="space-y-2">
-                <p className="text-sm font-semibold text-slate-700">Services</p>
-                {serviceRows.length ? (
-                  <ServiceTable services={serviceRows} postType={post.post_type} showDescription={showServiceDescription} />
-                ) : (
-                  <p className="text-sm text-slate-400">No services detail listed.</p>
-                )}
-              </div>
-            )}
-
-            {hasProduct && (
-              <div className="space-y-2">
-                <p className="text-sm font-semibold text-slate-700">Product</p>
-                {productRows.length ? (
-                  <ProductTable products={productRows} postType={post.post_type} showDescription={showProductDescription} />
-                ) : (
-                  <p className="text-sm text-slate-400">No product detail listed.</p>
-                )}
-              </div>
-            )}
-
-            {!hasExpertise && !hasServices && !hasProduct && (
-              <p className="text-sm text-slate-400">No detail listed.</p>
-            )}
-
-            {isDemand && canDeletePosts && (
-              <div className="space-y-2 rounded-xl border border-amber-200 bg-amber-50/70 p-3">
-                <div className="flex items-center justify-between gap-2">
-                  <p className="text-sm font-semibold text-amber-900">Submitted Applications</p>
-                  <span className="rounded-full border border-amber-300 bg-white px-2 py-0.5 text-xs font-semibold text-amber-800">
-                    {postPendingApplications.length} pending
-                  </span>
-                </div>
-
-                {postPendingApplications.length === 0 ? (
-                  <p className="text-sm text-slate-600">No pending applications for this demand post.</p>
-                ) : (
-                  <div className="space-y-3">
-                    {postPendingApplications.map((entry) => {
-                      const snapshot = entry?.configuration_snapshot || {}
-                      const applicant = entry?.applicant || {}
-                      const totals = entry?.totals || {}
-                      const expertiseRows = Array.isArray(snapshot?.expertise) ? snapshot.expertise : []
-                      const serviceRows = Array.isArray(snapshot?.services) ? snapshot.services : []
-                      const productRows = Array.isArray(snapshot?.products) ? snapshot.products : []
-                      const requesterNote = String(snapshot?.requester_note || snapshot?.notes?.requester_note || '').trim()
-
-                      return (
-                        <div key={`pending-app-${entry.erp_id}`} className="rounded-lg border border-amber-200 bg-white p-3">
-                          <div className="flex flex-wrap items-center justify-between gap-2">
-                            <p className="text-sm font-semibold text-slate-900">
-                              Applicant: {applicant?.name || `User #${applicant?.id || '-'}`}
-                            </p>
-                            <div className="flex items-center gap-2">
-                              <button
-                                type="button"
-                                onClick={() => handleApproveApplication(entry.erp_id, post.id)}
-                                className="rounded-full border border-emerald-300 bg-emerald-600 px-3 py-1 text-xs font-semibold text-white transition hover:bg-emerald-700"
-                              >
-                                Accept
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleRejectApplication(entry.erp_id, post.id)}
-                                className="rounded-full border border-rose-300 bg-rose-600 px-3 py-1 text-xs font-semibold text-white transition hover:bg-rose-700"
-                              >
-                                Reject
-                              </button>
-                            </div>
-                          </div>
-
-                          <p className="mt-1 text-xs text-slate-500">Submitted at: {formatPostDate(entry?.submitted_at)}</p>
-
-                          <div className="mt-2 overflow-x-auto rounded-lg border border-slate-200">
-                            <table className="w-full min-w-[520px] border-collapse text-xs">
-                              <thead className="bg-slate-100 text-slate-700">
-                                <tr>
-                                  <th className="border border-slate-200 px-2 py-1 text-left">Type</th>
-                                  <th className="border border-slate-200 px-2 py-1 text-left">Name</th>
-                                  <th className="border border-slate-200 px-2 py-1 text-left">Configuration</th>
-                                  <th className="border border-slate-200 px-2 py-1 text-right">Line Total</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {expertiseRows.map((row) => (
-                                  <tr key={`exp-${entry.erp_id}-${row.id}`} className="odd:bg-white even:bg-slate-50">
-                                    <td className="border border-slate-200 px-2 py-1">Expertise</td>
-                                    <td className="border border-slate-200 px-2 py-1">{row?.name || '-'}</td>
-                                    <td className="border border-slate-200 px-2 py-1">
-                                      {Number(row?.offered_people || 0)} person x {Number(row?.offered_hours || 0)} hr at {formatCurrency(row?.offered_rate || 0)}
-                                    </td>
-                                    <td className="border border-slate-200 px-2 py-1 text-right">{formatCurrency(row?.line_total || 0)}</td>
-                                  </tr>
-                                ))}
-                                {serviceRows.map((row) => (
-                                  <tr key={`svc-${entry.erp_id}-${row.id}`} className="odd:bg-white even:bg-slate-50">
-                                    <td className="border border-slate-200 px-2 py-1">Service</td>
-                                    <td className="border border-slate-200 px-2 py-1">{row?.name || '-'}</td>
-                                    <td className="border border-slate-200 px-2 py-1">
-                                      Charge: {formatCurrency(row?.offered_rate ?? row?.requested_rate ?? 0)}
-                                    </td>
-                                    <td className="border border-slate-200 px-2 py-1 text-right">{formatCurrency(row?.line_total || 0)}</td>
-                                  </tr>
-                                ))}
-                                {productRows.map((row) => (
-                                  <tr key={`prd-${entry.erp_id}-${row.id}`} className="odd:bg-white even:bg-slate-50">
-                                    <td className="border border-slate-200 px-2 py-1">Product</td>
-                                    <td className="border border-slate-200 px-2 py-1">{row?.name || '-'}</td>
-                                    <td className="border border-slate-200 px-2 py-1">
-                                      {Number(row?.offered_quantity || 0)} {String(row?.unit || 'unit')} at {formatCurrency(row?.offered_rate || 0)}
-                                    </td>
-                                    <td className="border border-slate-200 px-2 py-1 text-right">{formatCurrency(row?.line_total || 0)}</td>
-                                  </tr>
-                                ))}
-                                {expertiseRows.length === 0 && serviceRows.length === 0 && productRows.length === 0 ? (
-                                  <tr>
-                                    <td className="border border-slate-200 px-2 py-2 text-center text-slate-500" colSpan={4}>
-                                      No application configuration rows found.
-                                    </td>
-                                  </tr>
-                                ) : null}
-                              </tbody>
-                            </table>
-                          </div>
-
-                          <div className="mt-2 grid gap-2 sm:grid-cols-4">
-                            <div className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-xs text-slate-700">Expertise: {formatCurrency(totals?.expertise || 0)}</div>
-                            <div className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-xs text-slate-700">Service: {formatCurrency(totals?.services || 0)}</div>
-                            <div className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-xs text-slate-700">Product: {formatCurrency(totals?.products || 0)}</div>
-                            <div className="rounded-md border border-violet-300 bg-violet-50 px-2 py-1 text-xs font-semibold text-violet-800">Overall: {formatCurrency(totals?.grand || 0)}</div>
-                          </div>
-
-                          {requesterNote ? (
-                            <p className="mt-2 text-xs text-slate-700">
-                              <span className="font-semibold">Requester note:</span> {requesterNote}
-                            </p>
-                          ) : null}
-                        </div>
-                      )
-                    })}
-                  </div>
-                )}
-              </div>
-            )}
-
-            <div className="space-y-2 rounded-xl border border-violet-200 bg-violet-50/50 p-3">
-              <p className="text-sm font-semibold text-violet-800">Ratings and Comments</p>
-              {postRatings.length ? (
-                <div className="space-y-2">
-                  {postRatings.map((entry) => {
-                    const reviewerId = Number(entry?.customer)
-                    const targetId = Number(entry?.provider)
-                    const reviewer = usersById.get(reviewerId)
-                    const target = usersById.get(targetId)
-                    const reviewerRoles = Array.from(perPostRoleMap.get(reviewerId) || [])
-
-                    return (
-                      <div key={`post-rating-${post.id}-${entry.id}`} className="rounded-lg border border-violet-200 bg-white p-2">
-                        <p className="font-semibold text-slate-800">
-                          {reviewer?.name || reviewer?.username || `User #${reviewerId}`}
-                          {' -> '}
-                          {target?.name || target?.username || `User #${targetId}`}
-                        </p>
-                        {reviewerRoles.length ? (
-                          <p className="mt-0.5 text-[11px] text-slate-500">Role: {reviewerRoles.join(', ')}</p>
-                        ) : null}
-                        <p className="mt-1 text-sm text-slate-700">
-                          <span className="font-semibold">Rating:</span> {Number(entry?.rating_value || 0).toFixed(1)} / 5
-                        </p>
-                        <p className="mt-1 text-sm text-slate-700 whitespace-pre-wrap">
-                          <span className="font-semibold">Comment:</span> {entry?.review_text || '-'}
-                        </p>
-                      </div>
-                    )
-                  })}
-                </div>
-              ) : (
-                <p className="text-sm text-slate-500">No ratings/comments yet for this post.</p>
-              )}
-            </div>
-          </div>
-        )}
       </article>
     )
   }
 
   return (
-    <div className="space-y-6">
+    <div className="relative">
+      <div className={`space-y-6 transition ${selectedDetailPost ? 'pointer-events-none select-none blur-[3px]' : ''}`}>
       <div className="card relative overflow-hidden border-0 bg-gradient-to-r from-[#c9b6ff] via-[#e6d7ff] to-[#f2eaff] p-0 text-slate-800 shadow-lg">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.45),transparent_58%)]" />
         <div className="absolute -right-8 -top-8 h-10 w-16 rounded-full bg-white/30 blur-xl" />
@@ -1057,7 +1108,7 @@ export default function Dashboard() {
             >
               {id ? `${profile?.name || 'User'}'s Dashboard` : 'Dashboard'}
             </h2>
-            <p className="mt-0.5 text-xs text-violet-800/80">
+            <p className="mt-0.5 text-xs font-semibold text-violet-800/80">
               {id ? `Overview of ${profile?.name || 'their'} Localix activity.` : 'Overview of your Localix activity.'}
             </p>
           </div>
@@ -1282,7 +1333,10 @@ export default function Dashboard() {
                               <button
                                 type="button"
                                 onClick={() => {
-                                  setExpandedPostId(postId)
+                                  const targetPost = userPosts.find((entry) => Number(entry.id) === postId)
+                                  if (targetPost) {
+                                    openPostDetailsModal(targetPost, targetPost.post_type === 'Demand' ? 'Demand' : 'Available')
+                                  }
                                   setShowRequestsPanel(false)
                                 }}
                                 className="rounded border border-emerald-400 bg-emerald-50 px-2 py-1 text-[10px] font-semibold text-emerald-700 transition hover:bg-emerald-100"
@@ -1391,6 +1445,51 @@ export default function Dashboard() {
           </table>
         </div>
       </div>
+
+      </div>
+
+      {selectedDetailPost && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/35 backdrop-blur-sm p-3"
+          onClick={closePostDetailsModal}
+        >
+          <div
+            className="w-full max-w-6xl max-h-[92vh] overflow-hidden rounded-2xl border border-violet-300 bg-gradient-to-br from-[#f4e9ff] via-[#ecd9ff] to-[#f7ecff] shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-center justify-between gap-3 border-b border-violet-200/80 bg-white/60 px-4 py-3 sm:px-6">
+              <div>
+                <p className="text-sm font-semibold text-violet-700">{detailModalSectionType || selectedDetailPost.post_type} Post</p>
+                <p className="text-lg font-bold text-violet-900">
+                  {selectedDetailPost.post_title || selectedDetailPost.post_name || 'Untitled Post'}
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                {canDeletePosts && (
+                  <button
+                    type="button"
+                    onClick={() => navigate(`/edit-post/${selectedDetailPost.id}`)}
+                    className="rounded-full border border-sky-300 bg-sky-600 px-4 py-2 text-xs font-semibold text-white transition hover:bg-sky-700"
+                  >
+                    Edit Post
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={closePostDetailsModal}
+                  className="rounded-full border border-violet-300 bg-white/80 px-4 py-2 text-xs font-semibold text-violet-800 transition hover:bg-violet-50"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+
+            <div className="max-h-[calc(92vh-88px)] overflow-y-auto p-3 sm:p-4">
+              {renderPostDetailsContent(selectedDetailPost, detailModalSectionType || (selectedDetailPost.post_type === 'Demand' ? 'Demand' : 'Available'))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
