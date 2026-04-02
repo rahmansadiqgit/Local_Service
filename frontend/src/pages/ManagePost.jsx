@@ -835,7 +835,7 @@ export default function ManagePost() {
       window.dispatchEvent(new Event('localix:notifications-refresh'))
       showMessage('Your application was submitted successfully. Please wait for acceptance.', 'success')
       setTimeout(() => {
-        navigate('/feed')
+        navigate('/erp')
       }, 500)
     } catch (error) {
       console.error(error)
