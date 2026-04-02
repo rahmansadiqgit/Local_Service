@@ -2641,14 +2641,13 @@ class ConnectionViewSet(viewsets.GenericViewSet):
 
         if requester_side:
             actor_role_text = role_labels.get(requester_side.requested_role, "member")
-            actor_message = f"You removed your connection with {target_name}."
+            actor_message = f"You have removed connection with {target_name}."
             target_message = f"The {actor_role_text} {actor_name} has left your connection."
         elif addressee_side:
-            target_role_text = role_labels.get(addressee_side.requested_role, "member")
-            actor_message = f"You removed {target_role_text} {target_name}."
+            actor_message = f"You have removed connection with {target_name}."
             target_message = f"{actor_name} removed your connection."
         else:
-            actor_message = f"You removed your connection with {target_name}."
+            actor_message = f"You have removed connection with {target_name}."
             target_message = f"{actor_name} removed your connection."
 
         accepted_connections.delete()
