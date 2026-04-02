@@ -282,6 +282,32 @@ export default function ERP() {
     }
   }
 
+  const handleApproveBooking = async (erp) => {
+    try {
+      const { data } = await api.post(`/erp/${erp.id}/approve_booking/`)
+      setErpItems((prev) => prev.map((item) => (item.id === data.id ? data : item)))
+      setMessage('Booking request accepted successfully.')
+      window.dispatchEvent(new Event('localix:notifications-refresh'))
+    } catch (error) {
+      console.error(error)
+      const detail = String(error?.response?.data?.detail || '').trim()
+      setMessage(detail || 'Failed to approve booking request.')
+    }
+  }
+
+  const handleRejectBooking = async (erp) => {
+    try {
+      const { data } = await api.post(`/erp/${erp.id}/reject_booking/`)
+      setErpItems((prev) => prev.map((item) => (item.id === data.id ? data : item)))
+      setMessage('Booking request rejected.')
+      window.dispatchEvent(new Event('localix:notifications-refresh'))
+    } catch (error) {
+      console.error(error)
+      const detail = String(error?.response?.data?.detail || '').trim()
+      setMessage(detail || 'Failed to reject booking request.')
+    }
+  }
+
   const hasRequiredRows = (rows) =>
     Array.isArray(rows) &&
     rows.some((row) => {
@@ -677,6 +703,8 @@ export default function ERP() {
               onCompleteByReceiver={handleCompleteByReceiver}
               onRateParticipant={handleRateParticipant}
               onRateProvider={handleRateProvider}
+              onApproveBooking={handleApproveBooking}
+              onRejectBooking={handleRejectBooking}
               onOpenOwner={(ownerId) => navigate(`/dashboard/${ownerId}`)}
               toMediaUrl={toMediaUrl}
             />

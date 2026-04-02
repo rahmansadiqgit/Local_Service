@@ -936,7 +936,7 @@ export default function ManagePost() {
             is_configured: true,
           })
           setErpItems((prev) => prev.map((item) => (item.id === data.id ? data : item)))
-          showMessage('Booking confirmed and ERP task updated', 'success')
+          showMessage('Booking request sent. Waiting for approval.', 'success')
         } catch (patchError) {
           const statusCode = patchError?.response?.status
           if (statusCode === 404 || statusCode === 403 || statusCode === 400) {
@@ -945,7 +945,7 @@ export default function ManagePost() {
               const exists = prev.some((item) => item.id === data.id)
               return exists ? prev.map((item) => (item.id === data.id ? data : item)) : [...prev, data]
             })
-            showMessage('Booking confirmed and ERP task created', 'success')
+            showMessage('Booking request sent. Waiting for approval.', 'success')
           } else {
             throw patchError
           }
@@ -953,8 +953,10 @@ export default function ManagePost() {
       } else {
         const { data } = await api.post('/erp/', payload)
         setErpItems((prev) => [...prev, data])
-        showMessage('Booking confirmed and ERP task created', 'success')
+        showMessage('Booking request sent. Waiting for approval.', 'success')
       }
+
+      window.dispatchEvent(new Event('localix:notifications-refresh'))
 
       setTimeout(() => {
         navigate('/erp')
