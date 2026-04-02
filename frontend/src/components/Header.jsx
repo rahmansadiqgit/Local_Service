@@ -302,7 +302,12 @@ export default function Header() {
       return postLinkMatch[1].trim()
     }
 
-    if (title.includes("connection request") || messageLower.includes("connection request")) {
+    if (
+      title.includes("connection request") ||
+      title.includes("connection removed") ||
+      title.includes("connection request accepted") ||
+      messageLower.includes("connection")
+    ) {
       return "/connections"
     }
 
