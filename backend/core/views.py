@@ -1305,7 +1305,12 @@ class ERPViewSet(viewsets.ModelViewSet):
 
         erp.configuration_snapshot = snapshot
         erp.is_configured = True
-        erp.save(update_fields=["configuration_snapshot", "is_configured", "updated_at"])
+        # Move approved supply bookings directly into active execution flow.
+        if str(erp.stage or "").strip().lower() == "pending":
+            erp.stage = "On Process"
+            erp.save(update_fields=["configuration_snapshot", "is_configured", "stage", "updated_at"])
+        else:
+            erp.save(update_fields=["configuration_snapshot", "is_configured", "updated_at"])
 
         self._notify_supply_booking_decision(erp, actor, approved=True)
         return Response(self.get_serializer(erp).data, status=status.HTTP_200_OK)
