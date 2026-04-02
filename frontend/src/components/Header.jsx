@@ -212,8 +212,52 @@ export default function Header() {
 
   const getVisibleNotificationMessage = (value) => {
     const text = String(value || "")
-    // Keep link payload for routing, but remove it from visible notification copy.
-    return text.replace(/\s*post\s+link:\s*[^\s]+\s*/i, " ").replace(/\s{2,}/g, " ").trim()
+    // Keep routing payload hidden from visible copy.
+    return text.replace(/\s*post\s+link:\s*[^\s]+\s*/gi, " ").replace(/\s{2,}/g, " ").trim()
+  }
+
+  const parseInlineLinks = (value) => {
+    const text = getVisibleNotificationMessage(value)
+    const parts = []
+    const pattern = /\[([^\]]+)\]\((\/[^(\s)]+)\)/g
+    let lastIndex = 0
+    let match
+
+    while ((match = pattern.exec(text)) !== null) {
+      if (match.index > lastIndex) {
+        parts.push({ type: "text", value: text.slice(lastIndex, match.index) })
+      }
+      parts.push({ type: "link", label: match[1], to: match[2] })
+      lastIndex = pattern.lastIndex
+    }
+
+    if (lastIndex < text.length) {
+      parts.push({ type: "text", value: text.slice(lastIndex) })
+    }
+
+    return parts.length ? parts : [{ type: "text", value: text }]
+  }
+
+  const renderNotificationMessage = (value, notificationId) => {
+    const parts = parseInlineLinks(value)
+    return parts.map((part, index) => {
+      if (part.type === "link") {
+        return (
+          <button
+            key={`notif-link-${notificationId}-${index}`}
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation()
+              navigate(part.to)
+            }}
+            className="inline p-0 font-semibold text-violet-700 underline hover:text-violet-800"
+          >
+            {part.label}
+          </button>
+        )
+      }
+      return <span key={`notif-text-${notificationId}-${index}`}>{part.value}</span>
+    })
   }
 
   const handleMarkAllAsRead = async () => {
@@ -288,6 +332,10 @@ export default function Header() {
     const message = String(item?.message || "")
     const messageLower = message.toLowerCase()
 
+    if (title.includes("request declined")) {
+      return "/feed"
+    }
+
     if (title.includes("password changed") || messageLower.includes("password")) {
       return "/profile"
     }
@@ -300,6 +348,14 @@ export default function Header() {
     const postLinkMatch = message.match(/post\s+link:\s*([^\s]+)/i)
     if (postLinkMatch && postLinkMatch[1]) {
       return postLinkMatch[1].trim()
+    }
+
+    if (
+      title.includes("booking request sent")
+      || title.includes("new booking request")
+      || title.includes("booking confirmed")
+    ) {
+      return "/erp"
     }
 
     if (title.includes("connection request") || messageLower.includes("connection request")) {
@@ -541,7 +597,7 @@ export default function Header() {
                               )}
                             </div>
                           </div>
-                          <p className="mt-0.5 text-xs">{getVisibleNotificationMessage(item.message)}</p>
+                          <p className="mt-0.5 text-xs">{renderNotificationMessage(item.message, item.id)}</p>
                           <p className="mt-1 text-[11px] text-slate-500">{formatNotificationTime(item.created_at)}</p>
                         </div>
                       ))}
