@@ -2524,10 +2524,29 @@ class ConnectionViewSet(viewsets.GenericViewSet):
 
         sender_name = request.user.name or request.user.username or request.user.email
         role_label = connection.get_requested_role_display()
+        receiver_role_label = "Delivery" if role_label == "Delivery Man" else role_label
+        addressee_name = addressee.name or addressee.username or addressee.email
+        
+        # Notification for receiver
         Notification.objects.create(
             user=addressee,
+            notification_type=Notification.NotificationType.CONNECTION_REQUEST,
+            actor=request.user,
+            related_user=request.user,
+            connection_role=requested_role,
             title="Connection Request",
-            message=f"{sender_name} sent you a connection request for {role_label}.{f' Message: {message}' if message else ''}",
+            message=f"{sender_name} requested to connect with you as {receiver_role_label}.{f' Message: {message}' if message else ''}",
+        )
+        
+        # Notification for sender
+        Notification.objects.create(
+            user=request.user,
+            notification_type=Notification.NotificationType.CONNECTION_REQUEST,
+            actor=request.user,
+            related_user=addressee,
+            connection_role=requested_role,
+            title="Connection Request Sent",
+            message=f"You requested to connect with {addressee_name} as {role_label}.",
         )
 
         return Response(ConnectionSerializer(connection).data, status=status.HTTP_201_CREATED)
@@ -2551,25 +2570,66 @@ class ConnectionViewSet(viewsets.GenericViewSet):
             connection.save(update_fields=["status", "accepted_at", "updated_at"])
 
             sender_name = request.user.name or request.user.username or request.user.email
+            role_label = connection.get_requested_role_display()
+            requester_name = (
+                connection.requester.name
+                or connection.requester.username
+                or connection.requester.email
+            )
+            
+            # Notification for requester (they see: "Antu accepted your connection request")
             Notification.objects.create(
                 user=connection.requester,
+                notification_type=Notification.NotificationType.CONNECTION_ACCEPTED,
+                actor=request.user,
+                related_user=request.user,
+                connection_role=connection.requested_role,
                 title="Connection Request Accepted",
-                message=f"{sender_name} accepted your connection request.",
+                message=f"{sender_name} accepted your connection request as {role_label}.",
             )
+            
+            # Notification for acceptor (they see: "You accepted Sadiq's connection request")
             Notification.objects.create(
                 user=request.user,
+                notification_type=Notification.NotificationType.CONNECTION_ACCEPTED,
+                actor=request.user,
+                related_user=connection.requester,
+                connection_role=connection.requested_role,
                 title="Connection Added",
-                message=f"You are now connected with {connection.requester.name or connection.requester.username or connection.requester.email}.",
+                message=f"You accepted {requester_name}'s connection request as {role_label}.",
             )
         else:
             connection.status = ConnectionStatus.REJECTED
             connection.save(update_fields=["status", "updated_at"])
 
             sender_name = request.user.name or request.user.username or request.user.email
+            role_label = connection.get_requested_role_display()
+            requester_name = (
+                connection.requester.name
+                or connection.requester.username
+                or connection.requester.email
+            )
+            
+            # Notification for requester (they see: "Antu rejected your connection request")
             Notification.objects.create(
                 user=connection.requester,
+                notification_type=Notification.NotificationType.CONNECTION_REJECTED,
+                actor=request.user,
+                related_user=request.user,
+                connection_role=connection.requested_role,
                 title="Connection Request Rejected",
-                message=f"{sender_name} rejected your connection request.",
+                message=f"{sender_name} rejected your connection request as {role_label}.",
+            )
+            
+            # Notification for rejector (they see: "You rejected Sadiq's connection request")
+            Notification.objects.create(
+                user=request.user,
+                notification_type=Notification.NotificationType.CONNECTION_REJECTED,
+                actor=request.user,
+                related_user=connection.requester,
+                connection_role=connection.requested_role,
+                title="Connection Request Rejected",
+                message=f"You rejected {requester_name}'s connection request as {role_label}.",
             )
 
         return Response(ConnectionSerializer(connection).data)
@@ -2660,35 +2720,51 @@ class ConnectionViewSet(viewsets.GenericViewSet):
         if requester_side:
             actor_role_text = role_labels.get(requester_side.requested_role, "member")
             actor_role_title = role_labels_title.get(requester_side.requested_role, "Member")
-            if selected_role_text and not is_hired_view:
-                actor_message = f"You have removed connection with a {selected_role_text} {target_name}."
-            else:
-                actor_message = f"You have removed connection with {target_name}."
-            target_message = f"{actor_name} has removed connection from you."
+            actor_message = f"U have removed connection with {target_name} as a {actor_role_title}."
+            target_message = f"{actor_name} has Removed Connection from you as a {actor_role_title}."
         elif addressee_side:
             target_role_text = role_labels.get(addressee_side.requested_role, "member")
             if selected_role_text and not is_hired_view:
-                actor_message = f"You have removed connection with a {selected_role_text} {target_name}."
+                actor_message = f"You have removed a {selected_role_text} {target_name}."
+                target_message = f"{actor_name} has removed you as a {selected_role_text}."
             elif is_hired_view:
                 actor_message = f"You have removed connection with {target_name}."
+                target_message = f"{actor_name} has removed connection from you."
             else:
                 actor_message = f"You have removed a {target_role_text} named {target_name}."
-            target_message = f"{actor_name} has removed connection from you."
+                target_message = f"{actor_name} has removed you as a {target_role_text}."
         else:
             actor_message = f"You have removed connection with {target_name}."
             target_message = f"{actor_name} removed your connection."
 
         accepted_connections.delete()
 
+        # Determine role and message context
+        role_used = None
+        if requester_side:
+            role_used = requester_side.requested_role
+        elif addressee_side:
+            role_used = addressee_side.requested_role
+
+        # Notification for actor (person who removed)
         Notification.objects.create(
             user=request.user,
+            notification_type=Notification.NotificationType.CONNECTION_REMOVED,
+            actor=request.user,
+            related_user=target_user,
+            connection_role=role_used or "",
             title="Connection Removed",
             message=actor_message,
         )
 
+        # Notification for target (person whose connection was removed)
         if target_user:
             Notification.objects.create(
                 user=target_user,
+                notification_type=Notification.NotificationType.CONNECTION_REMOVED,
+                actor=request.user,
+                related_user=request.user,
+                connection_role=role_used or "",
                 title="Connection Removed",
                 message=target_message,
             )
