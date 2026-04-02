@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useLocation } from 'react-router-dom'
 import api from '../api/client'
 import RatingRingAvatar from '../components/RatingRingAvatar'
 
@@ -9,6 +10,7 @@ const ROLE_ENTRIES = [
 ]
 
 export default function Connections() {
+  const location = useLocation()
   const [selected, setSelected] = useState(null)
   const [memberCategory, setMemberCategory] = useState('Expertise')
   const [posts, setPosts] = useState([])
@@ -139,6 +141,88 @@ export default function Connections() {
   const memberCards = Array.isArray(overview.member_connections?.[selectedMemberRoleKey])
     ? overview.member_connections[selectedMemberRoleKey]
     : []
+
+  const deepLinkTarget = useMemo(() => {
+    const params = new URLSearchParams(location.search)
+    const section = String(params.get('section') || '').trim().toLowerCase()
+    const name = String(params.get('name') || '').trim().toLowerCase()
+    return {
+      section,
+      name,
+      hasTarget: Boolean(name),
+    }
+  }, [location.search])
+
+  useEffect(() => {
+    if (!deepLinkTarget.hasTarget) return
+
+    const isSamePerson = (person) => {
+      const displayName = String(person?.name || person?.username || person?.email || '').trim().toLowerCase()
+      return displayName === deepLinkTarget.name
+    }
+
+    const hired = Array.isArray(overview.hired_connections) ? overview.hired_connections : []
+    const live = Array.isArray(overview.live_connections) ? overview.live_connections : []
+    const recent = Array.isArray(overview.recent_connections) ? overview.recent_connections : []
+    const memberByRole = overview.member_connections || {}
+
+    let found = null
+
+    if (deepLinkTarget.section === 'hired') {
+      const target = hired.find(isSamePerson)
+      if (target) found = { person: target, type: 'Hired' }
+    }
+
+    if (!found && deepLinkTarget.section === 'members') {
+      const expertise = (Array.isArray(memberByRole.expertise) ? memberByRole.expertise : []).find(isSamePerson)
+      const skillProvider = (Array.isArray(memberByRole.skill_provider) ? memberByRole.skill_provider : []).find(isSamePerson)
+      const supplier = (Array.isArray(memberByRole.supplier) ? memberByRole.supplier : []).find(isSamePerson)
+      if (expertise) {
+        setMemberCategory('Expertise')
+        found = { person: expertise, type: 'Expertise' }
+      } else if (skillProvider) {
+        setMemberCategory('Skill Providers')
+        found = { person: skillProvider, type: 'Skill Providers' }
+      } else if (supplier) {
+        setMemberCategory('Delivery Man')
+        found = { person: supplier, type: 'Delivery Man' }
+      }
+    }
+
+    if (!found) {
+      const targetInHired = hired.find(isSamePerson)
+      if (targetInHired) found = { person: targetInHired, type: 'Hired' }
+    }
+
+    if (!found) {
+      const targetInLive = live.find(isSamePerson)
+      if (targetInLive) found = { person: targetInLive, type: 'Live' }
+    }
+
+    if (!found) {
+      const targetInRecent = recent.find(isSamePerson)
+      if (targetInRecent) found = { person: targetInRecent, type: 'Recent' }
+    }
+
+    if (!found) return
+
+    setSelected((prev) => {
+      if (Number(prev?.id) === Number(found.person?.id) && prev?.type === found.type) {
+        return prev
+      }
+      return { ...found.person, type: found.type }
+    })
+
+    window.requestAnimationFrame(() => {
+      const targetId = Number(found.person?.id)
+      const card = Number.isFinite(targetId)
+        ? document.getElementById(`connection-card-${targetId}`)
+        : null
+      if (card) {
+        card.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      }
+    })
+  }, [deepLinkTarget, overview])
 
   const openSelfAssignPosts = useMemo(() => {
     const getResponsibilityText = (erp, roleKey) => {
@@ -310,6 +394,7 @@ export default function Connections() {
   const renderCard = (person, type) => (
     <div
       key={person.id}
+      id={`connection-card-${person.id}`}
       role="button"
       tabIndex={0}
       onClick={() => setSelected({ ...person, type })}

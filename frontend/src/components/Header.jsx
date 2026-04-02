@@ -304,10 +304,16 @@ export default function Header() {
 
     if (
       title.includes("connection request") ||
+      title.includes("connection added") ||
       title.includes("connection removed") ||
       title.includes("connection request accepted") ||
       messageLower.includes("connection")
     ) {
+      const connectedWithMatch = message.match(/connected\s+with\s+(.+?)(?:\.|$)/i)
+      if (title.includes("connection added") && connectedWithMatch?.[1]) {
+        const personName = connectedWithMatch[1].trim()
+        return `/connections?section=hired&name=${encodeURIComponent(personName)}`
+      }
       return "/connections"
     }
 
