@@ -1180,12 +1180,8 @@ export default function ManagePost() {
 
   const getExpertiseDurationValue = (postType, row) => {
     const key = `expertise-${row.id}-duration`
-    const postId = Number(row?.post || 0)
-    const remainingDuration = postId > 0 ? getRemainingExpertiseDuration(postId, row) : Math.max(Number(row.needed_budget_unit || 0), 0)
     if (Object.prototype.hasOwnProperty.call(expertiseDurations, key)) {
-      const current = Number(expertiseDurations[key] || 0)
-      if (postType === 'Supply') return Math.max(0, Math.min(current, remainingDuration))
-      return current
+      return Number(expertiseDurations[key] || 0)
     }
     return postType === 'Demand' ? Math.max(Number(row.needed_budget_unit || 0), 0) : 0
   }
@@ -1440,13 +1436,12 @@ export default function ManagePost() {
                             const persons = getExpertisePersonsValue(post.post_type, expertise)
                             const duration = getExpertiseDurationValue(post.post_type, expertise)
                             const remainingPeople = getRemainingExpertisePeople(post.id, expertise)
-                            const remainingDuration = getRemainingExpertiseDuration(post.id, expertise)
                             const personsMax = post.post_type === 'Demand'
                               ? Math.max(Number(expertise.available_person || 0), 0)
                               : remainingPeople
                             const durationMax = post.post_type === 'Demand'
                               ? Math.max(Number(expertise.needed_budget_unit || 0), 0)
-                              : remainingDuration
+                              : 365
                             const enabled = isItemEnabled(post.id, 'expertise', expertise.id)
                             const requestedRate = Number(expertise.cost || 0)
                             const applyPeopleKey = `apply-expertise-${expertise.id}-people`
@@ -1473,7 +1468,7 @@ export default function ManagePost() {
                                   priceUnitText={`per ${formatRateUnit(expertise.unit).toLowerCase()}`}
                                   checked={enabled}
                                   onToggle={() =>
-                                    (post.post_type === 'Supply' && (!remainingPeople || !remainingDuration))
+                                    (post.post_type === 'Supply' && !remainingPeople)
                                       ? null
                                       : toggleItemEnabled(post.id, 'expertise', expertise.id, () => {
                                           setExpertisePersons((prev) => ({ ...prev, [`expertise-${expertise.id}`]: 0 }))
@@ -1482,7 +1477,7 @@ export default function ManagePost() {
                                   }
                                 />
 
-                                {post.post_type === 'Supply' && (!remainingPeople || !remainingDuration) && (
+                                {post.post_type === 'Supply' && !remainingPeople && (
                                   <div className="mt-4 rounded-lg border border-rose-400/35 bg-rose-500/10 px-3 py-2 text-xs text-rose-100">
                                     Already booked all for expertise
                                   </div>
@@ -1529,7 +1524,7 @@ export default function ManagePost() {
                                           onChange={(val) => setExpertiseDurations((prev) => ({ ...prev, [`expertise-${expertise.id}-duration`]: val }))}
                                           max={durationMax}
                                           label={post.post_type === 'Demand' ? 'Needed hire unit' : getDurationLabel(expertise.unit)}
-                                          helperText={post.post_type === 'Demand' ? `${Number(expertise.needed_budget_unit || 0)} required in post details` : `${getDurationHelperText(expertise.unit)} (${remainingDuration} remaining)`}
+                                          helperText={post.post_type === 'Demand' ? `${Number(expertise.needed_budget_unit || 0)} required in post details` : getDurationHelperText(expertise.unit)}
                                         />
                                       </>
                                     )}

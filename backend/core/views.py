@@ -525,20 +525,8 @@ class ERPViewSet(viewsets.ModelViewSet):
                         f'Expertise "{row.skill_name}": requested {requested_people} people, only {remaining_people} remaining.'
                     )
 
-        for key, requested_duration in requested_usage["expertise_duration"].items():
-            source, row_id = key
-            if source != "expertise":
-                continue
-            row = expertise_map.get(row_id)
-            if not row:
-                continue
-            total_duration = max(self._to_int(getattr(row, "needed_budget_unit", 0)), 0)
-            consumed_duration = max(self._to_int(consumed_usage["expertise_duration"].get(key, 0)), 0)
-            remaining_duration = max(total_duration - consumed_duration, 0)
-            if requested_duration > remaining_duration:
-                errors.append(
-                    f'Expertise "{row.name}": requested duration {requested_duration}, only {remaining_duration} remaining.'
-                )
+        # Do not enforce global expertise duration depletion across bookings.
+        # Booking capacity is constrained by available people and product stock.
 
         if errors:
             raise ValidationError(
