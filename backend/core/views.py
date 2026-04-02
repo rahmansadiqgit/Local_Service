@@ -2604,16 +2604,66 @@ class ConnectionViewSet(viewsets.GenericViewSet):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-        removed_count = accepted_connections.count()
-        accepted_connections.delete()
+        removed_connections = list(accepted_connections)
+        removed_count = len(removed_connections)
 
         target_user = User.objects.filter(id=target_user_id).first()
         actor_name = request.user.name or request.user.username or request.user.email
+        target_name = (
+            target_user.name or target_user.username or target_user.email
+            if target_user
+            else f"User #{target_user_id}"
+        )
+
+        role_labels = {
+            ConnectionRole.EXPERTISE: "expertise member",
+            ConnectionRole.SKILL_PROVIDER: "skill provider",
+            ConnectionRole.SUPPLIER: "delivery person",
+        }
+
+        # When requester removes, they are leaving the connection from their requested role.
+        requester_side = next(
+            (
+                conn for conn in removed_connections
+                if conn.requester_id == request.user.id and conn.addressee_id == target_user_id
+            ),
+            None,
+        )
+
+        # When addressee removes, target requester is the hired/member role.
+        addressee_side = next(
+            (
+                conn for conn in removed_connections
+                if conn.requester_id == target_user_id and conn.addressee_id == request.user.id
+            ),
+            None,
+        )
+
+        if requester_side:
+            actor_role_text = role_labels.get(requester_side.requested_role, "member")
+            actor_message = f"You removed your connection with {target_name}."
+            target_message = f"The {actor_role_text} {actor_name} has left your connection."
+        elif addressee_side:
+            target_role_text = role_labels.get(addressee_side.requested_role, "member")
+            actor_message = f"You removed {target_role_text} {target_name}."
+            target_message = f"{actor_name} removed your connection."
+        else:
+            actor_message = f"You removed your connection with {target_name}."
+            target_message = f"{actor_name} removed your connection."
+
+        accepted_connections.delete()
+
+        Notification.objects.create(
+            user=request.user,
+            title="Connection Removed",
+            message=actor_message,
+        )
+
         if target_user:
             Notification.objects.create(
                 user=target_user,
                 title="Connection Removed",
-                message=f"{actor_name} removed your connection.",
+                message=target_message,
             )
 
         return Response(
