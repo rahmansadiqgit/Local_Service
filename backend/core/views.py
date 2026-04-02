@@ -2210,6 +2210,23 @@ class ERPViewSet(viewsets.ModelViewSet):
         serializer = ERPMessageSerializer(instance)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
+    def perform_destroy(self, instance):
+        """
+        Only provider and receiver can delete an ERP card.
+        When deleted, it removes for both parties.
+        """
+        actor = self.request.user
+        provider = getattr(instance, "provider", None)
+        receiver = getattr(instance, "receiver", None)
+
+        # Check if actor is provider or receiver
+        if not (actor == provider or actor == receiver):
+            raise PermissionDenied(
+                "Only the provider and receiver can delete this ERP card. Associated members cannot delete."
+            )
+
+        instance.delete()
+
 
 class RatingViewSet(viewsets.ModelViewSet):
     queryset = Rating.objects.all()
