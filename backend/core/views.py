@@ -2213,7 +2213,9 @@ class ERPViewSet(viewsets.ModelViewSet):
     def perform_destroy(self, instance):
         """
         Only provider and receiver can delete an ERP card.
-        When deleted, it removes for both parties.
+        When deleted:
+        1. Removes the ERP for both parties
+        2. Notifies provider, receiver, and all associated members
         """
         actor = self.request.user
         provider = getattr(instance, "provider", None)
@@ -2225,6 +2227,72 @@ class ERPViewSet(viewsets.ModelViewSet):
                 "Only the provider and receiver can delete this ERP card. Associated members cannot delete."
             )
 
+        # Collect all recipients for notification
+        recipients = set()
+        if provider:
+            recipients.add(provider)
+        if receiver:
+            recipients.add(receiver)
+
+        # Add all associated members from configuration_snapshot
+        snapshot = self._as_dict(getattr(instance, "configuration_snapshot", None))
+        members = self._as_dict(snapshot.get("members", {}))
+        
+        # Role keys that contain assignee IDs
+        role_keys = ["expertise", "skill_provider", "supplier"]
+        for role_key in role_keys:
+            role_data = members.get(role_key)
+            if isinstance(role_data, dict):
+                assignee_ids = role_data.get("assignee_ids", [])
+                if isinstance(assignee_ids, list):
+                    for user_id in assignee_ids:
+                        try:
+                            user = User.objects.get(id=int(user_id))
+                            recipients.add(user)
+                        except (User.DoesNotExist, ValueError, TypeError):
+                            pass
+
+        # Remove the actor from recipients (they already know they deleted it)
+        recipients.discard(actor)
+
+        # Get ERP name
+        erp_name = (
+            snapshot.get("post", {}).get("title")
+            or getattr(instance.post, "post_title", "")
+            or getattr(instance.post, "post_name", "")
+            or f"ERP #{instance.id}"
+        )
+
+        # Get deleter name
+        deleter_name = (
+            getattr(actor, "name", "")
+            or getattr(actor, "username", "")
+            or f"User #{actor.id}"
+        )
+
+        # Get deleter role
+        deleter_role = "Provider" if actor == provider else "Receiver"
+
+        # Create notifications for all recipients
+        try:
+            notifications = []
+            for recipient in recipients:
+                notification = Notification(
+                    user=recipient,
+                    title="ERP Card Deleted",
+                    message=(
+                        f'The ERP card "{erp_name}" has been deleted by {deleter_role} {deleter_name}. '
+                        "This has been removed from your booking tracker."
+                    ),
+                )
+                notifications.append(notification)
+
+            if notifications:
+                Notification.objects.bulk_create(notifications)
+        except Exception:
+            logger.exception("Failed to create deletion notifications for ERP %s", getattr(instance, "id", None))
+
+        # Delete the ERP card
         instance.delete()
 
 
