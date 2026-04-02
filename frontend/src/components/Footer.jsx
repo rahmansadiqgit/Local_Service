@@ -56,6 +56,14 @@ export default function Footer() {
               </li>
               <li>
                 <Link
+                  to="/help-centre"
+                  className="text-white drop-shadow hover:text-yellow-300 transition"
+                >
+                  Help Centre
+                </Link>
+              </li>
+              <li>
+                <Link
                   to="/report"
                   className="text-white drop-shadow hover:text-yellow-300 transition"
                 >

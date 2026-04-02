@@ -62,6 +62,7 @@ export default function HomeFeed() {
   const [ratings, setRatings] = useState([])
   const [erpItems, setErpItems] = useState([])
   const [loading, setLoading] = useState(true)
+  const [feedError, setFeedError] = useState('')
   const [peopleSearch, setPeopleSearch] = useState('')
 
   const [filters, setFilters] = useState({
@@ -134,6 +135,7 @@ export default function HomeFeed() {
     let active = true
 
     const load = async () => {
+      setFeedError('')
       try {
         const publicRequestConfig = { skipAuth: true, skipAuthRedirect: true }
 
@@ -167,6 +169,15 @@ export default function HomeFeed() {
 
       } catch (error) {
         console.error(error)
+        if (active) {
+          setPosts([])
+          const statusCode = Number(error?.response?.status || 0)
+          if (statusCode === 401 || statusCode === 403) {
+            setFeedError('Feed is currently restricted for logged-out users by the backend API permissions.')
+          } else {
+            setFeedError('Could not load posts right now. Please check backend/API connection and try again.')
+          }
+        }
       } finally {
         if (active) setLoading(false)
       }
@@ -502,6 +513,21 @@ export default function HomeFeed() {
   const handleAction = async (post, actionType) => {
     setActionMessage('')
 
+    if (actionType === 'edit') {
+      if (!isAuthenticated) {
+        navigate('/login')
+        return
+      }
+
+      const postOwnerId = post.owner_id || post.owner
+      if (!currentUserId || String(postOwnerId) !== String(currentUserId)) {
+        setActionMessage('You can edit only your own posts.')
+        return
+      }
+      navigate(`/edit-post/${post.id}`)
+      return
+    }
+
     const postOwnerId = post.owner_id || post.owner
     if (currentUserId && String(postOwnerId) === String(currentUserId)) {
       setActionMessage("You can't apply or book your own post.")
@@ -823,6 +849,8 @@ export default function HomeFeed() {
 
         {loading ? (
           <div className="card">Loading feed...</div>
+        ) : feedError ? (
+          <div className="card text-rose-700">{feedError}</div>
         ) : filteredPosts.length === 0 ? (
           <div className="card">No posts match your filters.</div>
         ) : (

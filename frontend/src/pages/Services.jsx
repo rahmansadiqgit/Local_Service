@@ -47,7 +47,7 @@ export default function Services() {
         <div className="relative px-6 py-3.5 pr-40 sm:px-8 sm:py-4 sm:pr-44 lg:pr-48">
           <div>
             <h2 className="text-xl font-extrabold tracking-tight text-violet-900 sm:text-3xl">Services</h2>
-            <p className="mt-0.5 text-xs text-violet-800/80 sm:text-sm">Explore popular service categories available in Localix.</p>
+            <p className="mt-0.5 text-xs font-semibold text-violet-800/80 sm:text-sm">Explore popular service categories available in Localix.</p>
           </div>
           <img
             src="/images/services.png"
@@ -64,7 +64,7 @@ export default function Services() {
             className="card border border-violet-200/80 bg-gradient-to-br from-white via-violet-50/40 to-fuchsia-50/40"
           >
             <h3 className="text-lg font-bold text-violet-900">{group.title}</h3>
-            <p className="mt-1 text-xs text-slate-600">{group.subtitle}</p>
+            <p className="mt-1 text-xs font-bold text-slate-600">{group.subtitle}</p>
             <ul className="mt-4 flex flex-wrap gap-2.5 text-sm">
               {group.items.map((item) => (
                 <li

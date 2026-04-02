@@ -53,7 +53,7 @@ export default function ChangePasswordPage() {
           <h2 className="text-xl font-extrabold tracking-tight text-violet-900 sm:text-3xl" style={{ fontFamily: "'Sora', 'Trebuchet MS', sans-serif" }}>
             Change Password
           </h2>
-          <p className="mt-0.5 text-xs text-violet-800/80 sm:text-sm">Keep your account secure by updating your password.</p>
+          <p className="mt-0.5 text-xs font-semibold text-violet-800/80 sm:text-sm">Keep your account secure by updating your password.</p>
           <img
             src="/images/change_password.png"
             alt="Change password header illustration"
@@ -70,7 +70,7 @@ export default function ChangePasswordPage() {
             <button
               type="button"
               onClick={() => navigate('/profile')}
-              className="rounded-lg border border-violet-300 px-3 py-1 text-xs font-semibold text-violet-700 transition hover:bg-violet-100"
+              className="inline-flex items-center justify-center rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:from-orange-600 hover:to-amber-600 active:scale-[0.99]"
             >
               Back to Profile
             </button>

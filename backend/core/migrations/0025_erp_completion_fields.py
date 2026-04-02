@@ -1,6 +1,12 @@
 from django.conf import settings
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import migrations, models
+from django.utils import timezone
+
+
+def fill_null_erp_updated_at(apps, schema_editor):
+    ERP = apps.get_model("core", "ERP")
+    ERP.objects.filter(updated_at__isnull=True).update(updated_at=timezone.now())
 
 
 class Migration(migrations.Migration):
@@ -10,6 +16,7 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
+        migrations.RunPython(fill_null_erp_updated_at, migrations.RunPython.noop),
         migrations.AddField(
             model_name="erp",
             name="completed_at",

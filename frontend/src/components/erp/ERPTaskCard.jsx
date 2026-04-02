@@ -323,7 +323,7 @@ export default function ERPTaskCard({
   ].filter(Boolean)
 
   const taskCategoryLabel =
-    requiredCategoryLabels.length > 0 ? requiredCategoryLabels.join(', ') : post?.post_name || `Task #${erp.id}`
+    requiredCategoryLabels.length > 0 ? requiredCategoryLabels.join(' . ') : post?.post_name || `Task #${erp.id}`
 
   const providerUser = users.find((entry) => Number(entry.id) === Number(erp.provider))
   const providerDisplayName =
@@ -463,6 +463,34 @@ export default function ERPTaskCard({
       : erp.stage === 'On Process'
         ? 'border border-sky-200 bg-sky-50 text-sky-700'
         : 'border border-amber-200 bg-amber-50 text-amber-700'
+  const isProviderTheme = isProvider
+  const isReceiverTheme = isReceiver
+  const cardShellClass = isProviderTheme
+    ? 'border-transparent bg-gradient-to-br from-violet-50 via-purple-50 to-fuchsia-50 shadow-violet-200/45'
+    : isReceiverTheme
+      ? 'border-transparent bg-gradient-to-br from-sky-50 via-cyan-50 to-blue-50 shadow-sky-200/45'
+      : 'border-transparent bg-gradient-to-br from-white via-slate-50 to-brand-50/30'
+  const headerGradientClass = isProviderTheme
+    ? 'from-violet-700 via-purple-700 to-fuchsia-600'
+    : isReceiverTheme
+      ? 'from-cyan-700 via-sky-700 to-blue-600'
+      : 'from-slate-700 via-slate-600 to-slate-500'
+  const roleBadgeClass = isProviderTheme
+    ? 'border-violet-200/50 bg-violet-400/25 text-violet-50'
+    : isReceiverTheme
+      ? 'border-cyan-200/50 bg-cyan-400/25 text-cyan-50'
+      : 'border-slate-200/50 bg-slate-400/25 text-slate-50'
+  const categoryTextClass = isProviderTheme ? 'text-violet-100/95' : isReceiverTheme ? 'text-cyan-100/95' : 'text-slate-100/95'
+  const profileCardClass = isProviderTheme
+    ? 'border-violet-200/60 bg-white/90 hover:border-violet-300 hover:bg-violet-50/70'
+    : isReceiverTheme
+      ? 'border-sky-200/70 bg-white/90 hover:border-sky-300 hover:bg-sky-50/70'
+      : 'border-slate-200 bg-white'
+  const phaseLineClass = erp.stage === 'Completed' ? 'bg-emerald-400' : isProviderTheme ? 'bg-violet-200/70' : 'bg-sky-200/70'
+  const activePhaseDotClass = isProviderTheme
+    ? 'border-violet-100 bg-violet-500 shadow-sm'
+    : 'border-cyan-100 bg-sky-500 shadow-sm'
+  const activePhaseTextClass = isProviderTheme ? 'bg-violet-500 text-white' : 'bg-sky-500 text-white'
 
   const pendingChecklist = phaseTasks.Pending || []
   const openPendingTasks = pendingChecklist.filter((task) => !task.done)
@@ -722,47 +750,51 @@ export default function ERPTaskCard({
   }
 
   return (
-    <div className="card relative overflow-hidden rounded-3xl border border-slate-200/80 bg-gradient-to-br from-white via-slate-50 to-brand-50/30 p-5 shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-xl">
-      <div className="pointer-events-none absolute -right-14 -top-14 h-40 w-40 rounded-full bg-brand-200/20 blur-2xl" />
+    <div className={`card relative overflow-hidden rounded-3xl border p-4 shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-xl ${cardShellClass}`}>
+      <div className="pointer-events-none absolute -right-14 -top-14 h-40 w-40 rounded-full bg-white/40 blur-2xl" />
+      <div className="pointer-events-none absolute -left-10 bottom-10 h-28 w-28 rounded-full bg-white/30 blur-2xl" />
 
-      <div className="relative grid grid-cols-[auto_1fr_auto] items-center gap-3">
-        <p className="inline-flex rounded-full border border-slate-200 bg-white/80 px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
-          {roleLabel}
-        </p>
+      <div className={`relative overflow-hidden rounded-2xl border border-white/30 bg-gradient-to-br px-5 py-3 md:px-6 md:py-4 shadow-lg ${headerGradientClass}`}>
+        <div className="grid grid-cols-[auto_1fr_auto] items-center gap-3">
+          <p className={`inline-flex rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] ${roleBadgeClass}`}>
+            {roleLabel}
+          </p>
+          <div />
+          <span className={`rounded-full px-4 py-1.5 text-base font-bold ${stageStyle}`}>{erp.stage}</span>
+        </div>
+
+        <h2 className="relative mx-auto mt-3 w-full max-w-3xl text-center text-[2rem] font-bold leading-tight text-white drop-shadow-sm">
+          {post?.post_title || snapshotPost?.title || '-'}
+        </h2>
+
         <p
-          className="px-2 text-center text-lg font-normal tracking-normal text-slate-500"
+          className={`mt-1 text-center text-sm font-medium tracking-wide ${categoryTextClass}`}
           title={taskCategoryLabel}
         >
           {taskCategoryLabel}
         </p>
-        <span className={`rounded-full px-4 py-1.5 text-base font-bold ${stageStyle}`}>{erp.stage}</span>
+
+        {currentUserRoleResponsibilities.length ? (
+          <div className="relative mx-auto mt-3 w-full max-w-3xl rounded-2xl border border-white/35 bg-white/15 px-3 py-2 text-sm text-white shadow-sm backdrop-blur-sm">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-white/85">Your Responsibility</p>
+            <div className="mt-1 space-y-1">
+              {currentUserRoleResponsibilities.map((entry) => (
+                <p key={`my-responsibility-${erp.id}-${entry.roleKey}`} className="leading-relaxed">
+                  <span className="font-semibold text-white">{entry.roleLabel}:</span> {entry.responsibilityText}
+                </p>
+              ))}
+            </div>
+          </div>
+        ) : null}
       </div>
 
-      <h2 className="relative mx-auto mt-2 w-full max-w-3xl rounded-xl bg-white/80 px-3 py-2 text-center text-base font-bold text-slate-800 shadow-sm ring-1 ring-slate-200/80">
-        <span className="font-semibold">Post Title:</span> {post?.post_title || snapshotPost?.title || '-'}
-      </h2>
-
-      {currentUserRoleResponsibilities.length ? (
-        <div className="relative mx-auto mt-2 w-full max-w-3xl rounded-xl border border-brand-100 bg-brand-50/60 px-3 py-2 text-sm text-slate-700 shadow-sm">
-          <p className="text-xs font-semibold uppercase tracking-wide text-brand-700">Your Responsibility</p>
-          <div className="mt-1 space-y-1">
-            {currentUserRoleResponsibilities.map((entry) => (
-              <p key={`my-responsibility-${erp.id}-${entry.roleKey}`} className="leading-relaxed">
-                <span className="font-semibold text-slate-800">{entry.roleLabel}:</span> {entry.responsibilityText}
-              </p>
-            ))}
-          </div>
-        </div>
-      ) : null}
-
-      <div className="relative space-y-1.5">
+      <div className="relative mt-2">
         {counterpartyUserId && (
           <button
             type="button"
             onClick={() => onOpenOwner(counterpartyUserId)}
-            className="mt-1 inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-brand-300 hover:bg-brand-50/60"
+            className={`inline-flex w-full items-center gap-3 rounded-xl px-1 py-2 text-sm font-semibold text-slate-700 transition ${isProviderTheme ? 'hover:bg-violet-100/40' : isReceiverTheme ? 'hover:bg-sky-100/40' : 'hover:bg-slate-100/50'}`}
           >
-            <span className="text-slate-500">{counterpartyLabel}:</span>
             <RatingRingAvatar
               src={counterpartyPhoto}
               alt={counterpartyName}
@@ -770,24 +802,32 @@ export default function ERPTaskCard({
               size={48}
               ringWidth={2}
             />
-            <span className="text-slate-800">{counterpartyName}</span>
-            <p className="text-[11px] font-normal text-slate-500">{post?.location || 'Unknown location'}</p>
+            <div className="min-w-0 text-left">
+              <p className="text-[11px] uppercase tracking-wide text-slate-500">{counterpartyLabel}</p>
+              <span className="block truncate text-xl font-semibold text-slate-800">{counterpartyName}</span>
+              <p className="truncate text-[12px] font-normal text-slate-500">{post?.location || 'Unknown location'}</p>
+            </div>
           </button>
         )}
       </div>
 
-      <div className="relative grid gap-2 text-sm sm:grid-cols-2">
-        <div className="rounded-xl border border-slate-200 bg-white/90 px-3 py-2 text-slate-600 shadow-sm">
-          <span className="font-semibold text-slate-700">Rating:</span> {rating.toFixed(2)}
+      <div className="relative mt-1 grid gap-2 text-sm sm:grid-cols-2">
+        <div className="rounded-xl border border-amber-300/80 bg-gradient-to-br from-amber-100 to-yellow-100 px-3 py-2 text-amber-900 shadow-sm">
+          <span className="text-[11px] font-semibold uppercase tracking-wide text-amber-700">Rating</span>
+          <p className="mt-0.5 text-2xl font-bold leading-none">
+            {rating.toFixed(1)}
+            <span className="ml-1 text-xl font-semibold">/5</span>
+          </p>
         </div>
-        <div className="rounded-xl border border-slate-200 bg-white/90 px-3 py-2 text-slate-600 shadow-sm">
-          <span className="font-semibold text-slate-700">Total:</span> ${Number(erp.total_cost || 0).toFixed(2)}
+        <div className="rounded-xl border border-emerald-300/80 bg-gradient-to-br from-emerald-100 to-green-100 px-3 py-2 text-emerald-900 shadow-sm">
+          <span className="text-[11px] font-semibold uppercase tracking-wide text-emerald-700">Total</span>
+          <p className="mt-0.5 text-2xl font-bold leading-none">${Number(erp.total_cost || 0).toLocaleString()}</p>
         </div>
       </div>
 
-      <div className="rounded-lg border border-violet-200/70 bg-white/70 px-3 py-3 text-xs text-slate-700">
+      <div className="px-2 py-2 text-xs text-slate-700">
         <div className="relative">
-          <div className="pointer-events-none absolute left-8 right-8 top-3 h-0.5 bg-slate-200" />
+          <div className={`pointer-events-none absolute left-8 right-8 top-3 h-0.5 ${phaseLineClass}`} />
           <div className="relative grid grid-cols-3 gap-2">
             {phases.map((phase, index) => {
               const isDone = index < activePhaseIndex
@@ -798,7 +838,7 @@ export default function ERPTaskCard({
                   <span
                     className={`h-6 w-6 rounded-full border-2 transition ${
                       isActive
-                        ? 'border-violet-600 bg-violet-600 shadow-sm'
+                        ? activePhaseDotClass
                         : isDone
                           ? 'border-emerald-500 bg-emerald-500'
                           : 'border-slate-300 bg-white'
@@ -807,7 +847,7 @@ export default function ERPTaskCard({
                   <span
                     className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${
                       isActive
-                        ? 'bg-violet-600 text-white'
+                        ? activePhaseTextClass
                         : isDone
                           ? 'bg-emerald-100 text-emerald-700'
                           : 'text-slate-600'

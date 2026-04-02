@@ -1,4 +1,5 @@
-import { Navigate, Route, Routes } from 'react-router-dom'
+import { useEffect } from 'react'
+import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import Footer from './components/Footer'
 import Header from './components/Header'
 import ProtectedRoute from './components/ProtectedRoute'
@@ -8,11 +9,13 @@ import CreatePost from './pages/CreatePost'
 import Dashboard from './pages/Dashboard'
 import ERP from './pages/ERP'
 import HomeFeed from './pages/HomeFeed'
+import HelpCentre from './pages/HelpCentre'
 import About from './pages/About'
 import Login from './pages/Login'
 import ManagePost from './pages/ManagePost'
 import Profile from './pages/Profile'
 import EditProfile from './pages/EditProfile'
+import EditPost from './pages/EditPost'
 import ChangePasswordPage from './pages/ChangePasswordPage'
 import ReportProblem from './pages/ReportProblem'
 import Register from './pages/Register'
@@ -22,6 +25,12 @@ import Services from './pages/Services'
 import YourCart from './pages/YourCart'
 
 export default function App() {
+  const location = useLocation()
+
+  useEffect(() => {
+    window.scrollTo(0, 0)
+  }, [location.pathname, location.search])
+
   return (
     <div className="min-h-screen text-slate-900 ">
       
@@ -37,6 +46,7 @@ export default function App() {
             <Route path="/feed" element={<HomeFeed />} />
             <Route path="/services" element={<Services />} />
             <Route path="/about" element={<About />} />
+            <Route path="/help-centre" element={<HelpCentre />} />
             <Route path="/report" element={<ReportProblem />} />
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
@@ -51,6 +61,7 @@ export default function App() {
                 <Route path="/profile/change-password" element={<ChangePasswordPage />} />
                 <Route path="/profile/:id" element={<Profile />} />
               <Route path="/create-post" element={<CreatePost />} />
+              <Route path="/edit-post/:id" element={<EditPost />} />
               <Route path="/manage-post" element={<ManagePost />} />
               <Route path="/manage-post/:id" element={<ManagePost />} />
               <Route path="/connections" element={<Connections />} />
