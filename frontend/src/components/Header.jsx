@@ -332,6 +332,10 @@ export default function Header() {
     const message = String(item?.message || "")
     const messageLower = message.toLowerCase()
 
+    if (title.includes("booking request sent")) {
+      return null
+    }
+
     if (title.includes("request declined")) {
       return "/feed"
     }
