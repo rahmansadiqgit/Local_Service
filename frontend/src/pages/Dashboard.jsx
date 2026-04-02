@@ -31,7 +31,6 @@ export default function Dashboard() {
   const [connectionsOverview, setConnectionsOverview] = useState(null)
   const [pendingApplications, setPendingApplications] = useState([])
   const [applicationActionMessage, setApplicationActionMessage] = useState('')
-  const [showRequestsPanel, setShowRequestsPanel] = useState(false)
 
   const buildPendingApplicationsFromErp = (erpList, ownerId) => {
     const owner = Number(ownerId)
@@ -1259,102 +1258,6 @@ export default function Dashboard() {
           </div>
         </div>
       </div>
-
-      {canDeletePosts && (
-        <div className="card border border-amber-300/80 bg-gradient-to-br from-[#fffbf0] via-[#fff8e6] to-[#fffcf5] shadow-lg">
-          <div className="flex items-center justify-between gap-3 mb-4">
-            <h3 className="text-lg font-semibold text-amber-900">
-              Requests
-              {pendingApplications.length > 0 && (
-                <span className="ml-3 inline-flex rounded-full border border-amber-400 bg-amber-100 px-3 py-0.5 text-sm font-bold text-amber-800">
-                  {pendingApplications.length}
-                </span>
-              )}
-            </h3>
-            <button
-              type="button"
-              onClick={() => setShowRequestsPanel(!showRequestsPanel)}
-              className="rounded-full border border-amber-400 bg-amber-100 px-3 py-1.5 text-xs font-semibold text-amber-800 transition hover:bg-amber-200"
-            >
-              {showRequestsPanel ? 'Hide' : 'View'}
-            </button>
-          </div>
-
-          {showRequestsPanel && (
-            <div className="space-y-3">
-              {pendingApplications.length === 0 ? (
-                <p className="text-sm text-slate-600">No pending requests at this time.</p>
-              ) : (
-                <div className="overflow-hidden rounded-lg border border-amber-200 bg-white">
-                  <table className="w-full text-left text-xs">
-                    <thead className="border-b border-amber-200 bg-amber-50">
-                      <tr>
-                        <th className="px-3 py-2 font-semibold text-amber-900">Post Title</th>
-                        <th className="px-3 py-2 font-semibold text-amber-900">Applicant</th>
-                        <th className="px-3 py-2 font-semibold text-amber-900">Submitted</th>
-                        <th className="px-3 py-2 font-semibold text-amber-900">Total Cost</th>
-                        <th className="px-3 py-2 font-semibold text-amber-900">Action</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-amber-200">
-                      {pendingApplications.map((request) => {
-                        const postId = Number(request?.post?.id)
-                        const applicantId = Number(request?.applicant?.id)
-                        const applicantName = request?.applicant?.name || `User #${applicantId}`
-                        const applicantUser = usersById.get(applicantId)
-                        const applicantAvatarUrl = toMediaUrl(applicantUser?.profile_photo || request?.applicant?.profile_photo || '')
-                        const submittedDate = request?.submitted_at
-                          ? new Date(request.submitted_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: request?.submitted_at?.includes(new Date().getFullYear().toString()) ? undefined : '2-digit' })
-                          : 'N/A'
-                        const totalCost = formatCurrency(request?.totals?.grand || 0)
-
-                        return (
-                          <tr key={`request-${request.erp_id}`} className="hover:bg-amber-50/50">
-                            <td className="px-3 py-2 font-medium text-slate-800">{request?.post?.title || 'N/A'}</td>
-                            <td className="px-3 py-2">
-                              <button
-                                type="button"
-                                onClick={() => navigate(`/dashboard/${applicantId}`)}
-                                className="inline-flex items-center gap-2 rounded px-1 py-0.5 text-slate-700 transition hover:bg-amber-100"
-                              >
-                                {applicantAvatarUrl && (
-                                  <img
-                                    src={applicantAvatarUrl}
-                                    alt={applicantName}
-                                    className="h-5 w-5 rounded-full object-cover"
-                                  />
-                                )}
-                                <span className="font-medium hover:underline">{applicantName}</span>
-                              </button>
-                            </td>
-                            <td className="px-3 py-2 text-slate-600">{submittedDate}</td>
-                            <td className="px-3 py-2 font-semibold text-amber-900">{totalCost}</td>
-                            <td className="px-3 py-2 space-x-1 flex">
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  const targetPost = userPosts.find((entry) => Number(entry.id) === postId)
-                                  if (targetPost) {
-                                    openPostDetailsModal(targetPost, targetPost.post_type === 'Demand' ? 'Demand' : 'Available')
-                                  }
-                                  setShowRequestsPanel(false)
-                                }}
-                                className="rounded border border-emerald-400 bg-emerald-50 px-2 py-1 text-[10px] font-semibold text-emerald-700 transition hover:bg-emerald-100"
-                              >
-                                Review
-                              </button>
-                            </td>
-                          </tr>
-                        )
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      )}
 
       <div className="card border border-violet-300/80 bg-gradient-to-br from-[#f4e9ff] via-[#ecd9ff] to-[#f7ecff] shadow-lg">
         <p className="text-lg font-semibold text-violet-900">
