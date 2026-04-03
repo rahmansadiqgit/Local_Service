@@ -767,7 +767,7 @@ export default function Header() {
                 onClick={() => setOpenDropdown(null)}
                 className={getSidebarItemClass("/erp")}
               >
-                ERP
+                Process Tracking
               </Link>
               <Link
                 to="/connections"
