@@ -285,6 +285,73 @@ export default function ManagePost() {
     }, {})
   }, [erpItems])
 
+  const consumedCapacityByPost = useMemo(() => {
+    const toInt = (value, fallback = 0) => {
+      const parsed = Number.parseInt(value, 10)
+      return Number.isFinite(parsed) ? parsed : fallback
+    }
+
+    return (erpItems || []).reduce((acc, item) => {
+      if (!item?.is_configured) return acc
+
+      const snapshot = item?.configuration_snapshot || {}
+      const products = Array.isArray(snapshot?.products) ? snapshot.products : []
+      const expertise = Array.isArray(snapshot?.expertise) ? snapshot.expertise : []
+
+      if (!acc[item.post]) {
+        acc[item.post] = {
+          products: {},
+          expertisePeople: {},
+          expertiseDuration: {},
+        }
+      }
+
+      products.forEach((row) => {
+        if (!row || typeof row !== 'object' || row.included === false) return
+        const rowId = toInt(row.id, 0)
+        const qty = toInt(row.offered_quantity ?? row.quantity ?? 0, 0)
+        if (rowId <= 0 || qty <= 0) return
+        acc[item.post].products[rowId] = (acc[item.post].products[rowId] || 0) + qty
+      })
+
+      expertise.forEach((row) => {
+        if (!row || typeof row !== 'object' || row.included === false) return
+        const rowId = toInt(row.id, 0)
+        if (rowId <= 0) return
+
+        const people = toInt(row.offered_people ?? row.quantity ?? 0, 0)
+        const duration = toInt(row.offered_hours ?? row.duration ?? 0, 0)
+
+        if (people > 0) {
+          acc[item.post].expertisePeople[rowId] = (acc[item.post].expertisePeople[rowId] || 0) + people
+        }
+        if (duration > 0) {
+          acc[item.post].expertiseDuration[rowId] = (acc[item.post].expertiseDuration[rowId] || 0) + duration
+        }
+      })
+
+      return acc
+    }, {})
+  }, [erpItems])
+
+  const getRemainingProductUnits = (postId, product) => {
+    const total = Math.max(Number(product?.available_units || 0), 0)
+    const consumed = Math.max(Number(consumedCapacityByPost?.[postId]?.products?.[product?.id] || 0), 0)
+    return Math.max(total - consumed, 0)
+  }
+
+  const getRemainingExpertisePeople = (postId, expertise) => {
+    const total = Math.max(Number(expertise?.available_person || 0), 0)
+    const consumed = Math.max(Number(consumedCapacityByPost?.[postId]?.expertisePeople?.[expertise?.id] || 0), 0)
+    return Math.max(total - consumed, 0)
+  }
+
+  const getRemainingExpertiseDuration = (postId, expertise) => {
+    const total = Math.max(Number(expertise?.needed_budget_unit || 0), 0)
+    const consumed = Math.max(Number(consumedCapacityByPost?.[postId]?.expertiseDuration?.[expertise?.id] || 0), 0)
+    return Math.max(total - consumed, 0)
+  }
+
   const getItemKey = (type, id) => `${type}-${id}`
 
   const isItemEnabled = (postId, type, id) => {
@@ -936,7 +1003,7 @@ export default function ManagePost() {
             is_configured: true,
           })
           setErpItems((prev) => prev.map((item) => (item.id === data.id ? data : item)))
-          showMessage('Booking confirmed and ERP task updated', 'success')
+          showMessage('Booking request sent. Waiting for approval.', 'success')
         } catch (patchError) {
           const statusCode = patchError?.response?.status
           if (statusCode === 404 || statusCode === 403 || statusCode === 400) {
@@ -945,7 +1012,7 @@ export default function ManagePost() {
               const exists = prev.some((item) => item.id === data.id)
               return exists ? prev.map((item) => (item.id === data.id ? data : item)) : [...prev, data]
             })
-            showMessage('Booking confirmed and ERP task created', 'success')
+            showMessage('Booking request sent. Waiting for approval.', 'success')
           } else {
             throw patchError
           }
@@ -953,8 +1020,10 @@ export default function ManagePost() {
       } else {
         const { data } = await api.post('/erp/', payload)
         setErpItems((prev) => [...prev, data])
-        showMessage('Booking confirmed and ERP task created', 'success')
+        showMessage('Booking request sent. Waiting for approval.', 'success')
       }
+
+      window.dispatchEvent(new Event('localix:notifications-refresh'))
 
       setTimeout(() => {
         navigate('/erp')
@@ -1099,8 +1168,12 @@ export default function ManagePost() {
 
   const getExpertisePersonsValue = (postType, row) => {
     const key = `expertise-${row.id}`
+    const postId = Number(row?.post || 0)
+    const remainingPeople = postId > 0 ? getRemainingExpertisePeople(postId, row) : Math.max(Number(row.available_person || 0), 0)
     if (Object.prototype.hasOwnProperty.call(expertisePersons, key)) {
-      return Number(expertisePersons[key] || 0)
+      const current = Number(expertisePersons[key] || 0)
+      if (postType === 'Supply') return Math.max(0, Math.min(current, remainingPeople))
+      return current
     }
     return postType === 'Demand' ? Math.max(Number(row.available_person || 0), 0) : 0
   }
@@ -1115,8 +1188,12 @@ export default function ManagePost() {
 
   const getProductUnitsValue = (postType, row) => {
     const key = `product-${row.id}`
+    const postId = Number(row?.post || 0)
+    const remainingUnits = postId > 0 ? getRemainingProductUnits(postId, row) : Math.max(Number(row.available_units || 0), 0)
     if (Object.prototype.hasOwnProperty.call(productUnits, key)) {
-      return Number(productUnits[key] || 0)
+      const current = Number(productUnits[key] || 0)
+      if (postType === 'Supply') return Math.max(0, Math.min(current, remainingUnits))
+      return current
     }
     return postType === 'Demand' ? Math.max(Number(row.available_units || 0), 0) : 0
   }
@@ -1358,9 +1435,10 @@ export default function ManagePost() {
                           {(expertisesByPost[post.id] || []).map((expertise) => {
                             const persons = getExpertisePersonsValue(post.post_type, expertise)
                             const duration = getExpertiseDurationValue(post.post_type, expertise)
+                            const remainingPeople = getRemainingExpertisePeople(post.id, expertise)
                             const personsMax = post.post_type === 'Demand'
                               ? Math.max(Number(expertise.available_person || 0), 0)
-                              : Math.max(Number(expertise.available_person || 0), 1)
+                              : remainingPeople
                             const durationMax = post.post_type === 'Demand'
                               ? Math.max(Number(expertise.needed_budget_unit || 0), 0)
                               : 365
@@ -1390,12 +1468,20 @@ export default function ManagePost() {
                                   priceUnitText={`per ${formatRateUnit(expertise.unit).toLowerCase()}`}
                                   checked={enabled}
                                   onToggle={() =>
-                                    toggleItemEnabled(post.id, 'expertise', expertise.id, () => {
-                                      setExpertisePersons((prev) => ({ ...prev, [`expertise-${expertise.id}`]: 0 }))
-                                      setExpertiseDurations((prev) => ({ ...prev, [`expertise-${expertise.id}-duration`]: 0 }))
-                                    })
+                                    (post.post_type === 'Supply' && !remainingPeople)
+                                      ? null
+                                      : toggleItemEnabled(post.id, 'expertise', expertise.id, () => {
+                                          setExpertisePersons((prev) => ({ ...prev, [`expertise-${expertise.id}`]: 0 }))
+                                          setExpertiseDurations((prev) => ({ ...prev, [`expertise-${expertise.id}-duration`]: 0 }))
+                                        })
                                   }
                                 />
+
+                                {post.post_type === 'Supply' && !remainingPeople && (
+                                  <div className="mt-4 rounded-lg border border-rose-400/35 bg-rose-500/10 px-3 py-2 text-xs text-rose-100">
+                                    Already booked all for expertise
+                                  </div>
+                                )}
 
                                 {enabled && (
                                   <div className="mt-4 space-y-3 border-t border-white/15 pt-3">
@@ -1431,7 +1517,7 @@ export default function ManagePost() {
                                           onChange={(val) => setExpertisePersons((prev) => ({ ...prev, [`expertise-${expertise.id}`]: val }))}
                                           max={personsMax}
                                           label="People required"
-                                          helperText={post.post_type === 'Demand' ? `${Number(expertise.available_person || 0)} required in post details` : `${Number(expertise.available_person || 0)} professionals available`}
+                                          helperText={post.post_type === 'Demand' ? `${Number(expertise.available_person || 0)} required in post details` : `${remainingPeople} professionals available now`}
                                         />
                                         <CounterControl
                                           value={duration}
@@ -1539,7 +1625,8 @@ export default function ManagePost() {
                           {(productsByPost[post.id] || []).map((product) => {
                             const units = getProductUnitsValue(post.post_type, product)
                             const availableUnits = Math.max(Number(product.available_units || 0), 0)
-                            const unitsMax = post.post_type === 'Demand' ? availableUnits : availableUnits
+                            const remainingUnits = getRemainingProductUnits(post.id, product)
+                            const unitsMax = post.post_type === 'Demand' ? availableUnits : remainingUnits
                             const enabled = isItemEnabled(post.id, 'product', product.id)
                             const requestedRate = Number(product.cost_per_unit || 0)
                             const applyQuantityKey = `apply-product-${product.id}-quantity`
@@ -1564,11 +1651,19 @@ export default function ManagePost() {
                                   priceUnitText={`per ${String(product.unit || 'unit').toLowerCase()}`}
                                   checked={enabled}
                                   onToggle={() =>
-                                    toggleItemEnabled(post.id, 'product', product.id, () => {
-                                      setProductUnits((prev) => ({ ...prev, [`product-${product.id}`]: 0 }))
-                                    })
+                                    (post.post_type === 'Supply' && remainingUnits <= 0)
+                                      ? null
+                                      : toggleItemEnabled(post.id, 'product', product.id, () => {
+                                          setProductUnits((prev) => ({ ...prev, [`product-${product.id}`]: 0 }))
+                                        })
                                   }
                                 />
+
+                                {post.post_type === 'Supply' && remainingUnits <= 0 && (
+                                  <div className="mt-4 rounded-lg border border-rose-400/35 bg-rose-500/10 px-3 py-2 text-xs text-rose-100">
+                                    Stock out
+                                  </div>
+                                )}
 
                                 {enabled && (
                                   <div className="mt-4 space-y-3 border-t border-white/15 pt-3">
@@ -1596,7 +1691,7 @@ export default function ManagePost() {
                                         onChange={(val) => setProductUnits((prev) => ({ ...prev, [`product-${product.id}`]: val }))}
                                         max={unitsMax}
                                         label={getQuantityLabel(product.unit)}
-                                        helperText={post.post_type === 'Demand' ? `${availableUnits} required in post details (cannot exceed)` : `Maximum ${availableUnits} available`}
+                                          helperText={post.post_type === 'Demand' ? `${availableUnits} required in post details (cannot exceed)` : (remainingUnits > 0 ? `Maximum ${remainingUnits} available now` : 'Stock out')}
                                       />
                                     )}
 
