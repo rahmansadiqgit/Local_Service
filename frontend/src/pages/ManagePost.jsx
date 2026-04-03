@@ -78,10 +78,10 @@ export default function ManagePost() {
 
   const getNeededPerPersonQuestion = (unit) => {
     const normalized = String(unit || '').trim().toLowerCase()
-    if (normalized === 'hourly') return 'How many hours you need per person'
-    if (normalized === 'daily') return 'How many days you need per person'
-    if (normalized === 'monthly') return 'How many months you need per person'
-    return 'How many units you need per person'
+    if (normalized === 'hourly') return 'Hours you have to provide per person'
+    if (normalized === 'daily') return 'Days you have to provide per person'
+    if (normalized === 'monthly') return 'Months you have to provide per person'
+    return 'Units you have to provide per person'
   }
 
   const getDurationLabel = (unit) => {
@@ -736,8 +736,8 @@ export default function ManagePost() {
         const enabled = isItemEnabled(postId, 'expertise', row.id)
         const selectedPeople = getApplicationValue(applyPeopleKey, peopleMax)
         const quantity = enabled ? Math.max(0, Math.min(peopleMax, selectedPeople)) : 0
-        const duration = enabled ? quantity * perPersonUnit : 0
-        const requestedHours = peopleMax * perPersonUnit
+        const duration = enabled ? perPersonUnit : 0
+        const requestedHours = perPersonUnit
 
         return {
           id: row.id,
@@ -1114,7 +1114,7 @@ export default function ManagePost() {
     }
   }
 
-  const CounterControl = ({ value, onChange, max, label, helperText, disabled = false, strictMax = true }) => {
+  const CounterControl = ({ value, onChange, max, label, helperText, disabled = false, strictMax = true, compact = false }) => {
     const isLocked = disabled
     const handleTypedValue = (rawValue) => {
       const parsed = Number(rawValue)
@@ -1140,16 +1140,15 @@ export default function ManagePost() {
             {helperText ? <p className="text-xs text-slate-300">{helperText}</p> : null}
           </div>
           <div className="flex items-center gap-1.5">
-            <button
-              type="button"
-              onClick={() => onChange(Math.max(0, value - 1))}
-              disabled={isLocked}
-              className={`h-8 w-8 rounded-md border border-white/25 bg-white/10 text-white transition ${
-                isLocked ? 'cursor-not-allowed opacity-40' : 'hover:bg-white/20'
-              }`}
-            >
-              -
-            </button>
+            {!isLocked && (
+              <button
+                type="button"
+                onClick={() => onChange(Math.max(0, value - 1))}
+                className="h-8 w-8 rounded-md border border-white/25 bg-white/10 text-white transition hover:bg-white/20"
+              >
+                -
+              </button>
+            )}
             <input
               type="text"
               inputMode="numeric"
@@ -1158,20 +1157,19 @@ export default function ManagePost() {
               disabled={isLocked}
               onChange={(event) => handleTypedValue(event.target.value)}
               onBlur={(event) => handleTypedValue(event.target.value)}
-              className={`h-8 min-w-[64px] rounded-md border border-white/25 bg-white/5 px-2 text-center text-sm font-bold text-white outline-none ${
+              className={`${compact ? 'h-7 min-w-[52px] text-xs px-1.5' : 'h-8 min-w-[64px] text-sm px-2'} rounded-md border border-white/25 bg-white/5 text-center font-bold text-white outline-none ${
                 isLocked ? 'cursor-not-allowed opacity-50' : 'focus:border-white/60'
               }`}
             />
-            <button
-              type="button"
-              onClick={() => onChange(Math.min(max, value + 1))}
-              disabled={isLocked}
-              className={`h-8 w-8 rounded-md border border-white/25 bg-white/10 text-white transition ${
-                isLocked ? 'cursor-not-allowed opacity-40' : 'hover:bg-white/20'
-              }`}
-            >
-              +
-            </button>
+            {!isLocked && (
+              <button
+                type="button"
+                onClick={() => onChange(Math.min(max, value + 1))}
+                className="h-8 w-8 rounded-md border border-white/25 bg-white/10 text-white transition hover:bg-white/20"
+              >
+                +
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -1531,6 +1529,7 @@ export default function ManagePost() {
                                           value={applyPeople}
                                           onChange={(val) => setApplicationValue(applyPeopleKey, val, workersMax)}
                                           max={workersMax}
+                                          compact={true}
                                           disabled={true}
                                           label="People you'll provide"
                                           helperText={
@@ -1593,7 +1592,6 @@ export default function ManagePost() {
                             const perPersonUnit = Math.max(Number(expertise.needed_budget_unit || 0), 0)
                             const selectedApplyPeople = getApplicationValue(applyPeopleKey, personsMax)
                             const applyPeople = Math.max(0, Math.min(personsMax, selectedApplyPeople))
-                            const applyHours = applyPeople * perPersonUnit
                             const applyRate = getApplicationValue(applyRateKey, requestedRate)
                             const originalPeople = Math.max(Number((expertise.available_person_original ?? expertise.available_person) || 0), 0)
                             const peopleExhausted = originalPeople > 0 && personsMax <= 0
@@ -1640,6 +1638,7 @@ export default function ManagePost() {
                                           value={applyPeople}
                                           onChange={(val) => setApplicationValue(applyPeopleKey, val, personsMax)}
                                           max={personsMax}
+                                          compact={true}
                                           disabled={isExpertiseLocked}
                                           label="People you'll provide"
                                           helperText={
@@ -1656,19 +1655,6 @@ export default function ManagePost() {
                                           strictMax={false}
                                           label={post.post_type === 'Demand' ? getNeededPerPersonQuestion(expertise.unit) : getDurationLabel(expertise.unit)}
                                           helperText={getUnitPerPersonLabel(expertise.unit)}
-                                        />
-                                        <CounterControl
-                                          value={applyHours}
-                                          onChange={() => {}}
-                                          max={durationMax}
-                                          disabled={true}
-                                          strictMax={false}
-                                          label={getTotalUnitLabel(expertise.unit)}
-                                          helperText={
-                                            perPersonUnit > 0
-                                              ? `${applyPeople} person x ${perPersonUnit} ${getUnitPerPersonLabel(expertise.unit).replace(' per person', '')}`
-                                              : 'Set this value in Deal As details on post creation'
-                                          }
                                         />
                                         <OfferRateInput
                                           value={applyRate}
