@@ -849,8 +849,7 @@ export default function ManagePost() {
     setSubmittingApplicationPostId(post.id)
 
     try {
-      const existing = erpByPost[post.id]
-      let erpRecord = existing
+      let erpRecord = null
       const payload = {
         post: post.id,
         total_cost: Number(submittedSnapshot.totals?.grand || 0),
@@ -858,33 +857,9 @@ export default function ManagePost() {
         is_configured: false,
       }
 
-      if (existing) {
-        try {
-          const { data } = await api.patch(`/erp/${existing.id}/`, {
-            total_cost: Number(submittedSnapshot.totals?.grand || 0),
-            configuration_snapshot: submittedSnapshot,
-            is_configured: false,
-          })
-          erpRecord = data
-          setErpItems((prev) => prev.map((item) => (item.id === data.id ? data : item)))
-        } catch (patchError) {
-          const statusCode = patchError?.response?.status
-          if (statusCode === 404 || statusCode === 403 || statusCode === 400) {
-            const { data } = await api.post('/erp/', payload)
-            erpRecord = data
-            setErpItems((prev) => {
-              const exists = prev.some((item) => item.id === data.id)
-              return exists ? prev.map((item) => (item.id === data.id ? data : item)) : [...prev, data]
-            })
-          } else {
-            throw patchError
-          }
-        }
-      } else {
-        const { data } = await api.post('/erp/', payload)
-        erpRecord = data
-        setErpItems((prev) => [...prev, data])
-      }
+      const { data } = await api.post('/erp/', payload)
+      erpRecord = data
+      setErpItems((prev) => [...prev, data])
 
       try {
         await api.post(`/erp/${erpRecord.id}/submit_application/`, {
@@ -1056,7 +1031,6 @@ export default function ManagePost() {
       return
     }
 
-    const existing = erpByPost[post.id]
     const payload = {
       post: post.id,
       total_cost: total,
@@ -1066,36 +1040,10 @@ export default function ManagePost() {
 
     try {
       let erpRecordId = null
-      if (existing) {
-        try {
-          const { data } = await api.patch(`/erp/${existing.id}/`, {
-            total_cost: total,
-            configuration_snapshot: snapshot,
-            is_configured: true,
-          })
-          erpRecordId = Number(data?.id || 0)
-          setErpItems((prev) => prev.map((item) => (item.id === data.id ? data : item)))
-          showMessage('Booking request sent. Waiting for approval.', 'success')
-        } catch (patchError) {
-          const statusCode = patchError?.response?.status
-          if (statusCode === 404 || statusCode === 403 || statusCode === 400) {
-            const { data } = await api.post('/erp/', payload)
-            erpRecordId = Number(data?.id || 0)
-            setErpItems((prev) => {
-              const exists = prev.some((item) => item.id === data.id)
-              return exists ? prev.map((item) => (item.id === data.id ? data : item)) : [...prev, data]
-            })
-            showMessage('Booking request sent. Waiting for approval.', 'success')
-          } else {
-            throw patchError
-          }
-        }
-      } else {
-        const { data } = await api.post('/erp/', payload)
-        erpRecordId = Number(data?.id || 0)
-        setErpItems((prev) => [...prev, data])
-        showMessage('Booking request sent. Waiting for approval.', 'success')
-      }
+      const { data } = await api.post('/erp/', payload)
+      erpRecordId = Number(data?.id || 0)
+      setErpItems((prev) => [...prev, data])
+      showMessage('Booking request sent. Waiting for approval.', 'success')
 
       window.dispatchEvent(new Event('localix:notifications-refresh'))
 

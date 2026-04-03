@@ -1362,16 +1362,6 @@ class ERPViewSet(viewsets.ModelViewSet):
 
             provider, receiver, category = self._resolve_roles(actor, post)
 
-            existing = (
-                ERP.objects.filter(post=post, provider=provider, receiver=receiver)
-                .order_by("-updated_at", "-id")
-                .first()
-            )
-
-            if existing:
-                data = self.get_serializer(existing).data
-                return Response(data, status=status.HTTP_200_OK)
-
             requested_is_configured = self._to_bool(serializer.validated_data.get("is_configured", False))
             is_supply_post = self._is_supply_post(post)
             snapshot_payload = serializer.validated_data.get("configuration_snapshot") or {}

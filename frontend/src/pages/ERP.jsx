@@ -244,19 +244,6 @@ export default function ERP() {
     const focusErpIdRaw = searchParams.get('erp_id')
     const focusErpId = Number(focusErpIdRaw)
 
-    const byKey = new Map()
-
-    filteredTasks.forEach((erp) => {
-      const key = `${erp.post}-${erp.provider || 'none'}-${erp.receiver || 'none'}-${erp.category}`
-      const existing = byKey.get(key)
-
-      if (!existing || Number(erp.id || 0) > Number(existing.id || 0)) {
-        byKey.set(key, erp)
-      }
-    })
-
-    const deduped = Array.from(byKey.values())
-
     if (Number.isFinite(focusErpId) && focusErpId > 0) {
       const focusedVisible = visibleErpItems.find((erp) => Number(erp.id) === focusErpId)
       if (focusedVisible) {
@@ -267,7 +254,7 @@ export default function ERP() {
       return focusedAny ? [focusedAny] : []
     }
 
-    return deduped
+    return filteredTasks
   }, [filteredTasks, searchParams, visibleErpItems, erpItems])
 
   const handleStageChange = async (erp, stage) => {
