@@ -60,6 +60,30 @@ export default function ManagePost() {
     return normalized.charAt(0).toUpperCase() + normalized.slice(1)
   }
 
+  const getUnitPerPersonLabel = (unit) => {
+    const normalized = String(unit || '').trim().toLowerCase()
+    if (normalized === 'hourly') return 'hours per person'
+    if (normalized === 'daily') return 'days per person'
+    if (normalized === 'monthly') return 'months per person'
+    return 'units per person'
+  }
+
+  const getTotalUnitLabel = (unit) => {
+    const normalized = String(unit || '').trim().toLowerCase()
+    if (normalized === 'hourly') return 'Total hours (auto)'
+    if (normalized === 'daily') return 'Total days (auto)'
+    if (normalized === 'monthly') return 'Total months (auto)'
+    return 'Total units (auto)'
+  }
+
+  const getNeededPerPersonQuestion = (unit) => {
+    const normalized = String(unit || '').trim().toLowerCase()
+    if (normalized === 'hourly') return 'Hours you have to provide per person'
+    if (normalized === 'daily') return 'Days you have to provide per person'
+    if (normalized === 'monthly') return 'Months you have to provide per person'
+    return 'Units you have to provide per person'
+  }
+
   const getDurationLabel = (unit) => {
     const normalized = String(unit || '').trim().toLowerCase()
     if (normalized === 'hourly') return 'Duration (hours)'
@@ -196,8 +220,17 @@ export default function ManagePost() {
     }
   }, [id, showMessage])
 
+
   useEffect(() => {
     loadPosts()
+    // Listen for global refresh event to always reload post data after booking/application changes
+    const handleRefresh = () => {
+      loadPosts()
+    }
+    window.addEventListener('localix:notifications-refresh', handleRefresh)
+    return () => {
+      window.removeEventListener('localix:notifications-refresh', handleRefresh)
+    }
   }, [loadPosts])
 
   const handleDeletePost = async (postId) => {
@@ -292,9 +325,17 @@ export default function ManagePost() {
     }
 
     return (erpItems || []).reduce((acc, item) => {
-      if (!item?.is_configured) return acc
-
       const snapshot = item?.configuration_snapshot || {}
+      const postType = String(snapshot?.post?.type || '').trim().toLowerCase()
+      const applicationStatus = String(snapshot?.application_submission?.status || '').trim().toLowerCase()
+      const bookingStatus = String(snapshot?.booking_submission?.status || '').trim().toLowerCase()
+
+      const shouldConsume =
+        (postType === 'demand' && ['approved', 'accepted', 'confirmed'].includes(applicationStatus)) ||
+        (postType === 'supply' && ['approved', 'accepted', 'confirmed'].includes(bookingStatus))
+
+      if (!shouldConsume) return acc
+
       const products = Array.isArray(snapshot?.products) ? snapshot.products : []
       const expertise = Array.isArray(snapshot?.expertise) ? snapshot.expertise : []
 
@@ -347,8 +388,20 @@ export default function ManagePost() {
   }
 
   const getRemainingExpertiseDuration = (postId, expertise) => {
-    const total = Math.max(Number(expertise?.needed_budget_unit || 0), 0)
-    const consumed = Math.max(Number(consumedCapacityByPost?.[postId]?.expertiseDuration?.[expertise?.id] || 0), 0)
+    const perPersonUnit = Math.max(Number(expertise?.needed_budget_unit || 0), 0)
+    const remainingPeople = getRemainingExpertisePeople(postId, expertise)
+    return Math.max(remainingPeople * perPersonUnit, 0)
+  }
+
+  const getRemainingSkillPeople = (postId, skillRow) => {
+    const total = Math.max(Number(skillRow?.available_workers || 0), 0)
+    const consumed = Math.max(Number(consumedCapacityByPost?.[postId]?.expertisePeople?.[skillRow?.id] || 0), 0)
+    return Math.max(total - consumed, 0)
+  }
+
+  const getRemainingSkillHours = (postId, skillRow) => {
+    const total = Math.max(Number(skillRow?.needed_budget_unit || 0), 0)
+    const consumed = Math.max(Number(consumedCapacityByPost?.[postId]?.expertiseDuration?.[skillRow?.id] || 0), 0)
     return Math.max(total - consumed, 0)
   }
 
@@ -529,9 +582,10 @@ export default function ManagePost() {
 
     skillExpertiseRows.forEach((row) => {
       const enabled = isItemEnabled(postId, 'skill', row.id)
-      const peopleMax = Math.max(Number(row.available_workers || 0), 0)
-      const people = getApplicationValue(`apply-skill-${row.id}-people`, peopleMax)
-      const hours = getApplicationValue(`apply-skill-${row.id}-hours`, 0)
+      const peopleMax = getRemainingSkillPeople(postId, row)
+      const hoursMax = getRemainingSkillHours(postId, row)
+      const people = enabled ? peopleMax : 0
+      const hours = enabled ? hoursMax : 0
       const requestedRate = Number(row.cost_per_unit || 0)
       const offeredRate = getApplicationValue(`apply-skill-${row.id}-rate`, requestedRate)
       const lineTotal = enabled ? people * hours * offeredRate : 0
@@ -552,23 +606,29 @@ export default function ManagePost() {
 
     newExpertiseRows.forEach((row) => {
       const enabled = isItemEnabled(postId, 'expertise', row.id)
-      const peopleMax = Math.max(Number(row.available_person || 0), 0)
-      const people = getApplicationValue(`apply-expertise-${row.id}-people`, peopleMax)
-      const hoursMax = Math.max(Number(row.needed_budget_unit || 0), 0)
-      const hours = getApplicationValue(`apply-expertise-${row.id}-hours`, hoursMax)
+      const peopleMax = getRemainingExpertisePeople(postId, row)
+      const applyPeopleKey = `apply-expertise-${row.id}-people`
+      const perPersonUnit = Math.max(Number(row.needed_budget_unit || 0), 0)
+      const selectedPeople = getApplicationValue(applyPeopleKey, peopleMax)
+      const people = enabled ? Math.max(0, Math.min(peopleMax, selectedPeople)) : 0
+      const hours = enabled ? people * perPersonUnit : 0
       const requestedRate = Number(row.cost || 0)
       const offeredRate = getApplicationValue(`apply-expertise-${row.id}-rate`, requestedRate)
-      const lineTotal = enabled ? people * hours * offeredRate : 0
+      const lineTotal = enabled ? people * offeredRate : 0
       if (enabled) expertiseTotal += lineTotal
 
-      if (enabled && people > 0 && hours > 0 && offeredRate <= 0) {
-        validationErrors.push(`${row.name}: add your hourly offer rate.`)
+      if (enabled && people > 0 && perPersonUnit <= 0) {
+        validationErrors.push(`${row.name}: needed hire unit per person must be greater than 0.`)
+      }
+
+      if (enabled && people > 0 && offeredRate <= 0) {
+        validationErrors.push(`${row.name}: add your per-person budget rate.`)
       }
 
       lineItems.push({
         key: `apply-expertise-${row.id}`,
         title: row.name,
-        detail: `(${people} person x ${hours} hr)`,
+        detail: `(${people} person x ${perPersonUnit} ${getUnitPerPersonLabel(row.unit).replace(' per person', '')})`,
         amount: lineTotal,
         included: enabled,
       })
@@ -595,7 +655,7 @@ export default function ManagePost() {
 
     productRows.forEach((row) => {
       const enabled = isItemEnabled(postId, 'product', row.id)
-      const quantityMax = Math.max(Number(row.available_units || 0), 0)
+      const quantityMax = getRemainingProductUnits(postId, row)
       const quantity = getApplicationValue(`apply-product-${row.id}-quantity`, quantityMax)
       const requestedRate = Number(row.cost_per_unit || 0)
       const offeredRate = getApplicationValue(`apply-product-${row.id}-rate`, requestedRate)
@@ -644,13 +704,13 @@ export default function ManagePost() {
 
     const expertise = [
       ...skillExpertiseRows.map((row) => {
-        const peopleMax = Math.max(Number(row.available_workers || 0), 0)
-        const hoursMax = Math.max(Number(row.needed_budget_unit || 0), 0)
+        const peopleMax = getRemainingSkillPeople(postId, row)
+        const hoursMax = getRemainingSkillHours(postId, row)
         const requestedRate = Number(row.cost_per_unit || 0)
-        const quantity = getApplicationValue(`apply-skill-${row.id}-people`, peopleMax)
-        const duration = getApplicationValue(`apply-skill-${row.id}-hours`, 0)
         const offeredRate = getApplicationValue(`apply-skill-${row.id}-rate`, requestedRate)
         const enabled = isItemEnabled(postId, 'skill', row.id)
+        const quantity = enabled ? peopleMax : 0
+        const duration = enabled ? hoursMax : 0
 
         return {
           id: row.id,
@@ -668,13 +728,16 @@ export default function ManagePost() {
         }
       }),
       ...newExpertiseRows.map((row) => {
-        const peopleMax = Math.max(Number(row.available_person || 0), 0)
-        const hoursMax = Math.max(Number(row.needed_budget_unit || 0), 0)
+        const peopleMax = getRemainingExpertisePeople(postId, row)
+        const applyPeopleKey = `apply-expertise-${row.id}-people`
+        const perPersonUnit = Math.max(Number(row.needed_budget_unit || 0), 0)
         const requestedRate = Number(row.cost || 0)
-        const quantity = getApplicationValue(`apply-expertise-${row.id}-people`, peopleMax)
-        const duration = getApplicationValue(`apply-expertise-${row.id}-hours`, hoursMax)
         const offeredRate = getApplicationValue(`apply-expertise-${row.id}-rate`, requestedRate)
         const enabled = isItemEnabled(postId, 'expertise', row.id)
+        const selectedPeople = getApplicationValue(applyPeopleKey, peopleMax)
+        const quantity = enabled ? Math.max(0, Math.min(peopleMax, selectedPeople)) : 0
+        const duration = enabled ? perPersonUnit : 0
+        const requestedHours = perPersonUnit
 
         return {
           id: row.id,
@@ -682,13 +745,15 @@ export default function ManagePost() {
           name: row.name,
           unit: row.unit,
           included: enabled,
+          requested_unit_per_person: perPersonUnit,
           requested_people: peopleMax,
-          requested_hours: hoursMax,
+          requested_hours: requestedHours,
           requested_rate: requestedRate,
           offered_people: quantity,
           offered_hours: duration,
+          offered_unit_per_person: perPersonUnit,
           offered_rate: offeredRate,
-          line_total: enabled ? quantity * duration * offeredRate : 0,
+          line_total: enabled ? quantity * offeredRate : 0,
         }
       }),
     ]
@@ -709,7 +774,7 @@ export default function ManagePost() {
     })
 
     const products = productRows.map((row) => {
-      const quantityMax = Math.max(Number(row.available_units || 0), 0)
+      const quantityMax = getRemainingProductUnits(postId, row)
       const requestedRate = Number(row.cost_per_unit || 0)
       const quantity = getApplicationValue(`apply-product-${row.id}-quantity`, quantityMax)
       const offeredRate = getApplicationValue(`apply-product-${row.id}-rate`, requestedRate)
@@ -835,7 +900,12 @@ export default function ManagePost() {
       window.dispatchEvent(new Event('localix:notifications-refresh'))
       showMessage('Your application was submitted successfully. Please wait for acceptance.', 'success')
       setTimeout(() => {
-        navigate('/feed')
+        const targetErpId = Number(erpRecord?.id || 0)
+        if (Number.isFinite(targetErpId) && targetErpId > 0) {
+          navigate(`/erp?erp_id=${targetErpId}`)
+        } else {
+          navigate('/erp')
+        }
       }, 500)
     } catch (error) {
       console.error(error)
@@ -995,6 +1065,7 @@ export default function ManagePost() {
     }
 
     try {
+      let erpRecordId = null
       if (existing) {
         try {
           const { data } = await api.patch(`/erp/${existing.id}/`, {
@@ -1002,12 +1073,14 @@ export default function ManagePost() {
             configuration_snapshot: snapshot,
             is_configured: true,
           })
+          erpRecordId = Number(data?.id || 0)
           setErpItems((prev) => prev.map((item) => (item.id === data.id ? data : item)))
           showMessage('Booking request sent. Waiting for approval.', 'success')
         } catch (patchError) {
           const statusCode = patchError?.response?.status
           if (statusCode === 404 || statusCode === 403 || statusCode === 400) {
             const { data } = await api.post('/erp/', payload)
+            erpRecordId = Number(data?.id || 0)
             setErpItems((prev) => {
               const exists = prev.some((item) => item.id === data.id)
               return exists ? prev.map((item) => (item.id === data.id ? data : item)) : [...prev, data]
@@ -1019,6 +1092,7 @@ export default function ManagePost() {
         }
       } else {
         const { data } = await api.post('/erp/', payload)
+        erpRecordId = Number(data?.id || 0)
         setErpItems((prev) => [...prev, data])
         showMessage('Booking request sent. Waiting for approval.', 'success')
       }
@@ -1026,7 +1100,11 @@ export default function ManagePost() {
       window.dispatchEvent(new Event('localix:notifications-refresh'))
 
       setTimeout(() => {
-        navigate('/erp')
+        if (Number.isFinite(erpRecordId) && erpRecordId > 0) {
+          navigate(`/erp?erp_id=${erpRecordId}`)
+        } else {
+          navigate('/erp')
+        }
       }, 250)
     } catch (error) {
       console.error(error)
@@ -1036,7 +1114,24 @@ export default function ManagePost() {
     }
   }
 
-  const CounterControl = ({ value, onChange, max, label, helperText }) => {
+  const CounterControl = ({ value, onChange, max, label, helperText, disabled = false, strictMax = true, compact = false }) => {
+    const isLocked = disabled
+    const handleTypedValue = (rawValue) => {
+      const parsed = Number(rawValue)
+      if (!Number.isFinite(parsed)) {
+        onChange(0)
+        return
+      }
+      const normalized = Math.floor(parsed)
+      const maxValue = Number(max || 0)
+      const hasPositiveMax = Number.isFinite(maxValue) && maxValue > 0
+      const shouldClampMax = strictMax && hasPositiveMax
+      const next = shouldClampMax
+        ? Math.max(0, Math.min(maxValue, normalized))
+        : Math.max(0, normalized)
+      onChange(next)
+    }
+
     return (
       <div className="rounded-xl border border-white/20 bg-white/5 p-3">
         <div className="flex items-center justify-between gap-3">
@@ -1045,23 +1140,36 @@ export default function ManagePost() {
             {helperText ? <p className="text-xs text-slate-300">{helperText}</p> : null}
           </div>
           <div className="flex items-center gap-1.5">
-            <button
-              type="button"
-              onClick={() => onChange(Math.max(0, value - 1))}
-              className="h-8 w-8 rounded-md border border-white/25 bg-white/10 text-white transition hover:bg-white/20"
-            >
-              -
-            </button>
-            <div className="flex h-8 min-w-[44px] items-center justify-center rounded-md border border-white/25 bg-white/5 px-2 text-sm font-bold text-white">
-              {value}
-            </div>
-            <button
-              type="button"
-              onClick={() => onChange(Math.min(max, value + 1))}
-              className="h-8 w-8 rounded-md border border-white/25 bg-white/10 text-white transition hover:bg-white/20"
-            >
-              +
-            </button>
+            {!isLocked && (
+              <button
+                type="button"
+                onClick={() => onChange(Math.max(0, value - 1))}
+                className="h-8 w-8 rounded-md border border-white/25 bg-white/10 text-white transition hover:bg-white/20"
+              >
+                -
+              </button>
+            )}
+            <input
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              value={value}
+              disabled={isLocked}
+              onChange={(event) => handleTypedValue(event.target.value)}
+              onBlur={(event) => handleTypedValue(event.target.value)}
+              className={`${compact ? 'h-7 min-w-[52px] text-xs px-1.5' : 'h-8 min-w-[64px] text-sm px-2'} rounded-md border border-white/25 bg-white/5 text-center font-bold text-white outline-none ${
+                isLocked ? 'cursor-not-allowed opacity-50' : 'focus:border-white/60'
+              }`}
+            />
+            {!isLocked && (
+              <button
+                type="button"
+                onClick={() => onChange(Math.min(max, value + 1))}
+                className="h-8 w-8 rounded-md border border-white/25 bg-white/10 text-white transition hover:bg-white/20"
+              >
+                +
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -1113,18 +1221,21 @@ export default function ManagePost() {
     </span>
   )
 
-  const BookingItemHeader = ({ icon, title, subtitle, priceText, priceUnitText, checked, onToggle }) => (
+  const BookingItemHeader = ({ icon, title, subtitle, priceText, priceUnitText, checked, onToggle, disabled = false }) => (
     <div
-      role="button"
-      tabIndex={0}
-      onClick={onToggle}
+      role={disabled ? undefined : 'button'}
+      tabIndex={disabled ? -1 : 0}
+      onClick={disabled ? undefined : onToggle}
       onKeyDown={(event) => {
+        if (disabled) {
+          return
+        }
         if (event.key === 'Enter' || event.key === ' ') {
           event.preventDefault()
           onToggle()
         }
       }}
-      className="flex cursor-pointer items-start justify-between gap-3"
+      className={`flex items-start justify-between gap-3 ${disabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}
     >
       <div className="flex min-w-0 items-start gap-3">
         <div className="mt-0.5 flex h-9 w-9 items-center justify-center rounded-md border border-white/25 bg-white/20 text-base leading-none shadow-sm">
@@ -1143,8 +1254,10 @@ export default function ManagePost() {
         <input
           type="checkbox"
           checked={checked}
+          disabled={disabled}
           onChange={(event) => {
             event.stopPropagation()
+            if (disabled) return
             onToggle()
           }}
           className="mt-1 h-4 w-4 rounded border-slate-300 text-violet-600 focus:ring-violet-500"
@@ -1160,10 +1273,14 @@ export default function ManagePost() {
 
   const getSkillWorkersValue = (postType, row) => {
     const key = `skill-${row.id}`
+    const postId = Number(row?.post || 0)
+    const remainingPeople = postId > 0 ? getRemainingSkillPeople(postId, row) : Math.max(Number(row.available_workers || 0), 0)
     if (Object.prototype.hasOwnProperty.call(skillWorkers, key)) {
-      return Number(skillWorkers[key] || 0)
+      const current = Number(skillWorkers[key] || 0)
+      if (postType === 'Demand') return Math.max(0, Math.min(current, remainingPeople))
+      return current
     }
-    return postType === 'Demand' ? Math.max(Number(row.available_workers || 0), 0) : 0
+    return postType === 'Demand' ? remainingPeople : 0
   }
 
   const getExpertisePersonsValue = (postType, row) => {
@@ -1180,10 +1297,14 @@ export default function ManagePost() {
 
   const getExpertiseDurationValue = (postType, row) => {
     const key = `expertise-${row.id}-duration`
+    const postId = Number(row?.post || 0)
+    const remainingDuration = postId > 0 ? getRemainingExpertiseDuration(postId, row) : Math.max(Number(row.needed_budget_unit || 0), 0)
     if (Object.prototype.hasOwnProperty.call(expertiseDurations, key)) {
-      return Number(expertiseDurations[key] || 0)
+      const current = Number(expertiseDurations[key] || 0)
+      if (postType === 'Demand') return Math.max(0, Math.min(current, remainingDuration))
+      return current
     }
-    return postType === 'Demand' ? Math.max(Number(row.needed_budget_unit || 0), 0) : 0
+    return postType === 'Demand' ? remainingDuration : 0
   }
 
   const getProductUnitsValue = (postType, row) => {
@@ -1350,17 +1471,22 @@ export default function ManagePost() {
                           {(skillBreakdownByPost[post.id]?.expertise || []).map((skill) => {
                             const workers = getSkillWorkersValue(post.post_type, skill)
                             const workersMax = post.post_type === 'Demand'
-                              ? Math.max(Number(skill.available_workers || 0), 0)
+                              ? getRemainingSkillPeople(post.id, skill)
                               : Math.max(Number(skill.available_workers || 0), 1)
                             const enabled = isItemEnabled(post.id, 'skill', skill.id)
                             const requestedRate = Number(skill.cost_per_unit || 0)
                             const applyPeopleKey = `apply-skill-${skill.id}-people`
                             const applyHoursKey = `apply-skill-${skill.id}-hours`
                             const applyRateKey = `apply-skill-${skill.id}-rate`
-                            const applyHoursMax = Math.max(Number(skill.needed_budget_unit || 0), 0)
-                            const applyPeople = getApplicationValue(applyPeopleKey, workersMax)
-                            const applyHours = getApplicationValue(applyHoursKey, applyHoursMax)
+                            const applyHoursMax = post.post_type === 'Demand'
+                              ? getRemainingSkillHours(post.id, skill)
+                              : Math.max(Number(skill.needed_budget_unit || 0), 0)
+                            const applyPeople = workersMax
+                            const applyHours = applyHoursMax
                             const applyRate = getApplicationValue(applyRateKey, requestedRate)
+                            const peopleExhausted = workersMax <= 0
+                            const hoursExhausted = applyHoursMax <= 0
+                            const isSkillLocked = isApplyMode && peopleExhausted && hoursExhausted
                             const subtotal = isApplyMode
                               ? (enabled ? applyPeople * applyHours * applyRate : 0)
                               : (enabled ? workers * Number(skill.cost_per_unit || 0) : 0)
@@ -1378,12 +1504,22 @@ export default function ManagePost() {
                                   priceText={`৳ ${Number(skill.cost_per_unit || 0).toFixed(0)}`}
                                   priceUnitText={`per ${formatRateUnit(skill.unit).toLowerCase()}`}
                                   checked={enabled}
+                                  disabled={isSkillLocked}
                                   onToggle={() =>
+                                    isSkillLocked
+                                      ? null
+                                      :
                                     toggleItemEnabled(post.id, 'skill', skill.id, () => {
                                       setSkillWorkers((prev) => ({ ...prev, [`skill-${skill.id}`]: 0 }))
                                     })
                                   }
                                 />
+
+                                {isSkillLocked && (
+                                  <div className="mt-4 rounded-lg border border-rose-400/35 bg-rose-500/10 px-3 py-2 text-xs text-rose-100">
+                                    {post.post_type === 'Demand' ? 'Already Applied' : 'Already Booked'}
+                                  </div>
+                                )}
 
                                 {enabled && (
                                   <div className="mt-4 space-y-3 border-t border-white/15 pt-3">
@@ -1393,15 +1529,26 @@ export default function ManagePost() {
                                           value={applyPeople}
                                           onChange={(val) => setApplicationValue(applyPeopleKey, val, workersMax)}
                                           max={workersMax}
+                                          compact={true}
+                                          disabled={true}
                                           label="People you'll provide"
-                                          helperText={`Max ${workersMax} person (as requested)`}
+                                          helperText={
+                                            peopleExhausted
+                                              ? (post.post_type === 'Demand' ? 'Already Applied' : 'Already Booked')
+                                              : `Max ${workersMax} person (as requested)`
+                                          }
                                         />
                                         <CounterControl
                                           value={applyHours}
                                           onChange={(val) => setApplicationValue(applyHoursKey, val, applyHoursMax)}
                                           max={applyHoursMax}
+                                          disabled={true}
                                           label="Hours you'll work"
-                                          helperText={`Max ${applyHoursMax} hrs (as requested)`}
+                                          helperText={
+                                            hoursExhausted
+                                              ? (post.post_type === 'Demand' ? 'Already Applied' : 'Already Booked')
+                                              : `Max ${applyHoursMax} hrs (as requested)`
+                                          }
                                         />
                                         <OfferRateInput
                                           value={applyRate}
@@ -1436,22 +1583,21 @@ export default function ManagePost() {
                             const persons = getExpertisePersonsValue(post.post_type, expertise)
                             const duration = getExpertiseDurationValue(post.post_type, expertise)
                             const remainingPeople = getRemainingExpertisePeople(post.id, expertise)
-                            const personsMax = post.post_type === 'Demand'
-                              ? Math.max(Number(expertise.available_person || 0), 0)
-                              : remainingPeople
-                            const durationMax = post.post_type === 'Demand'
-                              ? Math.max(Number(expertise.needed_budget_unit || 0), 0)
-                              : 365
+                            const personsMax = getRemainingExpertisePeople(post.id, expertise)
+                            const durationMax = getRemainingExpertiseDuration(post.id, expertise)
                             const enabled = isItemEnabled(post.id, 'expertise', expertise.id)
                             const requestedRate = Number(expertise.cost || 0)
                             const applyPeopleKey = `apply-expertise-${expertise.id}-people`
-                            const applyHoursKey = `apply-expertise-${expertise.id}-hours`
                             const applyRateKey = `apply-expertise-${expertise.id}-rate`
-                            const applyPeople = getApplicationValue(applyPeopleKey, personsMax)
-                            const applyHours = getApplicationValue(applyHoursKey, durationMax)
+                            const perPersonUnit = Math.max(Number(expertise.needed_budget_unit || 0), 0)
+                            const selectedApplyPeople = getApplicationValue(applyPeopleKey, personsMax)
+                            const applyPeople = Math.max(0, Math.min(personsMax, selectedApplyPeople))
                             const applyRate = getApplicationValue(applyRateKey, requestedRate)
+                            const originalPeople = Math.max(Number((expertise.available_person_original ?? expertise.available_person) || 0), 0)
+                            const peopleExhausted = originalPeople > 0 && personsMax <= 0
+                            const isExpertiseLocked = (post.post_type === 'Supply' && remainingPeople <= 0) || (isApplyMode && peopleExhausted)
                             const subtotal = isApplyMode
-                              ? (enabled ? applyPeople * applyHours * applyRate : 0)
+                              ? (enabled ? applyPeople * applyRate : 0)
                               : (enabled ? persons * duration * Number(expertise.cost || 0) : 0)
                             return (
                               <div
@@ -1465,10 +1611,11 @@ export default function ManagePost() {
                                   title={expertise.name}
                                   subtitle="Skilled professional"
                                   priceText={`৳ ${Number(expertise.cost || 0).toFixed(0)}`}
-                                  priceUnitText={`per ${formatRateUnit(expertise.unit).toLowerCase()}`}
+                                  priceUnitText={`per person / ${formatRateUnit(expertise.unit).toLowerCase()}`}
                                   checked={enabled}
+                                  disabled={isExpertiseLocked}
                                   onToggle={() =>
-                                    (post.post_type === 'Supply' && !remainingPeople)
+                                    isExpertiseLocked
                                       ? null
                                       : toggleItemEnabled(post.id, 'expertise', expertise.id, () => {
                                           setExpertisePersons((prev) => ({ ...prev, [`expertise-${expertise.id}`]: 0 }))
@@ -1477,9 +1624,9 @@ export default function ManagePost() {
                                   }
                                 />
 
-                                {post.post_type === 'Supply' && !remainingPeople && (
+                                {isExpertiseLocked && (
                                   <div className="mt-4 rounded-lg border border-rose-400/35 bg-rose-500/10 px-3 py-2 text-xs text-rose-100">
-                                    Already booked all for expertise
+                                    {post.post_type === 'Demand' ? 'Already Applied' : 'Already Booked'}
                                   </div>
                                 )}
 
@@ -1491,23 +1638,31 @@ export default function ManagePost() {
                                           value={applyPeople}
                                           onChange={(val) => setApplicationValue(applyPeopleKey, val, personsMax)}
                                           max={personsMax}
+                                          compact={true}
+                                          disabled={isExpertiseLocked}
                                           label="People you'll provide"
-                                          helperText={`Max ${personsMax} person (as requested)`}
+                                          helperText={
+                                            peopleExhausted
+                                              ? (post.post_type === 'Demand' ? 'Already Applied' : 'Already Booked')
+                                              : `Max ${personsMax} person${post.post_type === 'Demand' ? ' (as requested)' : ' available'}`
+                                          }
                                         />
                                         <CounterControl
-                                          value={applyHours}
-                                          onChange={(val) => setApplicationValue(applyHoursKey, val, durationMax)}
-                                          max={durationMax}
-                                          label="Hours you'll work"
-                                          helperText={`Max ${durationMax} hrs (as requested)`}
+                                          value={perPersonUnit}
+                                          onChange={() => {}}
+                                          max={perPersonUnit}
+                                          disabled={true}
+                                          strictMax={false}
+                                          label={post.post_type === 'Demand' ? getNeededPerPersonQuestion(expertise.unit) : getDurationLabel(expertise.unit)}
+                                          helperText={getUnitPerPersonLabel(expertise.unit)}
                                         />
                                         <OfferRateInput
                                           value={applyRate}
                                           onChange={(val) => setApplicationValue(applyRateKey, val)}
                                           requestedRate={requestedRate}
-                                          label="Your rate per hour"
-                                          helperText={`Requester budget: ৳${requestedRate.toFixed(0)}/hr`}
-                                          unitLabel="hr"
+                                          label={`Your ${formatRateUnit(expertise.unit)} Budget (BDT) per person`}
+                                          helperText={`Requester budget: ৳${requestedRate.toFixed(0)} per person / ${formatRateUnit(expertise.unit).toLowerCase()}`}
+                                          unitLabel={`person/${formatRateUnit(expertise.unit).toLowerCase()}`}
                                         />
                                       </>
                                     ) : (
@@ -1550,6 +1705,7 @@ export default function ManagePost() {
 
                           {(skillBreakdownByPost[post.id]?.services || []).map((service) => {
                             const enabled = isItemEnabled(post.id, 'service', service.id)
+                            const isServiceLocked = Boolean(service.is_fully_booked)
                             const requestedRate = Number(service.cost_per_unit || 0)
                             const applyRateKey = `apply-service-${service.id}-rate`
                             const applyRate = getApplicationValue(applyRateKey, requestedRate)
@@ -1570,8 +1726,15 @@ export default function ManagePost() {
                                   priceText={`৳ ${Number(service.cost_per_unit || 0).toFixed(0)}`}
                                   priceUnitText={`per ${formatRateUnit(service.unit).toLowerCase()}`}
                                   checked={enabled}
-                                  onToggle={() => toggleItemEnabled(post.id, 'service', service.id)}
+                                  disabled={isServiceLocked}
+                                  onToggle={() => (isServiceLocked ? null : toggleItemEnabled(post.id, 'service', service.id))}
                                 />
+
+                                {isServiceLocked && (
+                                  <div className="mt-4 rounded-lg border border-rose-400/35 bg-rose-500/10 px-3 py-2 text-xs text-rose-100">
+                                    {post.post_type === 'Demand' ? 'Already Applied' : 'Already Booked'}
+                                  </div>
+                                )}
 
                                 {isApplyMode && !enabled && (
                                   <div className="mt-4 rounded-lg border border-rose-400/35 bg-rose-500/10 px-3 py-2 text-xs text-rose-100">
@@ -1633,6 +1796,9 @@ export default function ManagePost() {
                             const applyRateKey = `apply-product-${product.id}-rate`
                             const applyQuantity = getApplicationValue(applyQuantityKey, unitsMax)
                             const applyRate = getApplicationValue(applyRateKey, requestedRate)
+                            const originalUnits = Math.max(Number((product.available_units_original ?? product.available_units) || 0), 0)
+                            const unitsExhausted = originalUnits > 0 && unitsMax <= 0
+                            const isProductLocked = (post.post_type === 'Supply' && remainingUnits <= 0) || (isApplyMode && unitsExhausted)
                             const subtotal = isApplyMode
                               ? (enabled ? applyQuantity * applyRate : 0)
                               : (enabled ? units * Number(product.cost_per_unit || 0) : 0)
@@ -1650,8 +1816,9 @@ export default function ManagePost() {
                                   priceText={`৳ ${Number(product.cost_per_unit || 0).toFixed(0)}`}
                                   priceUnitText={`per ${String(product.unit || 'unit').toLowerCase()}`}
                                   checked={enabled}
+                                  disabled={isProductLocked}
                                   onToggle={() =>
-                                    (post.post_type === 'Supply' && remainingUnits <= 0)
+                                    isProductLocked
                                       ? null
                                       : toggleItemEnabled(post.id, 'product', product.id, () => {
                                           setProductUnits((prev) => ({ ...prev, [`product-${product.id}`]: 0 }))
@@ -1659,9 +1826,9 @@ export default function ManagePost() {
                                   }
                                 />
 
-                                {post.post_type === 'Supply' && remainingUnits <= 0 && (
+                                {isProductLocked && (
                                   <div className="mt-4 rounded-lg border border-rose-400/35 bg-rose-500/10 px-3 py-2 text-xs text-rose-100">
-                                    Stock out
+                                    {post.post_type === 'Demand' ? 'Already Applied' : 'Already Booked'}
                                   </div>
                                 )}
 
@@ -1674,7 +1841,11 @@ export default function ManagePost() {
                                           onChange={(val) => setApplicationValue(applyQuantityKey, val, unitsMax)}
                                           max={unitsMax}
                                           label="Quantity you can supply"
-                                          helperText={`Max ${availableUnits} unit (as requested)`}
+                                          helperText={
+                                            isProductLocked
+                                              ? (post.post_type === 'Demand' ? 'Already Applied' : 'Already Booked')
+                                              : `Max ${availableUnits} unit (as requested)`
+                                          }
                                         />
                                         <OfferRateInput
                                           value={applyRate}

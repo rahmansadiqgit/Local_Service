@@ -48,6 +48,99 @@ from .serializers import (
 User = get_user_model()
 logger = logging.getLogger(__name__)
 
+APPROVED_SUBMISSION_STATUSES = {"approved", "accepted", "confirmed"}
+
+
+def _to_int_safe(value, default=0):
+    try:
+        return int(float(value))
+    except (TypeError, ValueError):
+        return int(default)
+
+
+def _as_dict_safe(value):
+    return value if isinstance(value, dict) else {}
+
+
+def _is_consuming_erp(erp):
+    post = getattr(erp, "post", None)
+    post_type = str(getattr(post, "post_type", "") or "").strip().lower()
+    snapshot = _as_dict_safe(getattr(erp, "configuration_snapshot", None))
+
+    if post_type == "demand":
+        submission = _as_dict_safe(snapshot.get("application_submission"))
+        status_value = str(submission.get("status") or "").strip().lower()
+        return status_value in APPROVED_SUBMISSION_STATUSES
+
+    if post_type == "supply":
+        submission = _as_dict_safe(snapshot.get("booking_submission"))
+        status_value = str(submission.get("status") or "").strip().lower()
+        return status_value in APPROVED_SUBMISSION_STATUSES
+
+    return bool(getattr(erp, "is_configured", False))
+
+
+def _collect_consumed_capacity_by_post(post_ids):
+    normalized_post_ids = {
+        int(pid)
+        for pid in (post_ids or [])
+        if isinstance(pid, int) or (isinstance(pid, str) and str(pid).isdigit())
+    }
+    if not normalized_post_ids:
+        return {}, {}, {}
+
+    products_by_post = {}
+    expertise_people_by_post = {}
+    services_by_post = {}
+
+    erp_items = ERP.objects.filter(post_id__in=list(normalized_post_ids)).select_related("post")
+
+    for erp in erp_items:
+        if not _is_consuming_erp(erp):
+            continue
+
+        post_id = int(erp.post_id)
+        products_bucket = products_by_post.setdefault(post_id, {})
+        expertise_bucket = expertise_people_by_post.setdefault(post_id, {})
+        services_bucket = services_by_post.setdefault(post_id, {})
+
+        snapshot = _as_dict_safe(getattr(erp, "configuration_snapshot", None))
+
+        for row in snapshot.get("products") or []:
+            if not isinstance(row, dict) or row.get("included") is False:
+                continue
+            row_id = _to_int_safe(row.get("id"))
+            qty = _to_int_safe(row.get("offered_quantity", row.get("quantity", 0)))
+            if row_id > 0 and qty > 0:
+                products_bucket[row_id] = products_bucket.get(row_id, 0) + qty
+
+        for row in snapshot.get("services") or []:
+            if not isinstance(row, dict) or row.get("included") is False:
+                continue
+            row_id = _to_int_safe(row.get("id"))
+            count = _to_int_safe(row.get("offered_quantity", row.get("quantity", 1)), default=1)
+            if row_id > 0 and count > 0:
+                services_bucket[row_id] = services_bucket.get(row_id, 0) + count
+
+        for row in snapshot.get("expertise") or []:
+            if not isinstance(row, dict) or row.get("included") is False:
+                continue
+            row_id = _to_int_safe(row.get("id"))
+            if row_id <= 0:
+                continue
+
+            source = str(row.get("source") or "").strip().lower()
+            people = _to_int_safe(row.get("offered_people", row.get("quantity", 0)))
+            if people <= 0:
+                continue
+
+            if source == "skill":
+                services_bucket[row_id] = services_bucket.get(row_id, 0) + people
+            else:
+                expertise_bucket[row_id] = expertise_bucket.get(row_id, 0) + people
+
+    return products_by_post, expertise_people_by_post, services_by_post
+
 
 class RegisterView(APIView):
     permission_classes = [permissions.AllowAny]
@@ -336,6 +429,33 @@ class SkillViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
     filterset_fields = ["post"]
 
+    def list(self, request, *args, **kwargs):
+        queryset = self.filter_queryset(self.get_queryset()).select_related("post")
+        skill_items = list(queryset)
+        post_ids = {int(item.post_id) for item in skill_items if item.post_id}
+        _, _, services_by_post = _collect_consumed_capacity_by_post(post_ids)
+        post_type_by_post_id = {
+            int(item.post_id): str(getattr(getattr(item, "post", None), "post_type", "") or "").strip().lower()
+            for item in skill_items
+            if item.post_id
+        }
+
+        serializer = self.get_serializer(skill_items, many=True)
+        data = serializer.data
+
+        for row in data:
+            row_id = _to_int_safe(row.get("id"))
+            post_id = _to_int_safe(row.get("post"))
+            booked_count = max(_to_int_safe(services_by_post.get(post_id, {}).get(row_id, 0)), 0)
+            is_demand_post = post_type_by_post_id.get(post_id) == "demand"
+            row["booked_count"] = booked_count
+            row["is_booked"] = booked_count > 0
+            # For demand posts, once one approved provider claims the service,
+            # the service becomes unavailable for other applicants.
+            row["is_fully_booked"] = is_demand_post and booked_count > 0
+
+        return Response(data)
+
 
 class ExpertiseViewSet(viewsets.ModelViewSet):
     queryset = Expertise.objects.all()
@@ -343,12 +463,58 @@ class ExpertiseViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
     filterset_fields = ["post"]
 
+    def list(self, request, *args, **kwargs):
+        queryset = self.filter_queryset(self.get_queryset())
+        expertise_items = list(queryset)
+        post_ids = {int(item.post_id) for item in expertise_items if item.post_id}
+        _, expertise_by_post, _ = _collect_consumed_capacity_by_post(post_ids)
+
+        serializer = self.get_serializer(expertise_items, many=True)
+        data = serializer.data
+
+        for row in data:
+            row_id = _to_int_safe(row.get("id"))
+            post_id = _to_int_safe(row.get("post"))
+            original_available = max(_to_int_safe(row.get("available_person")), 0)
+            booked_people = max(_to_int_safe(expertise_by_post.get(post_id, {}).get(row_id, 0)), 0)
+            remaining_people = max(original_available - booked_people, 0)
+
+            row["available_person_original"] = original_available
+            row["booked_people"] = booked_people
+            row["available_person"] = remaining_people
+            row["is_booked"] = original_available > 0 and remaining_people <= 0
+
+        return Response(data)
+
 
 class ProductViewSet(viewsets.ModelViewSet):
     queryset = Product.objects.all() # From GenericAPIView
     serializer_class = ProductSerializer # From GenericAPIView
     permission_classes = [permissions.IsAuthenticatedOrReadOnly] # APIView
     filterset_fields = ["post"] # Used by DjangoFilterBackend
+
+    def list(self, request, *args, **kwargs):
+        queryset = self.filter_queryset(self.get_queryset())
+        product_items = list(queryset)
+        post_ids = {int(item.post_id) for item in product_items if item.post_id}
+        products_by_post, _, _ = _collect_consumed_capacity_by_post(post_ids)
+
+        serializer = self.get_serializer(product_items, many=True)
+        data = serializer.data
+
+        for row in data:
+            row_id = _to_int_safe(row.get("id"))
+            post_id = _to_int_safe(row.get("post"))
+            original_units = max(_to_int_safe(row.get("available_units")), 0)
+            booked_units = max(_to_int_safe(products_by_post.get(post_id, {}).get(row_id, 0)), 0)
+            remaining_units = max(original_units - booked_units, 0)
+
+            row["available_units_original"] = original_units
+            row["booked_units"] = booked_units
+            row["available_units"] = remaining_units
+            row["is_booked"] = original_units > 0 and remaining_units <= 0
+
+        return Response(data)
 
 
 class ERPViewSet(viewsets.ModelViewSet):
@@ -485,12 +651,19 @@ class ERPViewSet(viewsets.ModelViewSet):
             skill = skill_map.get(service_id)
             if not skill:
                 continue
-            # Skill.available_workers was removed from the data model, so there is
-            # no explicit service capacity to enforce by default.
-            # When capacity is not provided (<= 0), treat service bookings as unlimited.
-            total_capacity = self._to_int(getattr(skill, "available_workers", 0), default=0)
-            if total_capacity <= 0:
-                continue
+
+            post_type = str(getattr(post, "post_type", "") or "").strip().lower()
+            if post_type == "demand":
+                # Demand service rows are exclusive: one approved provider per service row.
+                total_capacity = 1
+            else:
+                # Supply services remain multi-bookable by default.
+                # Skill.available_workers was removed from the data model, so when
+                # capacity is absent/non-positive, treat it as unlimited.
+                total_capacity = self._to_int(getattr(skill, "available_workers", 0), default=0)
+                if total_capacity <= 0:
+                    continue
+
             consumed = max(self._to_int(consumed_usage["services"].get(service_id, 0)), 0)
             remaining = max(total_capacity - consumed, 0)
             if requested_count > remaining:
@@ -679,7 +852,7 @@ class ERPViewSet(viewsets.ModelViewSet):
                 message=(
                     f'Your request for "{post_title}" has been sent to the post owner [{owner_name}]({owner_link}). '
                     "⏱ Waiting for approval. "
-                    "Post link: /feed"
+                    f"Post link: /erp?erp_id={erp.id}"
                 ),
             )
         ]
@@ -1132,10 +1305,17 @@ class ERPViewSet(viewsets.ModelViewSet):
 
         visible_ids = []
         for item in merged_queryset.select_related("post"):
-            # Demand applications stay visible to the demand post owner for review,
-            # but remain hidden from task views until approved for others.
+            # Demand applications stay visible to the demand post owner for review.
+            # Keep them visible for the applicant too so opening /erp?erp_id=<id>
+            # right after submit shows the exact card they just created.
             post_owner_id = getattr(item.post, "owner_id", None)
             if post_owner_id and int(post_owner_id) == int(user.id):
+                visible_ids.append(int(item.id))
+                continue
+
+            post_type = str(getattr(getattr(item, "post", None), "post_type", "") or "").strip().lower()
+            provider_id = getattr(item, "provider_id", None)
+            if post_type == "demand" and provider_id and int(provider_id) == int(user.id):
                 visible_ids.append(int(item.id))
                 continue
 
@@ -1666,7 +1846,33 @@ class ERPViewSet(viewsets.ModelViewSet):
         assign = request.data.get("assign", True)
         should_assign = bool(assign)
 
+
         ids = set(role_bucket.get("assignee_ids") or [])
+        expertise_updated = False
+        # Only update available_person for expertise role in demand posts
+        if role == "expertise":
+            post = getattr(erp, "post", None)
+            if post and str(getattr(post, "post_type", "")).strip().lower() == "demand":
+                from core.models import Expertise
+                # Find the expertise row for this ERP and user (assume 1:1 mapping by post and user)
+                expertise_qs = Expertise.objects.filter(post=post)
+                # If you have a way to map user to a specific expertise row, add logic here
+                # For now, decrement the first available expertise with available_person > 0
+                if should_assign:
+                    for exp in expertise_qs.order_by("id"):
+                        if exp.available_person > 0:
+                            exp.available_person -= 1
+                            exp.save(update_fields=["available_person"])
+                            expertise_updated = True
+                            break
+                else:
+                    # On unassign, increment the first expertise with available_person < original
+                    for exp in expertise_qs.order_by("id"):
+                        exp.available_person += 1
+                        exp.save(update_fields=["available_person"])
+                        expertise_updated = True
+                        break
+
         if should_assign:
             ids.add(request.user.id)
         else:
@@ -1794,6 +2000,24 @@ class ERPViewSet(viewsets.ModelViewSet):
                 f"Post link: /erp?erp_id={erp.id}"
             ),
         )
+
+        return Response(self.get_serializer(erp).data)
+
+    @action(detail=True, methods=["post"])
+    def set_ready_product(self, request, pk=None):
+        erp = self.get_object()
+
+        if not erp.provider or erp.provider.id != request.user.id:
+            raise PermissionDenied("Only provider can update Ready product status.")
+
+        ready = self._to_bool(request.data.get("ready", False))
+
+        snapshot = self._as_dict(erp.configuration_snapshot)
+        workflow = self._as_dict(snapshot.get("workflow"))
+        workflow["ready_product_done"] = bool(ready)
+        workflow["ready_product_updated_at"] = timezone.now().isoformat()
+        snapshot["workflow"] = workflow
+        self._save_snapshot(erp, snapshot)
 
         return Response(self.get_serializer(erp).data)
 

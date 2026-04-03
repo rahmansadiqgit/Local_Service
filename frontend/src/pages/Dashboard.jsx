@@ -134,8 +134,15 @@ export default function Dashboard() {
       }
     };
     load();
+
+    const handleNotificationRefresh = () => {
+      load();
+    };
+    window.addEventListener('localix:notifications-refresh', handleNotificationRefresh);
+
     return () => {
       active = false;
+      window.removeEventListener('localix:notifications-refresh', handleNotificationRefresh);
     };
   }, [id]);
 

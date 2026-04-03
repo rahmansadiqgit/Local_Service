@@ -254,12 +254,19 @@ export default function ERP() {
     })
 
     const deduped = Array.from(byKey.values())
-    if (!Number.isFinite(focusErpId) || focusErpId <= 0) {
-      return deduped
+
+    if (Number.isFinite(focusErpId) && focusErpId > 0) {
+      const focusedVisible = visibleErpItems.find((erp) => Number(erp.id) === focusErpId)
+      if (focusedVisible) {
+        return [focusedVisible]
+      }
+
+      const focusedAny = erpItems.find((erp) => Number(erp.id) === focusErpId)
+      return focusedAny ? [focusedAny] : []
     }
 
-    return deduped.filter((erp) => Number(erp.id) === focusErpId)
-  }, [filteredTasks, searchParams])
+    return deduped
+  }, [filteredTasks, searchParams, visibleErpItems, erpItems])
 
   const handleStageChange = async (erp, stage) => {
     const isProvider = currentUserId && String(erp.provider) === String(currentUserId)
@@ -339,6 +346,7 @@ export default function ERP() {
   const getPhaseTasks = (erp) => {
     const isProvider = currentUserId && String(erp.provider) === String(currentUserId)
     const snapshot = erp.configuration_snapshot || {}
+    const workflow = snapshot.workflow || {}
     const snapshotExpertise = Array.isArray(snapshot.expertise) ? snapshot.expertise : []
     const snapshotServices = Array.isArray(snapshot.services) ? snapshot.services : []
     const snapshotProducts = Array.isArray(snapshot.products) ? snapshot.products : []
@@ -368,10 +376,10 @@ export default function ERP() {
       (sum, row) => sum + Math.max(0, Number(row.quantity || 0)),
       0,
     )
-    const isReadyProductDone =
-      readyProductStatusByErp[erp.id] === undefined
-        ? requiredProductQty > 0
-        : Boolean(readyProductStatusByErp[erp.id])
+    const hasReadyOverride = Object.prototype.hasOwnProperty.call(readyProductStatusByErp, erp.id)
+    const isReadyProductDone = hasReadyOverride
+      ? Boolean(readyProductStatusByErp[erp.id])
+      : Boolean(workflow.ready_product_done)
     const assignedExpertiseQtyFromField = Number(memberAssignments.expertise?.assigned_qty || 0)
     const assignedExpertiseCount = Array.isArray(memberAssignments.expertise?.assignee_ids)
       ? memberAssignments.expertise.assignee_ids.length
@@ -398,7 +406,10 @@ export default function ERP() {
       if (hasExpertiseCategory) {
         pendingTasks.push({
           label: `Assign Expertise in Members → Expertise${requiredExpertiseQty > 0 ? ` (required: ${requiredExpertiseQty})` : ''}`,
-          done: requiredExpertiseQty > 0 ? assignedExpertiseQty >= requiredExpertiseQty : hasWorkers,
+          done:
+            requiredExpertiseQty > 0
+              ? assignedExpertiseQty >= requiredExpertiseQty
+              : assignedExpertiseQty > 0 || hasWorkers,
           key: 'member_expertise',
         })
       }
@@ -448,7 +459,7 @@ export default function ERP() {
     }
   }
 
-  const handleToggleReadyProduct = (erpId) => {
+  const handleToggleReadyProduct = async (erpId) => {
     const targetErp = erpItems.find((item) => Number(item.id) === Number(erpId))
     const isProvider =
       targetErp && currentUserId && String(targetErp.provider) === String(currentUserId)
@@ -458,10 +469,30 @@ export default function ERP() {
       return
     }
 
+    const snapshot = targetErp?.configuration_snapshot || {}
+    const workflow = snapshot.workflow || {}
+    const hasReadyOverride = Object.prototype.hasOwnProperty.call(readyProductStatusByErp, erpId)
+    const currentReady = hasReadyOverride
+      ? Boolean(readyProductStatusByErp[erpId])
+      : Boolean(workflow.ready_product_done)
+    const nextReady = !currentReady
+
     setReadyProductStatusByErp((prev) => ({
       ...prev,
-      [erpId]: !prev[erpId],
+      [erpId]: nextReady,
     }))
+
+    try {
+      const { data } = await api.post(`/erp/${erpId}/set_ready_product/`, { ready: nextReady })
+      setErpItems((prev) => prev.map((item) => (item.id === data.id ? data : item)))
+    } catch (error) {
+      console.error(error)
+      setReadyProductStatusByErp((prev) => ({
+        ...prev,
+        [erpId]: currentReady,
+      }))
+      setMessage('Failed to update Ready product status.')
+    }
   }
 
   const handleUpdateMemberAssignment = async (erp, role, userId, assign) => {
