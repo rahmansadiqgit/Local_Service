@@ -628,8 +628,9 @@ export default function ERPTaskCard({
       .map((task) => pendingMemberRoleByTaskKey[String(task.key || '').trim()])
       .filter(Boolean),
   )
-  const shouldPulseMembersButton = pendingMemberRoles.size > 0 && !isDetailsOpen
-  const shouldPulseActionsButton = (openPendingTasks.length > 0 || shouldPulseMembersButton) && !isDetailsOpen
+  const hasPendingMembersAction = pendingMemberRoles.size > 0 || !hasAssociatedMembers
+  const hasPendingTaskAction = openPendingTasks.length > 0
+  const shouldHighlightActionsButton = (hasPendingTaskAction || hasPendingMembersAction) && !isDetailsOpen
   const canUseActionsMenu = isSupplyPost ? isBookingApproved : (isDemandPost ? isApplicationApproved : true)
   const menuItemBaseClass =
     'w-full rounded-xl border border-slate-200 bg-white px-4 py-2 text-left text-sm font-semibold text-slate-700 transition hover:border-violet-200 hover:bg-violet-50 hover:text-violet-700'
@@ -1201,7 +1202,7 @@ export default function ERPTaskCard({
                 }
               }}
               className={`rounded-full border px-4 py-2 text-sm font-semibold transition ${
-                shouldPulseActionsButton
+                shouldHighlightActionsButton
                   ? 'animate-bounce border-rose-300 bg-rose-100 text-rose-700 hover:border-rose-400 hover:bg-rose-200'
                   : 'border-slate-300 bg-white text-slate-700 hover:border-slate-400'
               }`}
@@ -1224,8 +1225,8 @@ export default function ERPTaskCard({
                   setIsMembersMenuOpen(false)
                 }}
                 className={`${menuItemBaseClass} ${
-                  openPendingTasks.length > 0
-                    ? 'animate-bounce border-rose-300 bg-rose-100 text-rose-700 hover:bg-rose-200'
+                  hasPendingTaskAction
+                    ? 'animate-bounce !border-rose-300 !bg-rose-100 !text-rose-700 hover:!bg-rose-200'
                     : ''
                 }`}
               >
@@ -1250,8 +1251,8 @@ export default function ERPTaskCard({
                 type="button"
                 onClick={() => setIsMembersMenuOpen((prev) => !prev)}
                 className={`${menuItemBaseClass} ${
-                  shouldPulseMembersButton
-                    ? 'animate-bounce border-rose-300 bg-rose-100 text-rose-700 hover:border-rose-400'
+                  hasPendingMembersAction
+                    ? 'animate-bounce !border-rose-300 !bg-rose-100 !text-rose-700 hover:!border-rose-400 hover:!bg-rose-200'
                     : ''
                 }`}
               >
@@ -1275,7 +1276,7 @@ export default function ERPTaskCard({
                           }}
                           className={`block w-full rounded-lg px-3 py-2 text-left text-xs font-medium transition ${
                             shouldPulseRole
-                              ? 'animate-bounce border border-rose-200 bg-rose-100 text-rose-700 hover:bg-rose-200'
+                              ? 'animate-bounce !border !border-rose-200 !bg-rose-100 !text-rose-700 hover:!bg-rose-200'
                               : 'text-slate-700 hover:bg-slate-50'
                           }`}
                         >
