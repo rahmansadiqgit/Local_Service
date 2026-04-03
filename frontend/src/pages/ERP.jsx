@@ -189,8 +189,9 @@ export default function ERP() {
       if (!isDemand) return true
       const status = String(item?.configuration_snapshot?.application_submission?.status || '').toLowerCase()
       const isOwner = Number(currentUserId) > 0 && Number(post?.owner_id ?? post?.owner) === Number(currentUserId)
+      const isApplicant = Number(currentUserId) > 0 && Number(item?.provider) === Number(currentUserId)
       if (status === 'submitted' || status === 'pending') {
-        return isOwner
+        return isOwner || isApplicant
       }
       return status === 'approved' || status === 'accepted' || status === 'confirmed' || !status
     })
@@ -214,8 +215,9 @@ export default function ERP() {
       if (!isDemand) return true
       const status = String(item?.configuration_snapshot?.application_submission?.status || '').toLowerCase()
       const isOwner = Number(currentUserId) > 0 && Number(post?.owner_id ?? post?.owner) === Number(currentUserId)
+      const isApplicant = Number(currentUserId) > 0 && Number(item?.provider) === Number(currentUserId)
       if (status === 'submitted' || status === 'pending') {
-        return isOwner
+        return isOwner || isApplicant
       }
       return status === 'approved' || status === 'accepted' || status === 'confirmed' || !status
     })
@@ -369,7 +371,7 @@ export default function ERP() {
     const hasProductCategory = hasProductRows || hasProductTotal
 
     const requiredExpertiseQty = snapshotExpertise.reduce(
-      (sum, row) => sum + Math.max(0, Number(row.quantity || 0)),
+      (sum, row) => sum + Math.max(0, Number((row.offered_people ?? row.quantity) || 0)),
       0,
     )
     const requiredProductQty = snapshotProducts.reduce(
@@ -381,10 +383,52 @@ export default function ERP() {
       ? Boolean(readyProductStatusByErp[erp.id])
       : Boolean(workflow.ready_product_done)
     const assignedExpertiseQtyFromField = Number(memberAssignments.expertise?.assigned_qty || 0)
-    const assignedExpertiseCount = Array.isArray(memberAssignments.expertise?.assignee_ids)
-      ? memberAssignments.expertise.assignee_ids.length
-      : 0
+    const expertiseAssignmentsByRow =
+      memberAssignments?.expertise && typeof memberAssignments.expertise.expertise_assignments === 'object'
+        ? memberAssignments.expertise.expertise_assignments
+        : {}
+    const expertiseChecks = snapshotExpertise
+      .map((row, index) => {
+        const rowId = Number(row?.id)
+        const required = Math.max(0, Number((row?.offered_people ?? row?.quantity) || 0))
+        if (!Number.isFinite(rowId) || rowId <= 0 || required <= 0) return null
+
+        const assignedIds = Array.isArray(expertiseAssignmentsByRow[String(rowId)])
+          ? expertiseAssignmentsByRow[String(rowId)]
+              .map((id) => Number(id))
+              .filter((id) => Number.isFinite(id) && id > 0)
+          : []
+        const assignedCount = new Set(assignedIds).size
+        return {
+          rowId,
+          name: String(row?.name || `Expertise ${index + 1}`),
+          required,
+          assigned: assignedCount,
+        }
+      })
+      .filter(Boolean)
+    const hasPerRowExpertiseChecks = expertiseChecks.length > 0
+    const assignedExpertiseCount = hasPerRowExpertiseChecks
+      ? expertiseChecks.reduce((sum, row) => sum + row.assigned, 0)
+      : (() => {
+          const expertiseAssigneeIds = new Set()
+          ;['expertise'].forEach((key) => {
+            const ids = Array.isArray(memberAssignments?.[key]?.assignee_ids)
+              ? memberAssignments[key].assignee_ids
+              : []
+            ids.forEach((id) => {
+              const parsed = Number(id)
+              if (Number.isFinite(parsed) && parsed > 0) {
+                expertiseAssigneeIds.add(parsed)
+              }
+            })
+          })
+          return expertiseAssigneeIds.size
+        })()
     const assignedExpertiseQty = Math.max(assignedExpertiseQtyFromField, assignedExpertiseCount)
+    const isExpertisePerRowComplete = hasPerRowExpertiseChecks
+      ? expertiseChecks.every((row) => row.assigned === row.required)
+      : assignedExpertiseQty === requiredExpertiseQty
     const hasAssignedSkillProvider =
       Array.isArray(memberAssignments.skill_provider?.assignee_ids)
         ? memberAssignments.skill_provider.assignee_ids.length > 0
@@ -404,11 +448,15 @@ export default function ERP() {
       })
 
       if (hasExpertiseCategory) {
+        const expertiseRequirementText = hasPerRowExpertiseChecks
+          ? ` (${expertiseChecks.map((row) => `${row.name}: ${row.assigned}/${row.required}`).join(', ')})`
+          : (requiredExpertiseQty > 0 ? ` (required: ${requiredExpertiseQty})` : '')
+
         pendingTasks.push({
-          label: `Assign Expertise in Members → Expertise${requiredExpertiseQty > 0 ? ` (required: ${requiredExpertiseQty})` : ''}`,
+          label: `Assign Expertise in Members → Expertise${expertiseRequirementText}`,
           done:
             requiredExpertiseQty > 0
-              ? assignedExpertiseQty >= requiredExpertiseQty
+              ? isExpertisePerRowComplete
               : assignedExpertiseQty > 0 || hasWorkers,
           key: 'member_expertise',
         })
@@ -424,7 +472,7 @@ export default function ERP() {
 
       if (hasProductCategory) {
         pendingTasks.push({
-          label: 'Assign Delivary Man in Members → Delivary man (at least one)',
+          label: 'Assign Delivery Man in Members → Delivery man (at least one)',
           done: hasAssignedSupplier,
           key: 'member_supplier',
         })
@@ -495,7 +543,7 @@ export default function ERP() {
     }
   }
 
-  const handleUpdateMemberAssignment = async (erp, role, userId, assign) => {
+  const handleUpdateMemberAssignment = async (erp, role, userId, assign, options = {}) => {
     const isProvider = currentUserId && String(erp.provider) === String(currentUserId)
     if (!isProvider) {
       setMessage('Only provider can manage member assignments in Pending.')
@@ -503,10 +551,17 @@ export default function ERP() {
     }
 
     try {
-      const { data } = await api.patch(`/erp/${erp.id}/members/`, {
+      const payload = {
         role,
         mode: assign ? 'add' : 'remove',
         assignee_ids: [userId],
+      }
+      if (role === 'expertise' && Number.isFinite(Number(options?.expertiseId)) && Number(options.expertiseId) > 0) {
+        payload.expertise_id = Number(options.expertiseId)
+      }
+
+      const { data } = await api.patch(`/erp/${erp.id}/members/`, {
+        ...payload,
       })
       setErpItems((prev) => prev.map((item) => (item.id === data.id ? data : item)))
     } catch (error) {
@@ -578,7 +633,7 @@ export default function ERP() {
     const isProvider = currentUserId && String(erp.provider) === String(currentUserId)
 
     if (erp.stage === 'Pending' && !isProvider) {
-      setMessage('Only provider can complete Pending assignments and move task to On Process.')
+      setMessage('Only provider can complete Pending assignments and move task to the next state.')
       return
     }
 
@@ -594,12 +649,14 @@ export default function ERP() {
     }
 
     const nextStage = erp.stage === 'Pending' ? 'On Process' : erp.stage
+    const isSupplyPost = String(postMap?.[erp.post]?.post_type || '').toLowerCase() === 'supply'
+    const nextStageLabel = nextStage === 'On Process' ? (isSupplyPost ? 'On Going' : 'Process') : nextStage
     if (nextStage === erp.stage) {
       setMessage('Receiver must complete this ERP from the new Completed button with rating and comment.')
       return
     }
     await handleStageChange(erp, nextStage)
-    setMessage(`Task ${erp.id} moved to ${nextStage}.`)
+    setMessage(`Task ${erp.id} moved to ${nextStageLabel}.`)
   }
 
   const handleCompleteByReceiver = async (erp, payload) => {
