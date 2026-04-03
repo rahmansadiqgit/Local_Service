@@ -2793,10 +2793,13 @@ class ConnectionViewSet(viewsets.GenericViewSet):
         # Create role-specific messages
         if receiver_role_label == "Delivery":
             receiver_message = f"{sender_name} requested to connect with you for making a delivery for him.{f' Message: {message}' if message else ''}"
-            sender_message = f"You requested to connect with {addressee_name} for making a delivery."
+            sender_message = f"You have requested to connect with a delivary man {addressee_name}."
         elif role_label == "Skill Provider":
-            receiver_message = f"{sender_name} requested to connect with you for providing him your skill.{f' Message: {message}' if message else ''}"
-            sender_message = f"You requested to connect with {addressee_name} for receiving his skill."
+            receiver_message = f"You are requested to connect as a skill provider for {sender_name}.{f' Message: {message}' if message else ''}"
+            sender_message = f"You have requested to connect with  a skill provider {addressee_name}."
+        elif role_label == "Expertise":
+             receiver_message = f"You are requested to connect as a expertise for {sender_name}.{f' Message: {message}' if message else ''}"
+             sender_message = f"You have requested to connect with a Expertise {addressee_name}."
         else:
             receiver_message = f"{sender_name} requested to connect with you as {receiver_role_label}.{f' Message: {message}' if message else ''}"
             sender_message = f"You requested to connect with {addressee_name} as {role_label}."
@@ -3007,51 +3010,62 @@ class ConnectionViewSet(viewsets.GenericViewSet):
             None,
         )
 
+        # Case 1: current user originally requested the connection and is now removing it.
         if requester_side:
             actor_role_text = role_labels.get(requester_side.requested_role, "member")
             actor_role_title = role_labels_title.get(requester_side.requested_role, "Member")
             
+            # Delivery wording uses an action-based sentence instead of role label.
             if actor_role_title == "Delivery Man":
                 actor_message = f"You have removed connection for making delivery for {target_name}."
                 target_message = f"{actor_name} has removed connection from you for making delivery."
+            # Skill provider and expertise use role-specific copy for both sides.
             elif actor_role_title == "Skill Provider":
                 actor_message = f"You have removed connection with a skill provider {target_name}."
-                target_message = f"{actor_name} has removed connection from you as a skill provider."
+                target_message = f"{actor_name} has removed connection from you . So from now you are not {actor_role_text} for {actor_name} ."
             elif actor_role_title == "Expertise":
-                actor_message = f"You have removed connection with {target_name} as a {actor_role_text}."
-                target_message = f"{actor_name} has removed connection from you as a {actor_role_text}."
+                actor_message = f"You have removed connection with a expertise {target_name}."
+                target_message = f"{actor_name} has removed connection from you . So from now you are not {actor_role_text} for {actor_name} ."
+            # Fallback for any future/unknown role.
             else:
                 actor_message = f"You have removed connection with {target_name} as a {actor_role_text}."
                 target_message = f"{actor_name} has removed connection from you as a {actor_role_text}."
+        # Case 2: current user was the addressee and removed a requester-side connection.
         elif addressee_side:
             target_role_text = role_labels.get(addressee_side.requested_role, "member")
             target_role_title = role_labels_title.get(addressee_side.requested_role, "Member")
             
+            # Keep delivery message explicit for delivery work context.
             if target_role_title == "Delivery Man":
-                actor_message = f"You have removed connection for making delivery with {target_name}."
+                actor_message = f"You have removed connection for making delivery for {target_name}."
                 target_message = f"{actor_name} has removed connection from you for making delivery."
+            # Role-specific copy for skill provider and expertise.
             elif target_role_title == "Skill Provider":
                 actor_message = f"You have removed connection with a skill provider {target_name}."
                 target_message = f"{actor_name} has removed connection from you as a skill provider."
             elif target_role_title == "Expertise":
-                actor_message = f"You have removed connection with {target_name} as a {target_role_text}."
+                actor_message = f"You have removed connection with a expertise {target_name}."
                 target_message = f"{actor_name} has removed connection from you as a {target_role_text}."
+            # If user removed from a filtered connection list (members tab), preserve that selected role wording.
             elif selected_role_text and not is_hired_view:
                 actor_message = f"You have removed a {selected_role_text} {target_name}."
                 target_message = f"{actor_name} has removed you as a {selected_role_text}."
+            # Hired view fallback with role-aware handling where available.
             elif is_hired_view:
                 if target_role_title == "Skill Provider":
                     actor_message = f"You have removed connection with a skill provider {target_name}."
                     target_message = f"{actor_name} has removed connection from you as a skill provider."
                 elif target_role_title == "Expertise":
-                    actor_message = f"You have removed connection with {target_name} as a {target_role_text}."
+                    actor_message = f"You have removed connection with a expertise {target_name}."
                     target_message = f"{actor_name} has removed connection from you as a {target_role_text}."
                 else:
                     actor_message = f"You have removed connection with {target_name}."
                     target_message = f"{actor_name} has removed connection from you."
+            # Generic fallback when no special context was detected.
             else:
                 actor_message = f"You have removed a {target_role_text} named {target_name}."
                 target_message = f"{actor_name} has removed you as a {target_role_text}."
+        # Safety fallback if neither direction was matched.
         else:
             actor_message = f"You have removed connection with {target_name}."
             target_message = f"{actor_name} removed your connection."

@@ -350,6 +350,7 @@ export default function Header() {
     const title = String(item?.title || "").toLowerCase()
     const message = String(item?.message || "")
     const messageLower = message.toLowerCase()
+    const relatedUserId = Number(item?.related_user)
 
     if (title.includes("booking request sent") || title.includes("application request sent")) {
       return "/feed"
@@ -365,6 +366,12 @@ export default function Header() {
 
     if (title.includes("post created") || messageLower.includes("post created")) {
       return "/dashboard"
+    }
+
+    // Outgoing connection requests should open the target profile dashboard,
+    // where the connection card shows the pending/request status.
+    if (title.includes("connection request sent") && Number.isFinite(relatedUserId) && relatedUserId > 0) {
+      return `/dashboard/${relatedUserId}`
     }
 
     const memberSectionTarget = getMemberSectionNotificationTarget(item)
