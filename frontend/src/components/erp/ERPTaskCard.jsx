@@ -628,7 +628,34 @@ export default function ERPTaskCard({
       .map((task) => pendingMemberRoleByTaskKey[String(task.key || '').trim()])
       .filter(Boolean),
   )
-  const hasPendingMembersAction = pendingMemberRoles.size > 0 || !hasAssociatedMembers
+  const expertiseRoleStateForStatus = getRoleState('expertise')
+  const expertiseAssignmentsForStatus =
+    expertiseRoleStateForStatus && typeof expertiseRoleStateForStatus.expertise_assignments === 'object'
+      ? expertiseRoleStateForStatus.expertise_assignments
+      : {}
+  const hasIncompleteExpertiseAssignments = hasExpertiseCategory && snapshotExpertise.some((row) => {
+    const rowId = Number(row?.id)
+    const required = Math.max(0, Number((row?.offered_people ?? row?.quantity) || 0))
+    if (!Number.isFinite(rowId) || rowId <= 0 || required <= 0) return false
+
+    const assignedRaw = Array.isArray(expertiseAssignmentsForStatus[String(rowId)])
+      ? expertiseAssignmentsForStatus[String(rowId)]
+      : []
+    const assignedCount = new Set(
+      assignedRaw
+        .map((id) => Number(id))
+        .filter((id) => Number.isFinite(id) && id > 0),
+    ).size
+
+    return assignedCount < required
+  })
+  const hasIncompleteSkillProviderAssignments = hasServicesCategory && getRoleAssigneeIds('skill_provider').length === 0
+  const hasIncompleteSupplierAssignments = hasProductCategory && getRoleAssigneeIds('supplier').length === 0
+  const hasPendingMembersAction =
+    pendingMemberRoles.size > 0
+    || hasIncompleteExpertiseAssignments
+    || hasIncompleteSkillProviderAssignments
+    || hasIncompleteSupplierAssignments
   const hasPendingTaskAction = openPendingTasks.length > 0
   const shouldHighlightActionsButton = (hasPendingTaskAction || hasPendingMembersAction) && !isDetailsOpen
   const canUseActionsMenu = isSupplyPost ? isBookingApproved : (isDemandPost ? isApplicationApproved : true)

@@ -1064,20 +1064,22 @@ export default function ManagePost() {
 
   const CounterControl = ({ value, onChange, max, label, helperText, disabled = false, strictMax = true, compact = false }) => {
     const isLocked = disabled
-    const handleTypedValue = (rawValue) => {
+    const normalizeValue = (rawValue) => {
       const parsed = Number(rawValue)
-      if (!Number.isFinite(parsed)) {
-        onChange(0)
-        return
-      }
+      if (!Number.isFinite(parsed)) return 0
+
       const normalized = Math.floor(parsed)
       const maxValue = Number(max || 0)
       const hasPositiveMax = Number.isFinite(maxValue) && maxValue > 0
       const shouldClampMax = strictMax && hasPositiveMax
-      const next = shouldClampMax
+
+      return shouldClampMax
         ? Math.max(0, Math.min(maxValue, normalized))
         : Math.max(0, normalized)
-      onChange(next)
+    }
+
+    const handleTypedValue = (rawValue) => {
+      onChange(normalizeValue(rawValue))
     }
 
     return (
@@ -1091,7 +1093,7 @@ export default function ManagePost() {
             {!isLocked && (
               <button
                 type="button"
-                onClick={() => onChange(Math.max(0, value - 1))}
+                onClick={() => onChange(normalizeValue(value - 1))}
                 className="h-8 w-8 rounded-md border border-white/25 bg-white/10 text-white transition hover:bg-white/20"
               >
                 -
@@ -1112,7 +1114,7 @@ export default function ManagePost() {
             {!isLocked && (
               <button
                 type="button"
-                onClick={() => onChange(Math.min(max, value + 1))}
+                onClick={() => onChange(normalizeValue(value + 1))}
                 className="h-8 w-8 rounded-md border border-white/25 bg-white/10 text-white transition hover:bg-white/20"
               >
                 +
