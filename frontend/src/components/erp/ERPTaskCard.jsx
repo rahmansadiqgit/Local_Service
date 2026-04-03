@@ -249,6 +249,7 @@ export default function ERPTaskCard({
       members,
     }
   })
+  const associatedMembersWithAssignments = associatedMembersByRole.filter((entry) => entry.members.length > 0)
   const hasAssociatedMembers = associatedMembersByRole.some((entry) => entry.members.length > 0)
   const selectedRoleState = selectedMemberRole ? getRoleState(selectedMemberRole) : {}
   const selectedAssigneeIds = Array.isArray(selectedRoleState.assignee_ids)
@@ -583,6 +584,7 @@ export default function ERPTaskCard({
         : 'border border-amber-200 bg-amber-50 text-amber-700'
   const isProviderTheme = isProvider
   const isReceiverTheme = isReceiver
+  const isDetailsOpen = expandedId === erp.id
   const cardShellClass = isProviderTheme
     ? 'border-transparent bg-gradient-to-br from-violet-50 via-purple-50 to-fuchsia-50 shadow-violet-200/45'
     : isReceiverTheme
@@ -626,11 +628,29 @@ export default function ERPTaskCard({
       .map((task) => pendingMemberRoleByTaskKey[String(task.key || '').trim()])
       .filter(Boolean),
   )
-  const shouldPulseMembersButton = pendingMemberRoles.size > 0
-  const shouldPulseActionsButton = openPendingTasks.length > 0 || shouldPulseMembersButton
+  const shouldPulseMembersButton = pendingMemberRoles.size > 0 && !isDetailsOpen
+  const shouldPulseActionsButton = (openPendingTasks.length > 0 || shouldPulseMembersButton) && !isDetailsOpen
   const canUseActionsMenu = isSupplyPost ? isBookingApproved : (isDemandPost ? isApplicationApproved : true)
   const menuItemBaseClass =
     'w-full rounded-xl border border-slate-200 bg-white px-4 py-2 text-left text-sm font-semibold text-slate-700 transition hover:border-violet-200 hover:bg-violet-50 hover:text-violet-700'
+
+  useEffect(() => {
+    if (!isDetailsOpen) return undefined
+
+    const previousOverflow = document.body.style.overflow
+    const previousPaddingRight = document.body.style.paddingRight
+    const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth
+
+    document.body.style.overflow = 'hidden'
+    if (scrollbarWidth > 0) {
+      document.body.style.paddingRight = `${scrollbarWidth}px`
+    }
+
+    return () => {
+      document.body.style.overflow = previousOverflow
+      document.body.style.paddingRight = previousPaddingRight
+    }
+  }, [isDetailsOpen])
 
   useEffect(() => {
     const handleOutsideClick = (event) => {
@@ -651,7 +671,7 @@ export default function ERPTaskCard({
   const renderTaskRow = (task, listType) => {
     const isOpenPending = listType === 'pending' && !task.done
     const isReadyProductTask = task.toggleable && task.key === 'ready_product'
-    const shouldBounceRow = isOpenPending && !(task.toggleable && task.key === 'ready_product')
+    const shouldBounceRow = isOpenPending && !(task.toggleable && task.key === 'ready_product') && !isDetailsOpen
     return (
       <li
         key={`${erp.id}-${listType}-${task.key || task.label}`}
@@ -871,7 +891,11 @@ export default function ERPTaskCard({
   }
 
   return (
-    <div className={`card relative overflow-hidden rounded-3xl border p-4 shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-xl ${cardShellClass}`}>
+    <div
+      className={`card relative overflow-hidden rounded-3xl border p-4 shadow-sm ${cardShellClass} ${
+        isDetailsOpen ? 'shadow-xl' : 'transition-all duration-300 hover:-translate-y-0.5 hover:shadow-xl'
+      }`}
+    >
       <div className="pointer-events-none absolute -right-14 -top-14 h-40 w-40 rounded-full bg-white/40 blur-2xl" />
       <div className="pointer-events-none absolute -left-10 bottom-10 h-28 w-28 rounded-full bg-white/30 blur-2xl" />
 
@@ -1635,13 +1659,13 @@ export default function ERPTaskCard({
         </div>
       ) : null}
 
-      {expandedId === erp.id && (
+      {isDetailsOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-2 sm:p-4" onClick={() => onToggleDetails(erp.id)}>
           <div className="max-h-[95vh] w-full max-w-7xl overflow-y-auto rounded-3xl border border-violet-200 bg-[#ece8f3] p-4 shadow-2xl sm:p-5" onClick={(event) => event.stopPropagation()}>
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-violet-200 bg-white px-4 py-3">
             <div>
               <p className="text-sm font-semibold text-violet-700">{isDemandPost ? 'Demand Post' : 'Available Post'}</p>
-              <p className="text-3xl font-bold text-violet-900">{snapshotPost.title || post?.post_title || post?.post_name || '-'}</p>
+              <p className="text-3xl font-bold text-violet-900">{post?.post_title || snapshotPost.title || post?.post_name || '-'}</p>
             </div>
             <div className="flex items-center gap-3">
               {isPostOwner ? (
@@ -1666,16 +1690,16 @@ export default function ERPTaskCard({
           <div className="rounded-2xl border border-violet-200 bg-white p-4">
             <h4 className="text-sm font-semibold text-slate-800">Post Details</h4>
             <div className="mt-2 grid gap-2 sm:grid-cols-2">
-              <p><span className="font-semibold text-slate-700">Title:</span> {snapshotPost.title || post?.post_title || '-'}</p>
-              <p><span className="font-semibold text-slate-700">Type:</span> {snapshotPost.type || post?.post_type || '-'}</p>
-              <p><span className="font-semibold text-slate-700">Name:</span> {snapshotPost.name || post?.post_name || '-'}</p>
-              <p><span className="font-semibold text-slate-700">Location:</span> {snapshotPost.location || post?.location || '-'}</p>
-              <p><span className="font-semibold text-slate-700">Brand:</span> {snapshotPost.brand_company_name || post?.brand_company_name || '-'}</p>
+              <p><span className="font-semibold text-slate-700">Post Type:</span> {post?.post_type || snapshotPost.type || '-'}</p>
+              <p><span className="font-semibold text-slate-700">Post Categories:</span> {post?.post_name || snapshotPost.name || '-'}</p>
+              <p><span className="font-semibold text-slate-700">Post Title:</span> {post?.post_title || snapshotPost.title || '-'}</p>
+              <p><span className="font-semibold text-slate-700">Location:</span> {post?.location || snapshotPost.location || '-'}</p>
+              <p><span className="font-semibold text-slate-700">Brand / Company:</span> {post?.brand_company_name || snapshotPost.brand_company_name || '-'}</p>
               <p>
                 <span className="font-semibold text-slate-700">Website:</span>{' '}
-                {snapshotPost.website_link || post?.website_link ? (
+                {post?.website_link || snapshotPost.website_link ? (
                   <a
-                    href={snapshotPost.website_link || post?.website_link}
+                    href={post?.website_link || snapshotPost.website_link}
                     target="_blank"
                     rel="noreferrer"
                     className="text-brand-600"
@@ -1687,10 +1711,7 @@ export default function ERPTaskCard({
             </div>
             <p className="mt-2">
               <span className="font-semibold text-slate-700">Description:</span>{' '}
-              {snapshotPost.description || post?.description || '-'}
-            </p>
-            <p className="mt-2">
-              <span className="font-semibold text-slate-700">Assigned Workers:</span> {(erp.assigned_workers || []).length}
+              {post?.description || snapshotPost.description || '-'}
             </p>
             <p className="mt-2">
               <span className="font-semibold text-slate-700">Note for Delivery Man:</span>{' '}
@@ -1702,7 +1723,7 @@ export default function ERPTaskCard({
             <h4 className="text-sm font-semibold text-slate-800">Associated Members</h4>
             {hasAssociatedMembers ? (
               <div className="mt-3 space-y-3">
-                {associatedMembersByRole.map(({ roleKey, roleLabel, members }) => (
+                {associatedMembersWithAssignments.map(({ roleKey, roleLabel, members }) => (
                   <div key={`erp-associated-${erp.id}-${roleKey}`} className="space-y-2">
                     <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{roleLabel}</p>
                     {members.length ? (

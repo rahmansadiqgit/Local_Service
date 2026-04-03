@@ -656,6 +656,7 @@ export default function Dashboard() {
 
     const { hasExpertise, hasServices, hasProduct, expertiseRows, serviceRows, productRows, showServiceDescription, showProductDescription } =
       buildCategoryRows(post)
+    const postImageSrc = toMediaUrl(post.image)
     const postOwnerId = Number(post.owner_id ?? post.owner)
     const postRatings = (ratingsByPost[post.id] || [])
       .filter((entry) => Number(entry?.provider) === postOwnerId)
@@ -665,6 +666,47 @@ export default function Dashboard() {
 
     return (
       <div className="space-y-3">
+        <div className="space-y-2 rounded-xl border border-violet-200/70 bg-white/80 p-3">
+          <p className="text-sm font-semibold text-slate-700">Post Details</p>
+          <div className="grid gap-2 text-sm text-slate-700 sm:grid-cols-2">
+            <p><span className="font-semibold text-slate-900">Post Type:</span> {post.post_type || '-'}</p>
+            <p><span className="font-semibold text-slate-900">Post Categories:</span> {post.post_name || '-'}</p>
+            <p><span className="font-semibold text-slate-900">Post Title:</span> {post.post_title || '-'}</p>
+            <p><span className="font-semibold text-slate-900">Brand / Company:</span> {post.brand_company_name || '-'}</p>
+            <p><span className="font-semibold text-slate-900">Location:</span> {post.location || '-'}</p>
+            <p>
+              <span className="font-semibold text-slate-900">Website:</span>{' '}
+              {post.website_link ? (
+                <a
+                  href={post.website_link}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-violet-700 underline-offset-2 hover:underline"
+                >
+                  Open link
+                </a>
+              ) : '-'}
+            </p>
+          </div>
+          <p className="text-sm text-slate-700">
+            <span className="font-semibold text-slate-900">Description:</span> {post.description || '-'}
+          </p>
+          <div className="text-sm text-slate-700">
+            <span className="font-semibold text-slate-900">Image:</span>
+            {postImageSrc ? (
+              <div className="mt-2 max-w-sm overflow-hidden rounded-xl border border-violet-200 bg-white p-1.5">
+                <img
+                  src={postImageSrc}
+                  alt={post.post_title || post.post_name || 'Post image'}
+                  className="h-44 w-full rounded-lg object-cover"
+                />
+              </div>
+            ) : (
+              <span className="ml-1">-</span>
+            )}
+          </div>
+        </div>
+
         {hasExpertise && (
           <div className="space-y-2 rounded-xl border border-violet-200/70 bg-white/80 p-3">
             <p className="text-sm font-semibold text-slate-700">Expertise</p>
