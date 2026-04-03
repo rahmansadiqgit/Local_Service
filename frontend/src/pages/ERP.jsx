@@ -268,14 +268,6 @@ export default function ERP() {
     return deduped
   }, [filteredTasks, searchParams, visibleErpItems, erpItems])
 
-  const notify = async (title, messageText) => {
-    try {
-      await api.post('/notifications/', { title, message: messageText })
-    } catch (error) {
-      console.error(error)
-    }
-  }
-
   const handleStageChange = async (erp, stage) => {
     const isProvider = currentUserId && String(erp.provider) === String(currentUserId)
     if (stage === 'Pending' && !isProvider) {
@@ -286,12 +278,6 @@ export default function ERP() {
     try {
       const { data } = await api.patch(`/erp/${erp.id}/update_stage/`, { stage })
       setErpItems((prev) => prev.map((item) => (item.id === data.id ? data : item)))
-      const bookingTitle =
-        erp?.configuration_snapshot?.post?.title || postMap[erp.post]?.post_title || postMap[erp.post]?.post_name || `Booking ${erp.id}`
-      notify(
-        'Booking Status Updated',
-        `Booking #${erp.id} for "${bookingTitle}" has moved to ${stage}. Check your Booking Tracker for the latest details. Post link: /erp?erp_id=${erp.id}`,
-      )
     } catch (error) {
       console.error(error)
     }
@@ -698,6 +684,18 @@ export default function ERP() {
     }
   }
 
+  const handleDeleteErp = async (erp) => {
+    try {
+      await api.delete(`/erp/${erp.id}/`)
+      setErpItems((prev) => prev.filter((item) => item.id !== erp.id))
+      setMessage('ERP Card deleted successfully')
+    } catch (error) {
+      console.error(error)
+      // Re-throw error to be caught by component
+      throw error
+    }
+  }
+
   const handleAutoGenerate = async () => {
     const pending = filteredTasks.filter((task) => !task.pdf_slip)
     for (const task of pending) {
@@ -756,6 +754,7 @@ export default function ERP() {
               onToggleTrack={(id) => setTrackOpenId((prev) => (prev === id ? null : id))}
               onToggleMessage={(id) => setMessageOpenId((prev) => (prev === id ? null : id))}
               onGeneratePdf={handleGeneratePdf}
+              onDelete={handleDeleteErp}
               onToggleDetails={(id) => setExpandedId((prev) => (prev === id ? null : id))}
               onTrackNext={handleTrackStage}
               onToggleReadyProduct={handleToggleReadyProduct}

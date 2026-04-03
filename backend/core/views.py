@@ -811,7 +811,7 @@ class ERPViewSet(viewsets.ModelViewSet):
                 notifications.append(
                     Notification(
                         user=target_user,
-                        title="Booking Confirmed",
+                        title="🎉 Booking Confirmed",
                         message=message,
                     )
                 )
@@ -962,7 +962,7 @@ class ERPViewSet(viewsets.ModelViewSet):
         notifications = [
             Notification(
                 user=actor,
-                title="✅ Application Request Sent" if is_demand_post else "Application Submitted",
+                title="✅ Application Request Sent" if is_demand_post else "✅ Application Submitted",
                 message=(
                     f'Your request for "{post_title}" has been sent to the post owner '
                     f'[{owner_name}]({owner_link}). ⏱ Waiting for approval. '
@@ -975,7 +975,7 @@ class ERPViewSet(viewsets.ModelViewSet):
             notifications.append(
                 Notification(
                     user=post_owner,
-                    title="🔔 New Application Request" if is_demand_post else "Someone applied to your post - review now",
+                    title="🔔 New Application Request" if is_demand_post else "👀 Someone applied to your post - review now",
                     message=(
                         f'You have a new application request for your post "{post_title}" from '
                         f'[{actor_name}]({applicant_link}) waiting for your response. '
@@ -1098,7 +1098,7 @@ class ERPViewSet(viewsets.ModelViewSet):
         notifications = [
             Notification(
                 user=actor,
-                title="Application Approved",
+                title="🎉 Application Approved",
                 message=(
                     f"You've approved {applicant_name}'s application for \"{post_title}\". "
                     "The Tracker is now active - complete your setup to get started. "
@@ -1161,6 +1161,7 @@ class ERPViewSet(viewsets.ModelViewSet):
             or getattr(post, "post_name", "")
             or "this post"
         )
+        owner_name = getattr(post_owner, "name", "") or getattr(post_owner, "username", "") or "Post owner"
         provider = getattr(erp, "provider", None)
 
         if provider and int(provider.id) != int(actor.id):
@@ -1211,20 +1212,36 @@ class ERPViewSet(viewsets.ModelViewSet):
         )
 
         members = User.objects.filter(id__in=list(added_ids))
-        is_demand_post = str(getattr(getattr(erp, "post", None), "post_type", "") or "").strip().lower() == "demand"
+        post_type_value = str(getattr(getattr(erp, "post", None), "post_type", "") or "").strip().lower()
+        is_demand_post = post_type_value == "demand"
+        is_supply_post = "supply" in post_type_value or "available" in post_type_value
         notifications = []
         for member in members:
             member_name = member.name or member.username or member.email or f"User #{member.id}"
             notifications.append(
                 Notification(
                     user=provider,
-                    title="Team Member Added",
+                    title="👥 Team Member Added",
                     message=(
                         f'{member_name} has been assigned to your booking "{post_title}" as {role_label}. '
                         f"Post link: /erp?erp_id={erp.id}"
                     ),
                 )
             )
+            if is_supply_post or is_demand_post:
+                notifications.append(
+                    Notification(
+                        user=member,
+                        title="👥 Team Member Added",
+                        message=(
+                            f'You are assigned as {role_label} to a Application "{post_title}". '
+                            f"Post link: /erp?erp_id={erp.id}"
+                        ) if is_demand_post else (
+                            f'You are assigned as {role_label} to a booking "{post_title}". '
+                            f"Post link: /erp?erp_id={erp.id}"
+                        ),
+                    )
+                )
 
         if notifications:
             Notification.objects.bulk_create(notifications)
@@ -1361,8 +1378,6 @@ class ERPViewSet(viewsets.ModelViewSet):
             instance = serializer.save(**save_kwargs)
             if requested_is_configured:
                 self._notify_booking_request_sent(instance, actor)
-            if requested_is_configured and not is_supply_post:
-                self._notify_booking_confirmation(instance, actor)
             data = self.get_serializer(instance).data
             headers = self.get_success_headers(data)
             return Response(data, status=status.HTTP_201_CREATED, headers=headers)
@@ -1405,9 +1420,6 @@ class ERPViewSet(viewsets.ModelViewSet):
             if next_is_configured and is_supply_post and previous_booking_status not in {"submitted", "pending"}:
                 self._notify_booking_request_sent(current, request.user)
 
-            if self._to_bool(request.data.get("is_configured", False)) and not is_supply_post and not was_configured:
-                self._notify_booking_confirmation(current, request.user)
-
             return Response(self.get_serializer(current).data)
         except (ValidationError, PermissionDenied):
             raise
@@ -1447,9 +1459,6 @@ class ERPViewSet(viewsets.ModelViewSet):
 
             if next_is_configured and is_supply_post and previous_booking_status not in {"submitted", "pending"}:
                 self._notify_booking_request_sent(current, request.user)
-
-            if self._to_bool(request.data.get("is_configured", False)) and not is_supply_post and not was_configured:
-                self._notify_booking_confirmation(current, request.user)
 
             return Response(self.get_serializer(current).data)
         except (ValidationError, PermissionDenied):
@@ -1776,7 +1785,7 @@ class ERPViewSet(viewsets.ModelViewSet):
         notifications = [
             Notification(
                 user=target,
-                title=f"Open Role Available: {role_title}" if is_demand_post else f"ERP Self-Assign Open: {role_title}",
+                title=f"🧩 Open Role Available: {role_title}" if is_demand_post else f"🧩 ERP Self-Assign Open: {role_title}",
                 message=body,
             )
             for target in receivers
@@ -2033,6 +2042,46 @@ class ERPViewSet(viewsets.ModelViewSet):
 
         erp.stage = stage
         erp.save(update_fields=["stage", "updated_at"])
+
+        post = getattr(erp, "post", None)
+        if post:
+            post_title = (
+                getattr(post, "post_title", "")
+                or getattr(post, "post_name", "")
+                or "this post"
+            )
+            stage_label = str(stage or "").strip() or "Unknown"
+            post_type_value = str(getattr(post, "post_type", "") or "").strip().lower()
+            is_supply_post = "supply" in post_type_value or "available" in post_type_value
+            provider = getattr(erp, "provider", None)
+            receiver = getattr(erp, "receiver", None)
+            recipients = []
+
+            if provider:
+                recipients.append(provider)
+            if receiver and (not provider or int(receiver.id) != int(provider.id)):
+                recipients.append(receiver)
+
+            notifications = [
+                Notification(
+                    user=recipient,
+                    title="✅Booking Status updated" if is_supply_post else "✅ Application Status Updated",
+                    message=(
+                        f'Application #{erp.id} for "{post_title}" has moved to {stage_label}. '
+                        "Check your Tracker for the latest details. "
+                        f"Post link: /erp?erp_id={erp.id}"
+                    ) if not is_supply_post else (
+                        f'Booking #{erp.id} for "{post_title}" has moved to {stage_label}. '
+                        "Check your Booking Tracker for the latest details. "
+                        f"Post link: /erp?erp_id={erp.id}"
+                    ),
+                )
+                for recipient in recipients
+            ]
+
+            if notifications:
+                Notification.objects.bulk_create(notifications)
+
         return Response(self.get_serializer(erp).data)
 
     @action(detail=True, methods=["post"])
@@ -2103,7 +2152,7 @@ class ERPViewSet(viewsets.ModelViewSet):
 
         Notification.objects.create(
             user=erp.provider,
-            title="Task Completed by Receiver" if str(getattr(getattr(erp, "post", None), "post_type", "") or "").strip().lower() == "demand" else "Booking Completed by Receiver",
+            title="✅ Task Completed by Receiver" if str(getattr(getattr(erp, "post", None), "post_type", "") or "").strip().lower() == "demand" else "✅ Booking Completed by Receiver",
             message=(
                 f'{receiver_name} has marked "{post_title}" as complete with a {rating_value}/5 rating. '
                 f'Their comment: "{comment}". '
@@ -2135,7 +2184,7 @@ class ERPViewSet(viewsets.ModelViewSet):
                 [
                     Notification(
                         user=participant,
-                        title="Task Successfully Completed" if str(getattr(getattr(erp, "post", None), "post_type", "") or "").strip().lower() == "demand" else "Booking Completed",
+                        title="✅ Task Successfully Completed" if str(getattr(getattr(erp, "post", None), "post_type", "") or "").strip().lower() == "demand" else "✅ Booking Completed",
                         message=(
                             f'The task "{post_title}" has been marked as complete. '
                             "The provider may now submit individual ratings for all team members involved. "
@@ -2152,7 +2201,7 @@ class ERPViewSet(viewsets.ModelViewSet):
 
         Notification.objects.create(
             user=request.user,
-            title="Completion Submitted Successfully",
+            title="✅ Completion Submitted Successfully" if str(getattr(getattr(erp, "post", None), "post_type", "") or "").strip().lower() == "demand" else "✅ Completion Submitted Successfully",
             message=(
                 f'Your completion and rating for "{post_title}" have been recorded. '
                 "Thank you for using the Booking Tracker — your feedback helps the community! "
@@ -2687,7 +2736,7 @@ class ERPViewSet(viewsets.ModelViewSet):
         self._notify_provider_member_activity(
             erp,
             request.user,
-            "New Message on Your cart" if str(getattr(getattr(erp, "post", None), "post_type", "") or "").strip().lower() == "demand" else "New Message on Booking",
+            "💬 New Message on Your cart" if str(getattr(getattr(erp, "post", None), "post_type", "") or "").strip().lower() == "demand" else "💬 New Message on Booking",
             (
                 f'{actor_name} sent a message on "{post_title}". Tap to view and reply in the chat. '
                 f"Post link: /erp?erp_id={erp.id}"
@@ -2696,6 +2745,91 @@ class ERPViewSet(viewsets.ModelViewSet):
 
         serializer = ERPMessageSerializer(instance)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+    def perform_destroy(self, instance):
+        """
+        Only provider and receiver can delete an ERP card.
+        When deleted:
+        1. Removes the ERP for both parties
+        2. Notifies provider, receiver, and all associated members
+        """
+        actor = self.request.user
+        provider = getattr(instance, "provider", None)
+        receiver = getattr(instance, "receiver", None)
+
+        # Check if actor is provider or receiver
+        if not (actor == provider or actor == receiver):
+            raise PermissionDenied(
+                "Only the provider and receiver can delete this ERP card. Associated members cannot delete."
+            )
+
+        # Collect all recipients for notification
+        recipients = set()
+        if provider:
+            recipients.add(provider)
+        if receiver:
+            recipients.add(receiver)
+
+        # Add all associated members from configuration_snapshot
+        snapshot = self._as_dict(getattr(instance, "configuration_snapshot", None))
+        members = self._as_dict(snapshot.get("members", {}))
+        
+        # Role keys that contain assignee IDs
+        role_keys = ["expertise", "skill_provider", "supplier"]
+        for role_key in role_keys:
+            role_data = members.get(role_key)
+            if isinstance(role_data, dict):
+                assignee_ids = role_data.get("assignee_ids", [])
+                if isinstance(assignee_ids, list):
+                    for user_id in assignee_ids:
+                        try:
+                            user = User.objects.get(id=int(user_id))
+                            recipients.add(user)
+                        except (User.DoesNotExist, ValueError, TypeError):
+                            pass
+
+        # Remove the actor from recipients (they already know they deleted it)
+        recipients.discard(actor)
+
+        # Get ERP name
+        erp_name = (
+            snapshot.get("post", {}).get("title")
+            or getattr(instance.post, "post_title", "")
+            or getattr(instance.post, "post_name", "")
+            or f"ERP #{instance.id}"
+        )
+
+        # Get deleter name
+        deleter_name = (
+            getattr(actor, "name", "")
+            or getattr(actor, "username", "")
+            or f"User #{actor.id}"
+        )
+
+        # Get deleter role
+        deleter_role = "Provider" if actor == provider else "Receiver"
+
+        # Create notifications for all recipients
+        try:
+            notifications = []
+            for recipient in recipients:
+                notification = Notification(
+                    user=recipient,
+                    title="🗑️ ERP Card Deleted",
+                    message=(
+                        f'The ERP card "{erp_name}" has been deleted by {deleter_role} {deleter_name}. '
+                        "This has been removed from your booking tracker."
+                    ),
+                )
+                notifications.append(notification)
+
+            if notifications:
+                Notification.objects.bulk_create(notifications)
+        except Exception:
+            logger.exception("Failed to create deletion notifications for ERP %s", getattr(instance, "id", None))
+
+        # Delete the ERP card
+        instance.delete()
 
 
 class RatingViewSet(viewsets.ModelViewSet):
@@ -2926,10 +3060,43 @@ class ConnectionViewSet(viewsets.GenericViewSet):
 
         sender_name = request.user.name or request.user.username or request.user.email
         role_label = connection.get_requested_role_display()
+        receiver_role_label = "Delivery" if role_label == "Delivery Man" else role_label
+        addressee_name = addressee.name or addressee.username or addressee.email
+        
+        # Create role-specific messages
+        if receiver_role_label == "Delivery":
+            receiver_message = f"{sender_name} requested to connect with you for making a delivery for him.{f' Message: {message}' if message else ''}"
+            sender_message = f"You have requested to connect with a delivary man {addressee_name}."
+        elif role_label == "Skill Provider":
+            receiver_message = f"You are requested to connect as a skill provider for {sender_name}.{f' Message: {message}' if message else ''}"
+            sender_message = f"You have requested to connect with  a skill provider {addressee_name}."
+        elif role_label == "Expertise":
+             receiver_message = f"You are requested to connect as a expertise for {sender_name}.{f' Message: {message}' if message else ''}"
+             sender_message = f"You have requested to connect with a Expertise {addressee_name}."
+        else:
+            receiver_message = f"{sender_name} requested to connect with you as {receiver_role_label}.{f' Message: {message}' if message else ''}"
+            sender_message = f"You requested to connect with {addressee_name} as {role_label}."
+        
+        # Notification for receiver
         Notification.objects.create(
             user=addressee,
+            notification_type=Notification.NotificationType.CONNECTION_REQUEST,
+            actor=request.user,
+            related_user=request.user,
+            connection_role=requested_role,
             title="Connection Request",
-            message=f"{sender_name} sent you a connection request for {role_label}.{f' Message: {message}' if message else ''}",
+            message=receiver_message,
+        )
+        
+        # Notification for sender
+        Notification.objects.create(
+            user=request.user,
+            notification_type=Notification.NotificationType.CONNECTION_REQUEST,
+            actor=request.user,
+            related_user=addressee,
+            connection_role=requested_role,
+            title="Connection Request Sent",
+            message=sender_message,
         )
 
         return Response(ConnectionSerializer(connection).data, status=status.HTTP_201_CREATED)
@@ -2953,25 +3120,82 @@ class ConnectionViewSet(viewsets.GenericViewSet):
             connection.save(update_fields=["status", "accepted_at", "updated_at"])
 
             sender_name = request.user.name or request.user.username or request.user.email
+            role_label = connection.get_requested_role_display()
+            requester_name = (
+                connection.requester.name
+                or connection.requester.username
+                or connection.requester.email
+            )
+            
+            # Create role-specific messages
+            if role_label == "Delivery Man":
+                requester_message = f"{sender_name} accepted your connection request for making delivery."
+                acceptor_message = f"You accepted {requester_name}'s connection request for making delivery for him."
+            else:
+                requester_message = f"{sender_name} accepted your connection request as {role_label}."
+                acceptor_message = f"You accepted {requester_name}'s connection request as {role_label}."
+            
+            # Notification for requester (they see: "Antu accepted your connection request")
             Notification.objects.create(
                 user=connection.requester,
+                notification_type=Notification.NotificationType.CONNECTION_ACCEPTED,
+                actor=request.user,
+                related_user=request.user,
+                connection_role=connection.requested_role,
                 title="Connection Request Accepted",
-                message=f"{sender_name} accepted your connection request.",
+                message=requester_message,
             )
+            
+            # Notification for acceptor (they see: "You accepted Sadiq's connection request")
             Notification.objects.create(
                 user=request.user,
+                notification_type=Notification.NotificationType.CONNECTION_ACCEPTED,
+                actor=request.user,
+                related_user=connection.requester,
+                connection_role=connection.requested_role,
                 title="Connection Added",
-                message=f"You are now connected with {connection.requester.name or connection.requester.username or connection.requester.email}.",
+                message=acceptor_message,
             )
         else:
             connection.status = ConnectionStatus.REJECTED
             connection.save(update_fields=["status", "updated_at"])
 
             sender_name = request.user.name or request.user.username or request.user.email
+            role_label = connection.get_requested_role_display()
+            requester_name = (
+                connection.requester.name
+                or connection.requester.username
+                or connection.requester.email
+            )
+            
+            # Create role-specific messages
+            if role_label == "Delivery Man":
+                requester_message = f"{sender_name} rejected your connection request for making delivery."
+                rejector_message = f"You rejected {requester_name}'s connection request for making delivery."
+            else:
+                requester_message = f"{sender_name} rejected your connection request as {role_label}."
+                rejector_message = f"You rejected {requester_name}'s connection request as {role_label}."
+            
+            # Notification for requester (they see: "Antu rejected your connection request")
             Notification.objects.create(
                 user=connection.requester,
+                notification_type=Notification.NotificationType.CONNECTION_REJECTED,
+                actor=request.user,
+                related_user=request.user,
+                connection_role=connection.requested_role,
                 title="Connection Request Rejected",
-                message=f"{sender_name} rejected your connection request.",
+                message=requester_message,
+            )
+            
+            # Notification for rejector (they see: "You rejected Sadiq's connection request")
+            Notification.objects.create(
+                user=request.user,
+                notification_type=Notification.NotificationType.CONNECTION_REJECTED,
+                actor=request.user,
+                related_user=connection.requester,
+                connection_role=connection.requested_role,
+                title="Connection Request Rejected",
+                message=rejector_message,
             )
 
         return Response(ConnectionSerializer(connection).data)
@@ -2979,6 +3203,7 @@ class ConnectionViewSet(viewsets.GenericViewSet):
     @action(detail=False, methods=["post"])
     def remove(self, request):
         target_user_id = request.data.get("target_user_id")
+        connection_type = str(request.data.get("connection_type", "")).strip().lower()
 
         try:
             target_user_id = int(target_user_id)
@@ -3006,16 +3231,148 @@ class ConnectionViewSet(viewsets.GenericViewSet):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-        removed_count = accepted_connections.count()
-        accepted_connections.delete()
+        removed_connections = list(accepted_connections)
+        removed_count = len(removed_connections)
 
         target_user = User.objects.filter(id=target_user_id).first()
         actor_name = request.user.name or request.user.username or request.user.email
+        target_name = (
+            target_user.name or target_user.username or target_user.email
+            if target_user
+            else f"User #{target_user_id}"
+        )
+
+        role_labels = {
+            ConnectionRole.EXPERTISE: "expertise",
+            ConnectionRole.SKILL_PROVIDER: "skill provider",
+            ConnectionRole.SUPPLIER: "delivery man",
+        }
+
+        role_labels_title = {
+            ConnectionRole.EXPERTISE: "Expertise",
+            ConnectionRole.SKILL_PROVIDER: "Skill Provider",
+            ConnectionRole.SUPPLIER: "Delivery Man",
+        }
+
+        connection_type_to_role = {
+            "delivery man": "delivery man",
+            "delivery": "delivery man",
+            "supplier": "delivery man",
+            "skill provider": "skill provider",
+            "skill providers": "skill provider",
+            "expertise": "expertise",
+        }
+        selected_role_text = connection_type_to_role.get(connection_type)
+        is_hired_view = connection_type in {"hired", "hired by", "hired_by"}
+
+        # When requester removes, they are leaving the connection from their requested role.
+        requester_side = next(
+            (
+                conn for conn in removed_connections
+                if conn.requester_id == request.user.id and conn.addressee_id == target_user_id
+            ),
+            None,
+        )
+
+        # When addressee removes, target requester is the hired/member role.
+        addressee_side = next(
+            (
+                conn for conn in removed_connections
+                if conn.requester_id == target_user_id and conn.addressee_id == request.user.id
+            ),
+            None,
+        )
+
+        # Case 1: current user originally requested the connection and is now removing it.
+        if requester_side:
+            actor_role_text = role_labels.get(requester_side.requested_role, "member")
+            actor_role_title = role_labels_title.get(requester_side.requested_role, "Member")
+            
+            # Delivery wording uses an action-based sentence instead of role label.
+            if actor_role_title == "Delivery Man":
+                actor_message = f"You have removed connection for making delivery for {target_name}."
+                target_message = f"{actor_name} has removed connection from you for making delivery."
+            # Skill provider and expertise use role-specific copy for both sides.
+            elif actor_role_title == "Skill Provider":
+                actor_message = f"You have removed connection with a skill provider {target_name}."
+                target_message = f"{actor_name} has removed connection from you . So from now you are not {actor_role_text} for {actor_name} ."
+            elif actor_role_title == "Expertise":
+                actor_message = f"You have removed connection with a expertise {target_name}."
+                target_message = f"{actor_name} has removed connection from you . So from now you are not {actor_role_text} for {actor_name} ."
+            # Fallback for any future/unknown role.
+            else:
+                actor_message = f"You have removed connection with {target_name} as a {actor_role_text}."
+                target_message = f"{actor_name} has removed connection from you as a {actor_role_text}."
+        # Case 2: current user was the addressee and removed a requester-side connection.
+        elif addressee_side:
+            target_role_text = role_labels.get(addressee_side.requested_role, "member")
+            target_role_title = role_labels_title.get(addressee_side.requested_role, "Member")
+            
+            # Keep delivery message explicit for delivery work context.
+            if target_role_title == "Delivery Man":
+                actor_message = f"You have removed connection for making delivery for {target_name}."
+                target_message = f"{actor_name} has removed connection from you for making delivery."
+            # Role-specific copy for skill provider and expertise.
+            elif target_role_title == "Skill Provider":
+                actor_message = f"You have removed connection with a skill provider {target_name}."
+                target_message = f"{actor_name} has removed connection from you as a skill provider."
+            elif target_role_title == "Expertise":
+                actor_message = f"You have removed connection with a expertise {target_name}."
+                target_message = f"{actor_name} has removed connection from you as a {target_role_text}."
+            # If user removed from a filtered connection list (members tab), preserve that selected role wording.
+            elif selected_role_text and not is_hired_view:
+                actor_message = f"You have removed a {selected_role_text} {target_name}."
+                target_message = f"{actor_name} has removed you as a {selected_role_text}."
+            # Hired view fallback with role-aware handling where available.
+            elif is_hired_view:
+                if target_role_title == "Skill Provider":
+                    actor_message = f"You have removed connection with a skill provider {target_name}."
+                    target_message = f"{actor_name} has removed connection from you as a skill provider."
+                elif target_role_title == "Expertise":
+                    actor_message = f"You have removed connection with a expertise {target_name}."
+                    target_message = f"{actor_name} has removed connection from you as a {target_role_text}."
+                else:
+                    actor_message = f"You have removed connection with {target_name}."
+                    target_message = f"{actor_name} has removed connection from you."
+            # Generic fallback when no special context was detected.
+            else:
+                actor_message = f"You have removed a {target_role_text} named {target_name}."
+                target_message = f"{actor_name} has removed you as a {target_role_text}."
+        # Safety fallback if neither direction was matched.
+        else:
+            actor_message = f"You have removed connection with {target_name}."
+            target_message = f"{actor_name} removed your connection."
+
+        accepted_connections.delete()
+
+        # Determine role and message context
+        role_used = None
+        if requester_side:
+            role_used = requester_side.requested_role
+        elif addressee_side:
+            role_used = addressee_side.requested_role
+
+        # Notification for actor (person who removed)
+        Notification.objects.create(
+            user=request.user,
+            notification_type=Notification.NotificationType.CONNECTION_REMOVED,
+            actor=request.user,
+            related_user=target_user,
+            connection_role=role_used or "",
+            title="Connection Removed",
+            message=actor_message,
+        )
+
+        # Notification for target (person whose connection was removed)
         if target_user:
             Notification.objects.create(
                 user=target_user,
+                notification_type=Notification.NotificationType.CONNECTION_REMOVED,
+                actor=request.user,
+                related_user=request.user,
+                connection_role=role_used or "",
                 title="Connection Removed",
-                message=f"{actor_name} removed your connection.",
+                message=target_message,
             )
 
         return Response(
