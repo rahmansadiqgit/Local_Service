@@ -837,7 +837,7 @@ class ERPViewSet(viewsets.ModelViewSet):
                 message=(
                     f'Your request for "{post_title}" has been sent to the post owner [{owner_name}]({owner_link}). '
                     "⏱ Waiting for approval. "
-                    "Post link: /feed"
+                    f"Post link: /erp?erp_id={erp.id}"
                 ),
             )
         ]
@@ -1273,10 +1273,17 @@ class ERPViewSet(viewsets.ModelViewSet):
 
         visible_ids = []
         for item in merged_queryset.select_related("post"):
-            # Demand applications stay visible to the demand post owner for review,
-            # but remain hidden from task views until approved for others.
+            # Demand applications stay visible to the demand post owner for review.
+            # Keep them visible for the applicant too so opening /erp?erp_id=<id>
+            # right after submit shows the exact card they just created.
             post_owner_id = getattr(item.post, "owner_id", None)
             if post_owner_id and int(post_owner_id) == int(user.id):
+                visible_ids.append(int(item.id))
+                continue
+
+            post_type = str(getattr(getattr(item, "post", None), "post_type", "") or "").strip().lower()
+            provider_id = getattr(item, "provider_id", None)
+            if post_type == "demand" and provider_id and int(provider_id) == int(user.id):
                 visible_ids.append(int(item.id))
                 continue
 

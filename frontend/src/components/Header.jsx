@@ -332,6 +332,12 @@ export default function Header() {
     const message = String(item?.message || "")
     const messageLower = message.toLowerCase()
 
+    // Prefer an explicit in-message link when available.
+    const postLinkMatch = message.match(/post\s+link:\s*([^\s]+)/i)
+    if (postLinkMatch && postLinkMatch[1]) {
+      return postLinkMatch[1].trim()
+    }
+
     if (title.includes("booking request sent") || title.includes("application request sent")) {
       return "/feed"
     }
@@ -348,10 +354,9 @@ export default function Header() {
       return "/dashboard"
     }
 
-    // Prefer an explicit in-message link when available.
-    const postLinkMatch = message.match(/post\s+link:\s*([^\s]+)/i)
-    if (postLinkMatch && postLinkMatch[1]) {
-      return postLinkMatch[1].trim()
+    const erpIdMatch = message.match(/erp\s*#\s*(\d+)/i)
+    if (erpIdMatch && erpIdMatch[1]) {
+      return `/erp?erp_id=${erpIdMatch[1]}`
     }
 
     if (
@@ -364,11 +369,6 @@ export default function Header() {
 
     if (title.includes("connection request") || messageLower.includes("connection request")) {
       return "/connections"
-    }
-
-    const erpIdMatch = message.match(/erp\s*#\s*(\d+)/i)
-    if (erpIdMatch && erpIdMatch[1]) {
-      return `/erp?erp_id=${erpIdMatch[1]}`
     }
 
     if (title.includes("erp") || messageLower.includes("erp")) {

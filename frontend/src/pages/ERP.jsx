@@ -254,12 +254,19 @@ export default function ERP() {
     })
 
     const deduped = Array.from(byKey.values())
-    if (!Number.isFinite(focusErpId) || focusErpId <= 0) {
-      return deduped
+
+    if (Number.isFinite(focusErpId) && focusErpId > 0) {
+      const focusedVisible = visibleErpItems.find((erp) => Number(erp.id) === focusErpId)
+      if (focusedVisible) {
+        return [focusedVisible]
+      }
+
+      const focusedAny = erpItems.find((erp) => Number(erp.id) === focusErpId)
+      return focusedAny ? [focusedAny] : []
     }
 
-    return deduped.filter((erp) => Number(erp.id) === focusErpId)
-  }, [filteredTasks, searchParams])
+    return deduped
+  }, [filteredTasks, searchParams, visibleErpItems, erpItems])
 
   const notify = async (title, messageText) => {
     try {
