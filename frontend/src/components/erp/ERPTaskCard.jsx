@@ -22,7 +22,6 @@ export default function ERPTaskCard({
   onToggleTrack,
   onToggleMessage,
   onGeneratePdf,
-  onDelete,
   onToggleDetails,
   onTrackNext,
   onToggleReadyProduct,
@@ -56,11 +55,13 @@ export default function ERPTaskCard({
   const [isLeavingAssignment, setIsLeavingAssignment] = useState(false)
   const [isCompletionFormOpen, setIsCompletionFormOpen] = useState(false)
   const [completionRating, setCompletionRating] = useState('')
+  const [completionHoverRating, setCompletionHoverRating] = useState(0)
   const [completionComment, setCompletionComment] = useState('')
   const [completionError, setCompletionError] = useState('')
   const [isSubmittingCompletion, setIsSubmittingCompletion] = useState(false)
   const [selectedParticipantId, setSelectedParticipantId] = useState('')
   const [participantRating, setParticipantRating] = useState('')
+  const [participantHoverRating, setParticipantHoverRating] = useState(0)
   const [participantComment, setParticipantComment] = useState('')
   const [participantRatingError, setParticipantRatingError] = useState('')
   const [participantRatingSuccess, setParticipantRatingSuccess] = useState('')
@@ -68,13 +69,11 @@ export default function ERPTaskCard({
   const [isParticipantRatingOpen, setIsParticipantRatingOpen] = useState(false)
   const [isProviderFeedbackOpen, setIsProviderFeedbackOpen] = useState(false)
   const [providerFeedbackRating, setProviderFeedbackRating] = useState('')
+  const [providerHoverRating, setProviderHoverRating] = useState(0)
   const [providerFeedbackComment, setProviderFeedbackComment] = useState('')
   const [providerFeedbackError, setProviderFeedbackError] = useState('')
   const [providerFeedbackSuccess, setProviderFeedbackSuccess] = useState('')
   const [isSubmittingProviderFeedback, setIsSubmittingProviderFeedback] = useState(false)
-  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false)
-  const [isDeletingErp, setIsDeletingErp] = useState(false)
-  const [deleteError, setDeleteError] = useState('')
   const [isDecidingBooking, setIsDecidingBooking] = useState(false)
 
   const snapshot = erp.configuration_snapshot || {}
@@ -140,6 +139,60 @@ export default function ERPTaskCard({
     available_units: getDisplayQty(row),
   }))
   const supplierNote = String(snapshot?.notes?.supplier_note || snapshot?.supplier_note || '').trim()
+  const ratingLabels = {
+    1: '1 - Very Poor',
+    2: '2 - Poor',
+    3: '3 - Average',
+    4: '4 - Good',
+    5: '5 - Excellent',
+  }
+  const getRatingLabel = (value) => ratingLabels[value] || 'Select rating'
+  const getRatingTextClass = (value) => {
+    if (value >= 4) return 'text-emerald-700'
+    if (value === 3) return 'text-amber-700'
+    if (value > 0) return 'text-rose-700'
+    return 'text-slate-500'
+  }
+  const getRatingMood = (value) => {
+    if (value >= 4.5) return { label: 'Excellent', className: 'text-emerald-700' }
+    if (value >= 3.5) return { label: 'Good', className: 'text-lime-700' }
+    if (value >= 2.5) return { label: 'Average', className: 'text-amber-700' }
+    if (value >= 1.5) return { label: 'Poor', className: 'text-orange-700' }
+    if (value > 0) return { label: 'Very Poor', className: 'text-rose-700' }
+    return { label: 'No Rating Yet', className: 'text-slate-500' }
+  }
+  const renderStarRating = ({ value, onChange, hoverValue, onHoverChange, onClearHover, idPrefix }) => {
+    const numericValue = Number(value) || 0
+    const visualValue = hoverValue > 0 ? hoverValue : numericValue
+
+    return (
+      <div className="mt-1" onMouseLeave={onClearHover}>
+        <div className="flex items-center gap-1">
+          {[1, 2, 3, 4, 5].map((star) => (
+            <button
+              key={`${idPrefix}-star-${star}`}
+              type="button"
+              onMouseEnter={() => onHoverChange(star)}
+              onFocus={() => onHoverChange(star)}
+              onClick={() => onChange(String(star))}
+              aria-label={`Rate ${star} star${star > 1 ? 's' : ''}`}
+              className={`text-2xl leading-none transition-colors ${
+                visualValue >= star ? 'text-amber-400' : 'text-slate-300 hover:text-amber-300'
+              }`}
+            >
+              ★
+            </button>
+          ))}
+        </div>
+        <p className={`mt-1 text-[11px] font-semibold ${getRatingTextClass(numericValue)}`}>
+          {getRatingLabel(numericValue)}
+        </p>
+      </div>
+    )
+  }
+  const ratingValue = Number(rating) || 0
+  const ratingFillPercent = `${Math.max(0, Math.min(100, (ratingValue / 5) * 100))}%`
+  const ratingMood = getRatingMood(ratingValue)
   const bookingSubmission = snapshot.booking_submission || {}
   const bookingStatus = String(bookingSubmission?.status || '').trim().toLowerCase()
   const applicationSubmission = snapshot.application_submission || {}
@@ -1021,10 +1074,16 @@ export default function ERPTaskCard({
       <div className="relative mt-1 grid gap-2 text-sm sm:grid-cols-2">
         <div className="rounded-xl border border-amber-300/80 bg-gradient-to-br from-amber-100 to-yellow-100 px-3 py-2 text-amber-900 shadow-sm">
           <span className="text-[11px] font-semibold uppercase tracking-wide text-amber-700">Rating</span>
-          <p className="mt-0.5 text-2xl font-bold leading-none">
-            {rating.toFixed(1)}
-            <span className="ml-1 text-xl font-semibold">/5</span>
-          </p>
+          <div className="mt-1 flex items-center gap-2">
+            <div className="relative inline-block text-xl leading-none" aria-hidden="true">
+              <div className="text-slate-300">★★★★★</div>
+              <div className="absolute inset-0 overflow-hidden text-amber-400" style={{ width: ratingFillPercent }}>
+                ★★★★★
+              </div>
+            </div>
+            <span className="text-sm font-semibold text-amber-900">{ratingValue.toFixed(1)}/5</span>
+          </div>
+          <p className={`mt-1 text-xs font-semibold ${ratingMood.className}`}>{ratingMood.label}</p>
         </div>
         <div className="rounded-xl border border-emerald-300/80 bg-gradient-to-br from-emerald-100 to-green-100 px-3 py-2 text-emerald-900 shadow-sm">
           <span className="text-[11px] font-semibold uppercase tracking-wide text-emerald-700">Total</span>
@@ -1317,27 +1376,6 @@ export default function ERPTaskCard({
                 </div>
               )}
             </div>
-
-            {isProvider || (currentUserId && String(erp.receiver) === String(currentUserId)) ? (
-              <button
-                type="button"
-                onClick={() => {
-                  setIsDeleteConfirmOpen(true)
-                }}
-                className="w-full rounded-xl border border-rose-300 bg-rose-50 px-4 py-2 text-left text-sm font-semibold text-rose-700 transition hover:bg-rose-100"
-              >
-                Delete
-              </button>
-            ) : (
-              <button
-                type="button"
-                disabled
-                title="Only provider and receiver can delete this ERP card"
-                className="w-full cursor-not-allowed rounded-xl border border-slate-200 bg-slate-100 px-4 py-2 text-left text-sm font-semibold text-slate-400"
-              >
-                Delete (Read-only)
-              </button>
-            )}
 
             <button
               type="button"
@@ -1859,21 +1897,17 @@ export default function ERPTaskCard({
           <div className="grid gap-2 sm:grid-cols-2">
             <label className="text-xs font-semibold text-slate-700">
               Rating
-              <select
-                value={completionRating}
-                onChange={(event) => {
-                  setCompletionRating(event.target.value)
+              {renderStarRating({
+                value: completionRating,
+                onChange: (nextValue) => {
+                  setCompletionRating(nextValue)
                   if (completionError) setCompletionError('')
-                }}
-                className="mt-1 w-full rounded-md border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700 outline-none focus:border-emerald-300"
-              >
-                <option value="">Select rating</option>
-                <option value="5">5 - Excellent</option>
-                <option value="4">4 - Good</option>
-                <option value="3">3 - Average</option>
-                <option value="2">2 - Poor</option>
-                <option value="1">1 - Very Poor</option>
-              </select>
+                },
+                hoverValue: completionHoverRating,
+                onHoverChange: setCompletionHoverRating,
+                onClearHover: () => setCompletionHoverRating(0),
+                idPrefix: `completion-${erp.id}`,
+              })}
             </label>
           </div>
 
@@ -1943,21 +1977,17 @@ export default function ERPTaskCard({
 
           <label className="text-xs font-semibold text-slate-700">
             Rating
-            <select
-              value={providerFeedbackRating}
-              onChange={(event) => {
-                setProviderFeedbackRating(event.target.value)
+            {renderStarRating({
+              value: providerFeedbackRating,
+              onChange: (nextValue) => {
+                setProviderFeedbackRating(nextValue)
                 if (providerFeedbackError) setProviderFeedbackError('')
-              }}
-              className="mt-1 w-full rounded-md border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700 outline-none focus:border-brand-300"
-            >
-              <option value="">Select rating</option>
-              <option value="5">5 - Excellent</option>
-              <option value="4">4 - Good</option>
-              <option value="3">3 - Average</option>
-              <option value="2">2 - Poor</option>
-              <option value="1">1 - Very Poor</option>
-            </select>
+              },
+              hoverValue: providerHoverRating,
+              onHoverChange: setProviderHoverRating,
+              onClearHover: () => setProviderHoverRating(0),
+              idPrefix: `provider-feedback-${erp.id}`,
+            })}
           </label>
 
           <label className="text-xs font-semibold text-slate-700">
@@ -2028,21 +2058,17 @@ export default function ERPTaskCard({
 
           <label className="text-xs font-semibold text-slate-700">
             Rating
-            <select
-              value={participantRating}
-              onChange={(event) => {
-                setParticipantRating(event.target.value)
+            {renderStarRating({
+              value: participantRating,
+              onChange: (nextValue) => {
+                setParticipantRating(nextValue)
                 if (participantRatingError) setParticipantRatingError('')
-              }}
-              className="mt-1 w-full rounded-md border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700 outline-none focus:border-sky-300"
-            >
-              <option value="">Select rating</option>
-              <option value="5">5 - Excellent</option>
-              <option value="4">4 - Good</option>
-              <option value="3">3 - Average</option>
-              <option value="2">2 - Poor</option>
-              <option value="1">1 - Very Poor</option>
-            </select>
+              },
+              hoverValue: participantHoverRating,
+              onHoverChange: setParticipantHoverRating,
+              onClearHover: () => setParticipantHoverRating(0),
+              idPrefix: `participant-${erp.id}`,
+            })}
           </label>
 
           <label className="text-xs font-semibold text-slate-700">
@@ -2095,56 +2121,6 @@ export default function ERPTaskCard({
         </div>
       ) : null}
 
-      {isDeleteConfirmOpen ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-lg max-w-sm">
-            <h3 className="text-lg font-bold text-slate-900">Delete ERP Card</h3>
-            <p className="mt-2 text-sm text-slate-600">
-              Are you sure you want to delete this ERP Card? This action cannot be undone. It will also be deleted from the other party's view.
-            </p>
-            {deleteError && (
-              <div className="mt-3 rounded-lg border border-rose-300 bg-rose-50 p-2">
-                <p className="text-xs font-semibold text-rose-700">{deleteError}</p>
-              </div>
-            )}
-            <div className="mt-6 flex gap-3">
-              <button
-                type="button"
-                onClick={() => {
-                  setIsDeleteConfirmOpen(false)
-                  setDeleteError('')
-                }}
-                disabled={isDeletingErp}
-                className="flex-1 rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-400 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={async () => {
-                  setIsDeletingErp(true)
-                  setDeleteError('')
-                  try {
-                    await onDelete?.(erp)
-                    setIsDeleteConfirmOpen(false)
-                    setIsActionsMenuOpen(false)
-                  } catch (error) {
-                    console.error('Delete failed:', error)
-                    const errorMsg = error.response?.data?.detail || error.message || 'Failed to delete ERP card'
-                    setDeleteError(errorMsg)
-                  } finally {
-                    setIsDeletingErp(false)
-                  }
-                }}
-                disabled={isDeletingErp}
-                className="flex-1 rounded-full border border-rose-300 bg-rose-100 px-4 py-2 text-sm font-semibold text-rose-700 transition hover:bg-rose-200 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {isDeletingErp ? 'Deleting...' : 'Delete'}
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
     </div>
   )
 }
