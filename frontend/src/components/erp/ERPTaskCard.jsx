@@ -1,8 +1,12 @@
 import { useCallback, useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 
 import api from '../../api/client'
 import defaultAvatar from '../../assets/default-avatar.svg'
+import ExpertiseTable from '../ExpertiseTable'
+import ProductTable from '../ProductTable'
 import RatingRingAvatar from '../RatingRingAvatar'
+import ServiceTable from '../ServiceTable'
 
 export default function ERPTaskCard({
   erp,
@@ -38,6 +42,7 @@ export default function ERPTaskCard({
   onOpenOwner,
   toMediaUrl,
 }) {
+  const navigate = useNavigate()
   const [isActionsMenuOpen, setIsActionsMenuOpen] = useState(false)
   const [isMembersMenuOpen, setIsMembersMenuOpen] = useState(false)
   const [selectedMemberRole, setSelectedMemberRole] = useState(null)
@@ -78,6 +83,62 @@ export default function ERPTaskCard({
   const snapshotServices = Array.isArray(snapshot.services) ? snapshot.services : []
   const snapshotProducts = Array.isArray(snapshot.products) ? snapshot.products : []
   const snapshotTotals = snapshot.totals || {}
+  const getDisplayQty = (row) => Number(row?.offered_people ?? row?.offered_quantity ?? row?.quantity ?? 0)
+  const getDisplayDuration = (row) => Number(row?.offered_hours ?? row?.offered_unit_per_person ?? row?.duration ?? 0)
+  const getDisplayUnitCost = (row) => Number(
+    row?.offered_budget_per_person
+      ?? row?.offered_rate
+      ?? row?.offered_price
+      ?? row?.unit_cost
+      ?? row?.cost
+      ?? 0,
+  )
+  const getDisplayLineTotal = (row) => Number(row?.line_total ?? row?.lineTotal ?? 0)
+  const selectedExpertiseRows = snapshotExpertise.filter((row) => {
+    if (!row || typeof row !== 'object') return false
+    if (row.included === false) return false
+    const qty = getDisplayQty(row)
+    const lineTotal = getDisplayLineTotal(row)
+    return qty > 0 || lineTotal > 0
+  })
+  const selectedServiceRows = snapshotServices.filter((row) => {
+    if (!row || typeof row !== 'object') return false
+    if (row.included === false) return false
+    const qty = getDisplayQty(row)
+    const lineTotal = getDisplayLineTotal(row)
+    return qty > 0 || lineTotal > 0
+  })
+  const selectedProductRows = snapshotProducts.filter((row) => {
+    if (!row || typeof row !== 'object') return false
+    if (row.included === false) return false
+    const qty = getDisplayQty(row)
+    const lineTotal = getDisplayLineTotal(row)
+    return qty > 0 || lineTotal > 0
+  })
+  const selectedExpertiseForTable = selectedExpertiseRows.map((row, index) => ({
+    id: row?.id ?? `sel-exp-${erp.id}-${index}`,
+    name: row?.name || row?.skill_name || '-',
+    experience: row?.experience ?? '-',
+    unit: row?.unit || '-',
+    cost: Number(getDisplayUnitCost(row) || 0).toFixed(2),
+    available_person: getDisplayQty(row),
+    needed_budget_unit: Number(row?.needed_budget_unit || 0),
+  }))
+  const selectedServicesForTable = selectedServiceRows.map((row, index) => ({
+    id: row?.id ?? `sel-svc-${erp.id}-${index}`,
+    service_name: row?.name || row?.service_name || '-',
+    description: String(row?.description || row?.details || '-'),
+    cost_per_unit: Number(getDisplayUnitCost(row) || 0).toFixed(2),
+    is_fully_booked: false,
+  }))
+  const selectedProductsForTable = selectedProductRows.map((row, index) => ({
+    id: row?.id ?? `sel-prd-${erp.id}-${index}`,
+    product_name: row?.name || row?.product_name || '-',
+    description: String(row?.description || row?.details || '-'),
+    unit: row?.unit || '-',
+    cost_per_unit: Number(getDisplayUnitCost(row) || 0).toFixed(2),
+    available_units: getDisplayQty(row),
+  }))
   const supplierNote = String(snapshot?.notes?.supplier_note || snapshot?.supplier_note || '').trim()
   const bookingSubmission = snapshot.booking_submission || {}
   const bookingStatus = String(bookingSubmission?.status || '').trim().toLowerCase()
@@ -568,6 +629,8 @@ export default function ERPTaskCard({
   const shouldPulseMembersButton = pendingMemberRoles.size > 0
   const shouldPulseActionsButton = openPendingTasks.length > 0 || shouldPulseMembersButton
   const canUseActionsMenu = isSupplyPost ? isBookingApproved : (isDemandPost ? isApplicationApproved : true)
+  const menuItemBaseClass =
+    'w-full rounded-xl border border-slate-200 bg-white px-4 py-2 text-left text-sm font-semibold text-slate-700 transition hover:border-violet-200 hover:bg-violet-50 hover:text-violet-700'
 
   useEffect(() => {
     const handleOutsideClick = (event) => {
@@ -1128,26 +1191,6 @@ export default function ERPTaskCard({
 
         {isActionsMenuOpen && canUseActionsMenu ? (
           <div className="absolute bottom-full right-0 z-30 mb-2 w-56 space-y-2 rounded-xl border border-slate-200 bg-white p-2 shadow-sm">
-            <button
-              type="button"
-              onClick={() => {
-                onSetPending(erp)
-                setIsActionsMenuOpen(false)
-                setIsMembersMenuOpen(false)
-              }}
-              disabled={!isProvider}
-              title={!isProvider ? 'Only provider can manage Pending actions' : ''}
-              className={`w-full rounded-full px-4 py-2 text-sm font-semibold transition ${
-                erp.stage === 'Pending'
-                  ? 'bg-brand-600 text-white shadow-sm hover:bg-brand-700'
-                  : !isProvider
-                    ? 'cursor-not-allowed border border-slate-200 bg-slate-100 text-slate-400'
-                    : 'border border-slate-300 bg-white text-slate-700 hover:border-brand-300 hover:text-brand-700'
-              }`}
-            >
-              Pending
-            </button>
-
             {isProvider ? (
               <button
                 type="button"
@@ -1156,10 +1199,10 @@ export default function ERPTaskCard({
                   setIsActionsMenuOpen(false)
                   setIsMembersMenuOpen(false)
                 }}
-                className={`w-full rounded-full border px-4 py-2 text-sm font-semibold transition ${
+                className={`${menuItemBaseClass} ${
                   openPendingTasks.length > 0
                     ? 'animate-bounce border-rose-300 bg-rose-100 text-rose-700 hover:bg-rose-200'
-                    : 'border-violet-300 bg-violet-50 text-violet-700 hover:bg-violet-100'
+                    : ''
                 }`}
               >
                 Tasks
@@ -1173,7 +1216,7 @@ export default function ERPTaskCard({
                 setIsActionsMenuOpen(false)
                 setIsMembersMenuOpen(false)
               }}
-              className="w-full rounded-full border border-slate-700 bg-white px-4 py-2 text-sm font-bold text-slate-800 transition hover:bg-slate-50"
+              className={menuItemBaseClass}
             >
               Generate PDF
             </button>
@@ -1182,10 +1225,10 @@ export default function ERPTaskCard({
               <button
                 type="button"
                 onClick={() => setIsMembersMenuOpen((prev) => !prev)}
-                className={`w-full rounded-full border px-4 py-2 text-sm font-semibold transition ${
+                className={`${menuItemBaseClass} ${
                   shouldPulseMembersButton
                     ? 'animate-bounce border-rose-300 bg-rose-100 text-rose-700 hover:border-rose-400'
-                    : 'border-slate-300 bg-white text-slate-700 hover:border-slate-400'
+                    : ''
                 }`}
               >
                 Members
@@ -1229,7 +1272,7 @@ export default function ERPTaskCard({
                 onClick={() => {
                   setIsDeleteConfirmOpen(true)
                 }}
-                className="w-full rounded-full border border-rose-300 bg-rose-50 px-4 py-2 text-sm font-semibold text-rose-700 transition hover:bg-rose-100"
+                className="w-full rounded-xl border border-rose-300 bg-rose-50 px-4 py-2 text-left text-sm font-semibold text-rose-700 transition hover:bg-rose-100"
               >
                 Delete
               </button>
@@ -1238,7 +1281,7 @@ export default function ERPTaskCard({
                 type="button"
                 disabled
                 title="Only provider and receiver can delete this ERP card"
-                className="w-full rounded-full border border-slate-200 bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-400 cursor-not-allowed"
+                className="w-full cursor-not-allowed rounded-xl border border-slate-200 bg-slate-100 px-4 py-2 text-left text-sm font-semibold text-slate-400"
               >
                 Delete (Read-only)
               </button>
@@ -1251,7 +1294,7 @@ export default function ERPTaskCard({
                 setIsActionsMenuOpen(false)
                 setIsMembersMenuOpen(false)
               }}
-              className="w-full rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-400"
+              className="w-full rounded-xl border border-violet-200 bg-violet-50 px-4 py-2 text-left text-sm font-semibold text-violet-700 transition hover:bg-violet-100"
             >
               {expandedId === erp.id ? 'Hide Details' : 'View Details'}
             </button>
@@ -1593,8 +1636,34 @@ export default function ERPTaskCard({
       ) : null}
 
       {expandedId === erp.id && (
-        <div className="space-y-4 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
-          <div className="rounded-xl border border-slate-200 bg-white p-3">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-2 sm:p-4" onClick={() => onToggleDetails(erp.id)}>
+          <div className="max-h-[95vh] w-full max-w-7xl overflow-y-auto rounded-3xl border border-violet-200 bg-[#ece8f3] p-4 shadow-2xl sm:p-5" onClick={(event) => event.stopPropagation()}>
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-violet-200 bg-white px-4 py-3">
+            <div>
+              <p className="text-sm font-semibold text-violet-700">{isDemandPost ? 'Demand Post' : 'Available Post'}</p>
+              <p className="text-3xl font-bold text-violet-900">{snapshotPost.title || post?.post_title || post?.post_name || '-'}</p>
+            </div>
+            <div className="flex items-center gap-3">
+              {isPostOwner ? (
+                <button
+                  type="button"
+                  onClick={() => navigate(`/edit-post/${post?.id || snapshotPost?.id || ''}`)}
+                  className="rounded-full border border-sky-300 bg-sky-500 px-5 py-2 text-sm font-semibold text-white transition hover:bg-sky-600"
+                >
+                  Edit Post
+                </button>
+              ) : null}
+              <button
+                type="button"
+                onClick={() => onToggleDetails(erp.id)}
+                className="rounded-full border border-violet-300 bg-white px-5 py-2 text-sm font-semibold text-violet-700 transition hover:bg-violet-50"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        <div className="space-y-4 text-sm text-slate-600">
+          <div className="rounded-2xl border border-violet-200 bg-white p-4">
             <h4 className="text-sm font-semibold text-slate-800">Post Details</h4>
             <div className="mt-2 grid gap-2 sm:grid-cols-2">
               <p><span className="font-semibold text-slate-700">Title:</span> {snapshotPost.title || post?.post_title || '-'}</p>
@@ -1629,7 +1698,7 @@ export default function ERPTaskCard({
             </p>
           </div>
 
-          <div className="rounded-xl border border-slate-200 bg-white p-3">
+          <div className="rounded-2xl border border-violet-200 bg-white p-4">
             <h4 className="text-sm font-semibold text-slate-800">Associated Members</h4>
             {hasAssociatedMembers ? (
               <div className="mt-3 space-y-3">
@@ -1678,71 +1747,45 @@ export default function ERPTaskCard({
             )}
           </div>
 
-          {[{
-            title: 'Expertise (Modified)',
-            rows: snapshotExpertise,
-            columns: [
-              { key: 'name', label: 'Name' },
-              { key: 'duration', label: 'Duration' },
-              { key: 'unit', label: 'Unit' },
-              { key: 'unit_cost', label: 'Unit Cost' },
-              { key: 'quantity', label: 'People' },
-              { key: 'line_total', label: 'Line Total' },
-            ],
-          }, {
-            title: 'Services (Modified)',
-            rows: snapshotServices,
-            columns: [
-              { key: 'name', label: 'Name' },
-              { key: 'unit_cost', label: 'Unit Cost' },
-              { key: 'quantity', label: 'Packages' },
-              { key: 'line_total', label: 'Line Total' },
-            ],
-          }, {
-            title: 'Products (Modified)',
-            rows: snapshotProducts,
-          }].map((section) => {
-            const isProductsSection = section.title === 'Products (Modified)'
-            const isServicesSection = section.title === 'Services (Modified)'
-            const showDuration = !isProductsSection && !isServicesSection
-            const showUnit = !isServicesSection
-
-            return (
-            section.rows.length > 0 ? (
-              <div key={section.title} className="rounded-xl border border-slate-200 bg-white p-3">
-                <h4 className="text-sm font-semibold text-slate-800">{section.title}</h4>
-                <div className="mt-2 overflow-x-auto">
-                  <table className="min-w-full text-left text-xs">
-                    <thead>
-                      <tr className="border-b border-slate-200 text-slate-500">
-                        <th className="px-2 py-1">Name</th>
-                        {showUnit ? <th className="px-2 py-1">Unit</th> : null}
-                        <th className="px-2 py-1">Qty</th>
-                        {showDuration ? <th className="px-2 py-1">Duration</th> : null}
-                        <th className="px-2 py-1">Unit Cost</th>
-                        <th className="px-2 py-1">Line Total</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {section.rows.map((row) => (
-                        <tr key={`${section.title}-${row.id}`} className="border-b border-slate-100 last:border-none">
-                          <td className="px-2 py-1 font-medium text-slate-700">{row.name || '-'}</td>
-                          {showUnit ? <td className="px-2 py-1">{row.unit || '-'}</td> : null}
-                          <td className="px-2 py-1">{Number(row.quantity || 0)}</td>
-                          {showDuration ? <td className="px-2 py-1">{Number(row.duration || 0)}</td> : null}
-                          <td className="px-2 py-1">${Number(row.unit_cost || 0).toFixed(2)}</td>
-                          <td className="px-2 py-1 font-semibold text-slate-700">${Number(row.line_total || 0).toFixed(2)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+          {selectedExpertiseForTable.length ? (
+            <div className="rounded-2xl border border-violet-200 bg-white p-4">
+              <h4 className="text-sm font-semibold text-slate-800">Expertise (Selected)</h4>
+              <div className="mt-2">
+                <ExpertiseTable
+                  expertises={selectedExpertiseForTable}
+                  postType={isDemandPost ? 'Demand' : 'Supply'}
+                />
               </div>
-            ) : null
-            )
-          })}
+            </div>
+          ) : null}
 
-          <div className="rounded-xl border border-slate-200 bg-white p-3">
+          {selectedServicesForTable.length ? (
+            <div className="rounded-2xl border border-violet-200 bg-white p-4">
+              <h4 className="text-sm font-semibold text-slate-800">Services (Selected)</h4>
+              <div className="mt-2">
+                <ServiceTable
+                  services={selectedServicesForTable}
+                  postType={isDemandPost ? 'Demand' : 'Supply'}
+                  showDescription
+                />
+              </div>
+            </div>
+          ) : null}
+
+          {selectedProductsForTable.length ? (
+            <div className="rounded-2xl border border-violet-200 bg-white p-4">
+              <h4 className="text-sm font-semibold text-slate-800">Products (Selected)</h4>
+              <div className="mt-2">
+                <ProductTable
+                  products={selectedProductsForTable}
+                  postType={isDemandPost ? 'Demand' : 'Supply'}
+                  showDescription
+                />
+              </div>
+            </div>
+          ) : null}
+
+          <div className="rounded-2xl border border-violet-200 bg-white p-4">
             <h4 className="text-sm font-semibold text-slate-800">Final Cost Summary</h4>
             <div className="mt-2 grid gap-2 sm:grid-cols-2">
               <p><span className="font-semibold text-slate-700">Expertise Total:</span> ${Number(snapshotTotals.expertise || 0).toFixed(2)}</p>
@@ -1752,6 +1795,8 @@ export default function ERPTaskCard({
             </div>
           </div>
 
+        </div>
+        </div>
         </div>
       )}
 
