@@ -664,7 +664,7 @@ export default function Header() {
                     alt="Profile"
                     rating={Number.isFinite(profileRatingValue) ? profileRatingValue : null}
                     size={40}
-                    ringWidth={2}
+                    ringWidth={3}
                   />
                 ) : (
                   <span className="text-lg leading-none">👤</span>

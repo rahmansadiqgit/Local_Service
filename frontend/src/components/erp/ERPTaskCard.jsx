@@ -979,7 +979,7 @@ export default function ERPTaskCard({
               alt={counterpartyName}
               rating={getUserRating(counterpartyUserId)}
               size={48}
-              ringWidth={2}
+              ringWidth={3}
             />
             <div className="min-w-0 text-left">
               <p className="text-[11px] uppercase tracking-wide text-slate-500">{counterpartyLabel}</p>
