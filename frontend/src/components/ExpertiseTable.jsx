@@ -52,13 +52,13 @@ export default function ExpertiseTable({ expertises = [], postType = 'Supply', t
             </th>
             <th className="px-3 py-2 whitespace-nowrap">
               <button type="button" onClick={() => handleSort('unit')}>
-                {isDemand ? 'Hire Unit' : 'Work Type'}
+                {isDemand ? 'Deal As' : 'Work Type'}
               </button>
             </th>
             {isDemand && (
               <th className="px-3 py-2 whitespace-nowrap">
                 <button type="button" onClick={() => handleSort('needed_budget_unit')}>
-                  Needed Hire Unit
+                  Needed Hire Unit / Person
                 </button>
               </th>
             )}

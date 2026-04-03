@@ -60,6 +60,30 @@ export default function ManagePost() {
     return normalized.charAt(0).toUpperCase() + normalized.slice(1)
   }
 
+  const getUnitPerPersonLabel = (unit) => {
+    const normalized = String(unit || '').trim().toLowerCase()
+    if (normalized === 'hourly') return 'hours per person'
+    if (normalized === 'daily') return 'days per person'
+    if (normalized === 'monthly') return 'months per person'
+    return 'units per person'
+  }
+
+  const getTotalUnitLabel = (unit) => {
+    const normalized = String(unit || '').trim().toLowerCase()
+    if (normalized === 'hourly') return 'Total hours (auto)'
+    if (normalized === 'daily') return 'Total days (auto)'
+    if (normalized === 'monthly') return 'Total months (auto)'
+    return 'Total units (auto)'
+  }
+
+  const getNeededPerPersonQuestion = (unit) => {
+    const normalized = String(unit || '').trim().toLowerCase()
+    if (normalized === 'hourly') return 'How many hours you need per person'
+    if (normalized === 'daily') return 'How many days you need per person'
+    if (normalized === 'monthly') return 'How many months you need per person'
+    return 'How many units you need per person'
+  }
+
   const getDurationLabel = (unit) => {
     const normalized = String(unit || '').trim().toLowerCase()
     if (normalized === 'hourly') return 'Duration (hours)'
@@ -301,9 +325,17 @@ export default function ManagePost() {
     }
 
     return (erpItems || []).reduce((acc, item) => {
-      if (!item?.is_configured) return acc
-
       const snapshot = item?.configuration_snapshot || {}
+      const postType = String(snapshot?.post?.type || '').trim().toLowerCase()
+      const applicationStatus = String(snapshot?.application_submission?.status || '').trim().toLowerCase()
+      const bookingStatus = String(snapshot?.booking_submission?.status || '').trim().toLowerCase()
+
+      const shouldConsume =
+        (postType === 'demand' && ['approved', 'accepted', 'confirmed'].includes(applicationStatus)) ||
+        (postType === 'supply' && ['approved', 'accepted', 'confirmed'].includes(bookingStatus))
+
+      if (!shouldConsume) return acc
+
       const products = Array.isArray(snapshot?.products) ? snapshot.products : []
       const expertise = Array.isArray(snapshot?.expertise) ? snapshot.expertise : []
 
@@ -356,8 +388,20 @@ export default function ManagePost() {
   }
 
   const getRemainingExpertiseDuration = (postId, expertise) => {
-    const total = Math.max(Number(expertise?.needed_budget_unit || 0), 0)
-    const consumed = Math.max(Number(consumedCapacityByPost?.[postId]?.expertiseDuration?.[expertise?.id] || 0), 0)
+    const perPersonUnit = Math.max(Number(expertise?.needed_budget_unit || 0), 0)
+    const remainingPeople = getRemainingExpertisePeople(postId, expertise)
+    return Math.max(remainingPeople * perPersonUnit, 0)
+  }
+
+  const getRemainingSkillPeople = (postId, skillRow) => {
+    const total = Math.max(Number(skillRow?.available_workers || 0), 0)
+    const consumed = Math.max(Number(consumedCapacityByPost?.[postId]?.expertisePeople?.[skillRow?.id] || 0), 0)
+    return Math.max(total - consumed, 0)
+  }
+
+  const getRemainingSkillHours = (postId, skillRow) => {
+    const total = Math.max(Number(skillRow?.needed_budget_unit || 0), 0)
+    const consumed = Math.max(Number(consumedCapacityByPost?.[postId]?.expertiseDuration?.[skillRow?.id] || 0), 0)
     return Math.max(total - consumed, 0)
   }
 
@@ -538,9 +582,10 @@ export default function ManagePost() {
 
     skillExpertiseRows.forEach((row) => {
       const enabled = isItemEnabled(postId, 'skill', row.id)
-      const peopleMax = Math.max(Number(row.available_workers || 0), 0)
-      const people = getApplicationValue(`apply-skill-${row.id}-people`, peopleMax)
-      const hours = getApplicationValue(`apply-skill-${row.id}-hours`, 0)
+      const peopleMax = getRemainingSkillPeople(postId, row)
+      const hoursMax = getRemainingSkillHours(postId, row)
+      const people = enabled ? peopleMax : 0
+      const hours = enabled ? hoursMax : 0
       const requestedRate = Number(row.cost_per_unit || 0)
       const offeredRate = getApplicationValue(`apply-skill-${row.id}-rate`, requestedRate)
       const lineTotal = enabled ? people * hours * offeredRate : 0
@@ -561,23 +606,29 @@ export default function ManagePost() {
 
     newExpertiseRows.forEach((row) => {
       const enabled = isItemEnabled(postId, 'expertise', row.id)
-      const peopleMax = Math.max(Number(row.available_person || 0), 0)
-      const people = getApplicationValue(`apply-expertise-${row.id}-people`, peopleMax)
-      const hoursMax = Math.max(Number(row.needed_budget_unit || 0), 0)
-      const hours = getApplicationValue(`apply-expertise-${row.id}-hours`, hoursMax)
+      const peopleMax = getRemainingExpertisePeople(postId, row)
+      const applyPeopleKey = `apply-expertise-${row.id}-people`
+      const perPersonUnit = Math.max(Number(row.needed_budget_unit || 0), 0)
+      const selectedPeople = getApplicationValue(applyPeopleKey, peopleMax)
+      const people = enabled ? Math.max(0, Math.min(peopleMax, selectedPeople)) : 0
+      const hours = enabled ? people * perPersonUnit : 0
       const requestedRate = Number(row.cost || 0)
       const offeredRate = getApplicationValue(`apply-expertise-${row.id}-rate`, requestedRate)
-      const lineTotal = enabled ? people * hours * offeredRate : 0
+      const lineTotal = enabled ? people * offeredRate : 0
       if (enabled) expertiseTotal += lineTotal
 
-      if (enabled && people > 0 && hours > 0 && offeredRate <= 0) {
-        validationErrors.push(`${row.name}: add your hourly offer rate.`)
+      if (enabled && people > 0 && perPersonUnit <= 0) {
+        validationErrors.push(`${row.name}: needed hire unit per person must be greater than 0.`)
+      }
+
+      if (enabled && people > 0 && offeredRate <= 0) {
+        validationErrors.push(`${row.name}: add your per-person budget rate.`)
       }
 
       lineItems.push({
         key: `apply-expertise-${row.id}`,
         title: row.name,
-        detail: `(${people} person x ${hours} hr)`,
+        detail: `(${people} person x ${perPersonUnit} ${getUnitPerPersonLabel(row.unit).replace(' per person', '')})`,
         amount: lineTotal,
         included: enabled,
       })
@@ -604,7 +655,7 @@ export default function ManagePost() {
 
     productRows.forEach((row) => {
       const enabled = isItemEnabled(postId, 'product', row.id)
-      const quantityMax = Math.max(Number(row.available_units || 0), 0)
+      const quantityMax = getRemainingProductUnits(postId, row)
       const quantity = getApplicationValue(`apply-product-${row.id}-quantity`, quantityMax)
       const requestedRate = Number(row.cost_per_unit || 0)
       const offeredRate = getApplicationValue(`apply-product-${row.id}-rate`, requestedRate)
@@ -653,13 +704,13 @@ export default function ManagePost() {
 
     const expertise = [
       ...skillExpertiseRows.map((row) => {
-        const peopleMax = Math.max(Number(row.available_workers || 0), 0)
-        const hoursMax = Math.max(Number(row.needed_budget_unit || 0), 0)
+        const peopleMax = getRemainingSkillPeople(postId, row)
+        const hoursMax = getRemainingSkillHours(postId, row)
         const requestedRate = Number(row.cost_per_unit || 0)
-        const quantity = getApplicationValue(`apply-skill-${row.id}-people`, peopleMax)
-        const duration = getApplicationValue(`apply-skill-${row.id}-hours`, 0)
         const offeredRate = getApplicationValue(`apply-skill-${row.id}-rate`, requestedRate)
         const enabled = isItemEnabled(postId, 'skill', row.id)
+        const quantity = enabled ? peopleMax : 0
+        const duration = enabled ? hoursMax : 0
 
         return {
           id: row.id,
@@ -677,13 +728,16 @@ export default function ManagePost() {
         }
       }),
       ...newExpertiseRows.map((row) => {
-        const peopleMax = Math.max(Number(row.available_person || 0), 0)
-        const hoursMax = Math.max(Number(row.needed_budget_unit || 0), 0)
+        const peopleMax = getRemainingExpertisePeople(postId, row)
+        const applyPeopleKey = `apply-expertise-${row.id}-people`
+        const perPersonUnit = Math.max(Number(row.needed_budget_unit || 0), 0)
         const requestedRate = Number(row.cost || 0)
-        const quantity = getApplicationValue(`apply-expertise-${row.id}-people`, peopleMax)
-        const duration = getApplicationValue(`apply-expertise-${row.id}-hours`, hoursMax)
         const offeredRate = getApplicationValue(`apply-expertise-${row.id}-rate`, requestedRate)
         const enabled = isItemEnabled(postId, 'expertise', row.id)
+        const selectedPeople = getApplicationValue(applyPeopleKey, peopleMax)
+        const quantity = enabled ? Math.max(0, Math.min(peopleMax, selectedPeople)) : 0
+        const duration = enabled ? quantity * perPersonUnit : 0
+        const requestedHours = peopleMax * perPersonUnit
 
         return {
           id: row.id,
@@ -691,13 +745,15 @@ export default function ManagePost() {
           name: row.name,
           unit: row.unit,
           included: enabled,
+          requested_unit_per_person: perPersonUnit,
           requested_people: peopleMax,
-          requested_hours: hoursMax,
+          requested_hours: requestedHours,
           requested_rate: requestedRate,
           offered_people: quantity,
           offered_hours: duration,
+          offered_unit_per_person: perPersonUnit,
           offered_rate: offeredRate,
-          line_total: enabled ? quantity * duration * offeredRate : 0,
+          line_total: enabled ? quantity * offeredRate : 0,
         }
       }),
     ]
@@ -718,7 +774,7 @@ export default function ManagePost() {
     })
 
     const products = productRows.map((row) => {
-      const quantityMax = Math.max(Number(row.available_units || 0), 0)
+      const quantityMax = getRemainingProductUnits(postId, row)
       const requestedRate = Number(row.cost_per_unit || 0)
       const quantity = getApplicationValue(`apply-product-${row.id}-quantity`, quantityMax)
       const offeredRate = getApplicationValue(`apply-product-${row.id}-rate`, requestedRate)
@@ -1058,15 +1114,21 @@ export default function ManagePost() {
     }
   }
 
-  const CounterControl = ({ value, onChange, max, label, helperText, disabled = false }) => {
-    const isLocked = disabled || Number(max || 0) <= 0
+  const CounterControl = ({ value, onChange, max, label, helperText, disabled = false, strictMax = true }) => {
+    const isLocked = disabled
     const handleTypedValue = (rawValue) => {
       const parsed = Number(rawValue)
       if (!Number.isFinite(parsed)) {
         onChange(0)
         return
       }
-      const next = Math.max(0, Math.min(Number(max || 0), Math.floor(parsed)))
+      const normalized = Math.floor(parsed)
+      const maxValue = Number(max || 0)
+      const hasPositiveMax = Number.isFinite(maxValue) && maxValue > 0
+      const shouldClampMax = strictMax && hasPositiveMax
+      const next = shouldClampMax
+        ? Math.max(0, Math.min(maxValue, normalized))
+        : Math.max(0, normalized)
       onChange(next)
     }
 
@@ -1213,10 +1275,14 @@ export default function ManagePost() {
 
   const getSkillWorkersValue = (postType, row) => {
     const key = `skill-${row.id}`
+    const postId = Number(row?.post || 0)
+    const remainingPeople = postId > 0 ? getRemainingSkillPeople(postId, row) : Math.max(Number(row.available_workers || 0), 0)
     if (Object.prototype.hasOwnProperty.call(skillWorkers, key)) {
-      return Number(skillWorkers[key] || 0)
+      const current = Number(skillWorkers[key] || 0)
+      if (postType === 'Demand') return Math.max(0, Math.min(current, remainingPeople))
+      return current
     }
-    return postType === 'Demand' ? Math.max(Number(row.available_workers || 0), 0) : 0
+    return postType === 'Demand' ? remainingPeople : 0
   }
 
   const getExpertisePersonsValue = (postType, row) => {
@@ -1233,10 +1299,14 @@ export default function ManagePost() {
 
   const getExpertiseDurationValue = (postType, row) => {
     const key = `expertise-${row.id}-duration`
+    const postId = Number(row?.post || 0)
+    const remainingDuration = postId > 0 ? getRemainingExpertiseDuration(postId, row) : Math.max(Number(row.needed_budget_unit || 0), 0)
     if (Object.prototype.hasOwnProperty.call(expertiseDurations, key)) {
-      return Number(expertiseDurations[key] || 0)
+      const current = Number(expertiseDurations[key] || 0)
+      if (postType === 'Demand') return Math.max(0, Math.min(current, remainingDuration))
+      return current
     }
-    return postType === 'Demand' ? Math.max(Number(row.needed_budget_unit || 0), 0) : 0
+    return postType === 'Demand' ? remainingDuration : 0
   }
 
   const getProductUnitsValue = (postType, row) => {
@@ -1403,20 +1473,22 @@ export default function ManagePost() {
                           {(skillBreakdownByPost[post.id]?.expertise || []).map((skill) => {
                             const workers = getSkillWorkersValue(post.post_type, skill)
                             const workersMax = post.post_type === 'Demand'
-                              ? Math.max(Number(skill.available_workers || 0), 0)
+                              ? getRemainingSkillPeople(post.id, skill)
                               : Math.max(Number(skill.available_workers || 0), 1)
                             const enabled = isItemEnabled(post.id, 'skill', skill.id)
                             const requestedRate = Number(skill.cost_per_unit || 0)
                             const applyPeopleKey = `apply-skill-${skill.id}-people`
                             const applyHoursKey = `apply-skill-${skill.id}-hours`
                             const applyRateKey = `apply-skill-${skill.id}-rate`
-                            const applyHoursMax = Math.max(Number(skill.needed_budget_unit || 0), 0)
-                            const applyPeople = getApplicationValue(applyPeopleKey, workersMax)
-                            const applyHours = getApplicationValue(applyHoursKey, applyHoursMax)
+                            const applyHoursMax = post.post_type === 'Demand'
+                              ? getRemainingSkillHours(post.id, skill)
+                              : Math.max(Number(skill.needed_budget_unit || 0), 0)
+                            const applyPeople = workersMax
+                            const applyHours = applyHoursMax
                             const applyRate = getApplicationValue(applyRateKey, requestedRate)
-                            const originalPeople = Math.max(Number((skill.available_workers_original ?? skill.available_workers) || 0), 0)
-                            const peopleExhausted = originalPeople > 0 && workersMax <= 0
-                            const isSkillLocked = isApplyMode && peopleExhausted
+                            const peopleExhausted = workersMax <= 0
+                            const hoursExhausted = applyHoursMax <= 0
+                            const isSkillLocked = isApplyMode && peopleExhausted && hoursExhausted
                             const subtotal = isApplyMode
                               ? (enabled ? applyPeople * applyHours * applyRate : 0)
                               : (enabled ? workers * Number(skill.cost_per_unit || 0) : 0)
@@ -1459,7 +1531,7 @@ export default function ManagePost() {
                                           value={applyPeople}
                                           onChange={(val) => setApplicationValue(applyPeopleKey, val, workersMax)}
                                           max={workersMax}
-                                          disabled={peopleExhausted}
+                                          disabled={true}
                                           label="People you'll provide"
                                           helperText={
                                             peopleExhausted
@@ -1471,9 +1543,12 @@ export default function ManagePost() {
                                           value={applyHours}
                                           onChange={(val) => setApplicationValue(applyHoursKey, val, applyHoursMax)}
                                           max={applyHoursMax}
+                                          disabled={true}
                                           label="Hours you'll work"
                                           helperText={
-                                            `Max ${applyHoursMax} hrs (as requested)`
+                                            hoursExhausted
+                                              ? (post.post_type === 'Demand' ? 'Already Applied' : 'Already Booked')
+                                              : `Max ${applyHoursMax} hrs (as requested)`
                                           }
                                         />
                                         <OfferRateInput
@@ -1514,17 +1589,17 @@ export default function ManagePost() {
                             const enabled = isItemEnabled(post.id, 'expertise', expertise.id)
                             const requestedRate = Number(expertise.cost || 0)
                             const applyPeopleKey = `apply-expertise-${expertise.id}-people`
-                            const applyHoursKey = `apply-expertise-${expertise.id}-hours`
                             const applyRateKey = `apply-expertise-${expertise.id}-rate`
-                            const applyPeople = getApplicationValue(applyPeopleKey, personsMax)
-                            const applyHours = getApplicationValue(applyHoursKey, durationMax)
+                            const perPersonUnit = Math.max(Number(expertise.needed_budget_unit || 0), 0)
+                            const selectedApplyPeople = getApplicationValue(applyPeopleKey, personsMax)
+                            const applyPeople = Math.max(0, Math.min(personsMax, selectedApplyPeople))
+                            const applyHours = applyPeople * perPersonUnit
                             const applyRate = getApplicationValue(applyRateKey, requestedRate)
                             const originalPeople = Math.max(Number((expertise.available_person_original ?? expertise.available_person) || 0), 0)
-                            const requestedDuration = Math.max(Number(expertise.needed_budget_unit || 0), 0)
                             const peopleExhausted = originalPeople > 0 && personsMax <= 0
                             const isExpertiseLocked = (post.post_type === 'Supply' && remainingPeople <= 0) || (isApplyMode && peopleExhausted)
                             const subtotal = isApplyMode
-                              ? (enabled ? applyPeople * applyHours * applyRate : 0)
+                              ? (enabled ? applyPeople * applyRate : 0)
                               : (enabled ? persons * duration * Number(expertise.cost || 0) : 0)
                             return (
                               <div
@@ -1538,7 +1613,7 @@ export default function ManagePost() {
                                   title={expertise.name}
                                   subtitle="Skilled professional"
                                   priceText={`৳ ${Number(expertise.cost || 0).toFixed(0)}`}
-                                  priceUnitText={`per ${formatRateUnit(expertise.unit).toLowerCase()}`}
+                                  priceUnitText={`per person / ${formatRateUnit(expertise.unit).toLowerCase()}`}
                                   checked={enabled}
                                   disabled={isExpertiseLocked}
                                   onToggle={() =>
@@ -1565,7 +1640,7 @@ export default function ManagePost() {
                                           value={applyPeople}
                                           onChange={(val) => setApplicationValue(applyPeopleKey, val, personsMax)}
                                           max={personsMax}
-                                          disabled={peopleExhausted}
+                                          disabled={isExpertiseLocked}
                                           label="People you'll provide"
                                           helperText={
                                             peopleExhausted
@@ -1574,21 +1649,34 @@ export default function ManagePost() {
                                           }
                                         />
                                         <CounterControl
+                                          value={perPersonUnit}
+                                          onChange={() => {}}
+                                          max={perPersonUnit}
+                                          disabled={true}
+                                          strictMax={false}
+                                          label={post.post_type === 'Demand' ? getNeededPerPersonQuestion(expertise.unit) : getDurationLabel(expertise.unit)}
+                                          helperText={getUnitPerPersonLabel(expertise.unit)}
+                                        />
+                                        <CounterControl
                                           value={applyHours}
-                                          onChange={(val) => setApplicationValue(applyHoursKey, val, durationMax)}
+                                          onChange={() => {}}
                                           max={durationMax}
-                                          label="Hours you'll work"
+                                          disabled={true}
+                                          strictMax={false}
+                                          label={getTotalUnitLabel(expertise.unit)}
                                           helperText={
-                                            `Max ${durationMax} hrs${post.post_type === 'Demand' ? ' (as requested)' : ' available'}`
+                                            perPersonUnit > 0
+                                              ? `${applyPeople} person x ${perPersonUnit} ${getUnitPerPersonLabel(expertise.unit).replace(' per person', '')}`
+                                              : 'Set this value in Deal As details on post creation'
                                           }
                                         />
                                         <OfferRateInput
                                           value={applyRate}
                                           onChange={(val) => setApplicationValue(applyRateKey, val)}
                                           requestedRate={requestedRate}
-                                          label="Your rate per hour"
-                                          helperText={`Requester budget: ৳${requestedRate.toFixed(0)}/hr`}
-                                          unitLabel="hr"
+                                          label={`Your ${formatRateUnit(expertise.unit)} Budget (BDT) per person`}
+                                          helperText={`Requester budget: ৳${requestedRate.toFixed(0)} per person / ${formatRateUnit(expertise.unit).toLowerCase()}`}
+                                          unitLabel={`person/${formatRateUnit(expertise.unit).toLowerCase()}`}
                                         />
                                       </>
                                     ) : (
