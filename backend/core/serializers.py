@@ -5,7 +5,7 @@ import re
 from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
-from .models import Connection, ERP, ERPMessage, Expertise, Notification, Post, ProblemReport, Product, Rating, Skill
+from .models import Connection, ConnectionRole, ERP, ERPMessage, Expertise, Notification, Post, ProblemReport, Product, Rating, Skill
 
 User = get_user_model()
 
@@ -334,10 +334,47 @@ class RatingSerializer(serializers.ModelSerializer):
 
 
 class NotificationSerializer(serializers.ModelSerializer):
+    actor_name = serializers.SerializerMethodField(read_only=True)
+    actor_profile_photo = serializers.ImageField(source="actor.profile_photo", read_only=True)
+    related_user_name = serializers.SerializerMethodField(read_only=True)
+    related_user_profile_photo = serializers.ImageField(source="related_user.profile_photo", read_only=True)
+    connection_role_label = serializers.SerializerMethodField(read_only=True)
+
     class Meta:
         model = Notification
-        fields = ("id", "user", "title", "message", "is_read", "created_at")
+        fields = (
+            "id",
+            "user",
+            "notification_type",
+            "title",
+            "message",
+            "actor",
+            "actor_name",
+            "actor_profile_photo",
+            "related_user",
+            "related_user_name",
+            "related_user_profile_photo",
+            "connection_role",
+            "connection_role_label",
+            "is_read",
+            "created_at",
+        )
         read_only_fields = ("id", "user", "created_at")
+
+    def get_actor_name(self, obj):
+        if obj.actor:
+            return obj.actor.name or obj.actor.username or obj.actor.email
+        return None
+
+    def get_related_user_name(self, obj):
+        if obj.related_user:
+            return obj.related_user.name or obj.related_user.username or obj.related_user.email
+        return None
+
+    def get_connection_role_label(self, obj):
+        if obj.connection_role:
+            return dict(ConnectionRole.choices).get(obj.connection_role, obj.connection_role)
+        return None
 
 
 class ProblemReportSerializer(serializers.ModelSerializer):

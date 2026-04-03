@@ -18,6 +18,7 @@ export default function ERPTaskCard({
   onToggleTrack,
   onToggleMessage,
   onGeneratePdf,
+  onDelete,
   onToggleDetails,
   onTrackNext,
   onToggleReadyProduct,
@@ -66,7 +67,12 @@ export default function ERPTaskCard({
   const [providerFeedbackError, setProviderFeedbackError] = useState('')
   const [providerFeedbackSuccess, setProviderFeedbackSuccess] = useState('')
   const [isSubmittingProviderFeedback, setIsSubmittingProviderFeedback] = useState(false)
-  const [isDecidingBooking, setIsDecidingBooking] = useState(false)
+  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false)
+  const [isDeletingErp, setIsDeletingErp] = useState(false)
+  const [deleteError, setDeleteError] = useState('')
+
+  const phases = ['Pending', 'On Process', 'Completed']
+  const activePhaseIndex = phases.indexOf(erp.stage)
 
   const snapshot = erp.configuration_snapshot || {}
   const snapshotPost = snapshot.post || {}
@@ -289,10 +295,7 @@ export default function ERPTaskCard({
   const canLeaveTask = currentUserRoleResponsibilities.length > 0 && erp.stage !== 'Completed'
   const isReceiver = viewerRole === 'Receiver'
   const canUseMessenger = isProvider || isReceiver || currentUserRoleResponsibilities.length > 0
-  const onProcessChecklist = Array.isArray(phaseTasks?.['On Process']) ? phaseTasks['On Process'] : []
-  const isOnProcessReadyForCompletion =
-    onProcessChecklist.length === 0 || onProcessChecklist.every((task) => Boolean(task?.done))
-  const canCompleteAsReceiver = isReceiver && erp.stage === 'On Process' && isOnProcessReadyForCompletion
+  const canCompleteAsReceiver = isReceiver && erp.stage === 'On Process'
 
   const averageRatingByUser = (() => {
     const totals = new Map()
@@ -1005,7 +1008,7 @@ export default function ERPTaskCard({
               }}
               className="rounded-full border border-emerald-300 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-700 transition hover:border-emerald-400 hover:bg-emerald-100"
             >
-              Mark Completed
+             Completed
             </button>
           ) : shouldShowProviderParticipantRatingButton ? (
             <button
@@ -1188,6 +1191,27 @@ export default function ERPTaskCard({
                 </div>
               )}
             </div>
+
+            {isProvider || (currentUserId && String(erp.receiver) === String(currentUserId)) ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setIsDeleteConfirmOpen(true)
+                }}
+                className="w-full rounded-full border border-rose-300 bg-rose-50 px-4 py-2 text-sm font-semibold text-rose-700 transition hover:bg-rose-100"
+              >
+                Delete
+              </button>
+            ) : (
+              <button
+                type="button"
+                disabled
+                title="Only provider and receiver can delete this ERP card"
+                className="w-full rounded-full border border-slate-200 bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-400 cursor-not-allowed"
+              >
+                Delete (Read-only)
+              </button>
+            )}
 
             <button
               type="button"
@@ -1884,6 +1908,57 @@ export default function ERPTaskCard({
                 </p>
               </div>
             ))}
+          </div>
+        </div>
+      ) : null}
+
+      {isDeleteConfirmOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-lg max-w-sm">
+            <h3 className="text-lg font-bold text-slate-900">Delete ERP Card</h3>
+            <p className="mt-2 text-sm text-slate-600">
+              Are you sure you want to delete this ERP Card? This action cannot be undone. It will also be deleted from the other party's view.
+            </p>
+            {deleteError && (
+              <div className="mt-3 rounded-lg border border-rose-300 bg-rose-50 p-2">
+                <p className="text-xs font-semibold text-rose-700">{deleteError}</p>
+              </div>
+            )}
+            <div className="mt-6 flex gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsDeleteConfirmOpen(false)
+                  setDeleteError('')
+                }}
+                disabled={isDeletingErp}
+                className="flex-1 rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-400 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  setIsDeletingErp(true)
+                  setDeleteError('')
+                  try {
+                    await onDelete?.(erp)
+                    setIsDeleteConfirmOpen(false)
+                    setIsActionsMenuOpen(false)
+                  } catch (error) {
+                    console.error('Delete failed:', error)
+                    const errorMsg = error.response?.data?.detail || error.message || 'Failed to delete ERP card'
+                    setDeleteError(errorMsg)
+                  } finally {
+                    setIsDeletingErp(false)
+                  }
+                }}
+                disabled={isDeletingErp}
+                className="flex-1 rounded-full border border-rose-300 bg-rose-100 px-4 py-2 text-sm font-semibold text-rose-700 transition hover:bg-rose-200 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {isDeletingErp ? 'Deleting...' : 'Delete'}
+              </button>
+            </div>
           </div>
         </div>
       ) : null}
