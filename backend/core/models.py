@@ -244,15 +244,46 @@ class Rating(models.Model):
 
 
 class Notification(models.Model):
+    class NotificationType(models.TextChoices):
+        CONNECTION_REQUEST = "connection_request", "Connection Request"
+        CONNECTION_ACCEPTED = "connection_accepted", "Connection Accepted"
+        CONNECTION_REJECTED = "connection_rejected", "Connection Rejected"
+        CONNECTION_REMOVED = "connection_removed", "Connection Removed"
+
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         related_name="notifications",
     )
+    notification_type = models.CharField(
+        max_length=30,
+        choices=NotificationType.choices,
+        default=NotificationType.CONNECTION_REQUEST,
+    )
     title = models.CharField(max_length=255)
     message = models.TextField()
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="notifications_sent",
+    )
+    related_user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="notifications_related_to",
+    )
+    connection_role = models.CharField(
+        max_length=30,
+        choices=ConnectionRole.choices,
+        blank=True,
+    )
     is_read = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
+
     def __str__(self) -> str:
         return f"{self.user.username} - {self.title}"
 

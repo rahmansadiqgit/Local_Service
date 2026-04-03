@@ -31,6 +31,8 @@ export default function Dashboard() {
   const [connectionsOverview, setConnectionsOverview] = useState(null)
   const [pendingApplications, setPendingApplications] = useState([])
   const [applicationActionMessage, setApplicationActionMessage] = useState('')
+  const [activeRequestPreview, setActiveRequestPreview] = useState(null)
+  const [showRequestsPanel, setShowRequestsPanel] = useState(false)
 
   const buildPendingApplicationsFromErp = (erpList, ownerId) => {
     const owner = Number(ownerId)
@@ -705,6 +707,22 @@ export default function Dashboard() {
     await updateApplicationDecision(erpId, postId, 'rejected')
   }
 
+  const openRequestPreview = (entry, post) => {
+    setActiveRequestPreview({
+      entry,
+      postId: post?.id,
+      postTitle: post?.post_title || post?.post_name || `Post #${post?.id || '-'}`,
+      post: post || null,
+    })
+  }
+
+  const closeRequestPreview = () => {
+    setActiveRequestPreview(null)
+  }
+
+  const previewPost = activeRequestPreview?.post || null
+  const previewPostRows = previewPost ? buildCategoryRows(previewPost) : null
+
   const connectionRelationship = useMemo(() => {
     const targetId = Number(profile?.id)
     if (!Number.isFinite(targetId) || targetId <= 0 || !connectionsOverview) {
@@ -1143,6 +1161,227 @@ export default function Dashboard() {
         </div>
       )}
 
+      {activeRequestPreview && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 p-2 sm:p-4">
+          <div className="flex h-[96vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl border border-slate-300 bg-slate-100 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-300 bg-white px-4 py-3">
+              <div>
+                <p className="text-base font-semibold text-slate-900">Request PDF Preview</p>
+                <p className="text-xs text-slate-500">{activeRequestPreview.postTitle}</p>
+              </div>
+              <button
+                type="button"
+                onClick={closeRequestPreview}
+                className="rounded-md border border-slate-300 bg-white px-3 py-1 text-xs font-semibold text-slate-700 transition hover:bg-slate-100"
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-3 sm:p-5">
+              <div className="mx-auto w-full max-w-5xl rounded-lg border border-slate-300 bg-white p-4 shadow sm:p-6">
+                <div className="mb-6 rounded-lg border border-slate-200 bg-slate-50 p-4">
+                  <p className="text-lg font-bold text-slate-900">Post Details</p>
+                  <div className="mt-2 grid gap-2 text-sm sm:grid-cols-2">
+                    <p className="text-slate-700"><span className="font-semibold">Title:</span> {previewPost?.post_title || previewPost?.post_name || activeRequestPreview.postTitle}</p>
+                    <p className="text-slate-700"><span className="font-semibold">Type:</span> {previewPost?.post_type || '-'}</p>
+                    <p className="text-slate-700"><span className="font-semibold">Location:</span> {previewPost?.location || 'Remote'}</p>
+                    <p className="text-slate-700"><span className="font-semibold">Created:</span> {formatPostDate(previewPost?.created_at)}</p>
+                  </div>
+                  <div className="mt-3 rounded-md border border-slate-200 bg-white p-3">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Full Post Description</p>
+                    <p className="mt-1 whitespace-pre-wrap text-sm text-slate-800">{String(previewPost?.description || 'No description added yet.').trim() || 'No description added yet.'}</p>
+                  </div>
+                </div>
+
+                {previewPostRows?.hasExpertise && (
+                  <div className="mb-6 space-y-2">
+                    <p className="text-sm font-semibold text-slate-700">Post Expertise</p>
+                    {previewPostRows.expertiseRows.length ? (
+                      <ExpertiseTable expertises={previewPostRows.expertiseRows} postType={previewPost?.post_type} />
+                    ) : (
+                      <p className="text-sm text-slate-500">No expertise detail listed.</p>
+                    )}
+                  </div>
+                )}
+
+                {previewPostRows?.hasServices && (
+                  <div className="mb-6 space-y-2">
+                    <p className="text-sm font-semibold text-slate-700">Post Services</p>
+                    {previewPostRows.serviceRows.length ? (
+                      <ServiceTable
+                        services={previewPostRows.serviceRows}
+                        postType={previewPost?.post_type}
+                        showDescription={previewPostRows.showServiceDescription}
+                      />
+                    ) : (
+                      <p className="text-sm text-slate-500">No service detail listed.</p>
+                    )}
+                  </div>
+                )}
+
+                {previewPostRows?.hasProduct && (
+                  <div className="mb-6 space-y-2">
+                    <p className="text-sm font-semibold text-slate-700">Post Product</p>
+                    {previewPostRows.productRows.length ? (
+                      <ProductTable
+                        products={previewPostRows.productRows}
+                        postType={previewPost?.post_type}
+                        showDescription={previewPostRows.showProductDescription}
+                      />
+                    ) : (
+                      <p className="text-sm text-slate-500">No product detail listed.</p>
+                    )}
+                  </div>
+                )}
+
+                <div className="mb-4 flex flex-wrap items-start justify-between gap-2 border-b border-slate-200 pb-3">
+                  <div>
+                    <p className="text-lg font-bold text-slate-900">Application Summary</p>
+                    {(() => {
+                      const applicantId = Number(activeRequestPreview.entry?.applicant?.id)
+                      const applicantUser = usersById.get(applicantId)
+                      const applicantName =
+                        String(activeRequestPreview.entry?.applicant?.name || '').trim() ||
+                        String(applicantUser?.name || applicantUser?.username || '').trim() ||
+                        'Unknown applicant'
+                      const applicantAvatarUrl =
+                        toMediaUrl(activeRequestPreview.entry?.applicant?.profile_photo || applicantUser?.profile_photo || '') ||
+                        '/images/default-avatar.svg'
+
+                      return (
+                        <div className="mt-1 flex items-center gap-2 text-sm text-slate-600">
+                          <img src={applicantAvatarUrl} alt={applicantName} className="h-7 w-7 rounded-full border border-slate-200 object-cover" />
+                          <span>Applicant: {applicantName}</span>
+                        </div>
+                      )
+                    })()}
+                  </div>
+                  <p className="text-sm text-slate-500">Submitted at: {formatPostDate(activeRequestPreview.entry?.submitted_at)}</p>
+                </div>
+
+                <div className="overflow-x-auto rounded-lg border border-slate-200">
+                  <table className="w-full min-w-[720px] border-collapse text-sm">
+                    <thead className="bg-slate-100 text-slate-800">
+                      <tr>
+                        <th className="border border-slate-200 px-3 py-2 text-left">Type</th>
+                        <th className="border border-slate-200 px-3 py-2 text-left">Name</th>
+                        <th className="border border-slate-200 px-3 py-2 text-left">Configuration</th>
+                        <th className="border border-slate-200 px-3 py-2 text-right">Line Total</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(Array.isArray(activeRequestPreview.entry?.configuration_snapshot?.expertise)
+                        ? activeRequestPreview.entry.configuration_snapshot.expertise
+                        : []
+                      ).map((row) => (
+                        <tr key={`preview-exp-${activeRequestPreview.entry?.erp_id}-${row.id}`} className="odd:bg-white even:bg-slate-50">
+                          <td className="border border-slate-200 px-3 py-2">Expertise</td>
+                          <td className="border border-slate-200 px-3 py-2">{row?.name || '-'}</td>
+                          <td className="border border-slate-200 px-3 py-2">
+                            {Number(row?.offered_people || 0)} person x {Number(row?.offered_hours || 0)} hr at {formatCurrency(row?.offered_rate || 0)}
+                          </td>
+                          <td className="border border-slate-200 px-3 py-2 text-right">{formatCurrency(row?.line_total || 0)}</td>
+                        </tr>
+                      ))}
+                      {(Array.isArray(activeRequestPreview.entry?.configuration_snapshot?.services)
+                        ? activeRequestPreview.entry.configuration_snapshot.services
+                        : []
+                      ).map((row) => (
+                        <tr key={`preview-svc-${activeRequestPreview.entry?.erp_id}-${row.id}`} className="odd:bg-white even:bg-slate-50">
+                          <td className="border border-slate-200 px-3 py-2">Service</td>
+                          <td className="border border-slate-200 px-3 py-2">{row?.name || '-'}</td>
+                          <td className="border border-slate-200 px-3 py-2">Charge: {formatCurrency(row?.offered_rate ?? row?.requested_rate ?? 0)}</td>
+                          <td className="border border-slate-200 px-3 py-2 text-right">{formatCurrency(row?.line_total || 0)}</td>
+                        </tr>
+                      ))}
+                      {(Array.isArray(activeRequestPreview.entry?.configuration_snapshot?.products)
+                        ? activeRequestPreview.entry.configuration_snapshot.products
+                        : []
+                      ).map((row) => (
+                        <tr key={`preview-prd-${activeRequestPreview.entry?.erp_id}-${row.id}`} className="odd:bg-white even:bg-slate-50">
+                          <td className="border border-slate-200 px-3 py-2">Product</td>
+                          <td className="border border-slate-200 px-3 py-2">{row?.name || '-'}</td>
+                          <td className="border border-slate-200 px-3 py-2">
+                            {Number(row?.offered_quantity || 0)} {String(row?.unit || 'unit')} at {formatCurrency(row?.offered_rate || 0)}
+                          </td>
+                          <td className="border border-slate-200 px-3 py-2 text-right">{formatCurrency(row?.line_total || 0)}</td>
+                        </tr>
+                      ))}
+                      {(Array.isArray(activeRequestPreview.entry?.configuration_snapshot?.expertise)
+                        ? activeRequestPreview.entry.configuration_snapshot.expertise
+                        : []
+                      ).length === 0 &&
+                      (Array.isArray(activeRequestPreview.entry?.configuration_snapshot?.services)
+                        ? activeRequestPreview.entry.configuration_snapshot.services
+                        : []
+                      ).length === 0 &&
+                      (Array.isArray(activeRequestPreview.entry?.configuration_snapshot?.products)
+                        ? activeRequestPreview.entry.configuration_snapshot.products
+                        : []
+                      ).length === 0 ? (
+                        <tr>
+                          <td className="border border-slate-200 px-3 py-3 text-center text-slate-500" colSpan={4}>
+                            No application configuration rows found.
+                          </td>
+                        </tr>
+                      ) : null}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="mt-4 grid gap-2 sm:grid-cols-4">
+                  <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+                    Expertise: {formatCurrency(activeRequestPreview.entry?.totals?.expertise || 0)}
+                  </div>
+                  <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+                    Service: {formatCurrency(activeRequestPreview.entry?.totals?.services || 0)}
+                  </div>
+                  <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+                    Product: {formatCurrency(activeRequestPreview.entry?.totals?.products || 0)}
+                  </div>
+                  <div className="rounded-md border border-violet-300 bg-violet-50 px-3 py-2 text-sm font-semibold text-violet-800">
+                    Overall: {formatCurrency(activeRequestPreview.entry?.totals?.grand || 0)}
+                  </div>
+                </div>
+
+                {String(activeRequestPreview.entry?.configuration_snapshot?.requester_note || activeRequestPreview.entry?.configuration_snapshot?.notes?.requester_note || '').trim() ? (
+                  <p className="mt-4 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+                    <span className="font-semibold">Requester note:</span>{' '}
+                    {String(activeRequestPreview.entry?.configuration_snapshot?.requester_note || activeRequestPreview.entry?.configuration_snapshot?.notes?.requester_note || '').trim()}
+                  </p>
+                ) : null}
+              </div>
+            </div>
+
+            <div className="border-t border-slate-300 bg-white px-4 py-3">
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleRejectApplication(activeRequestPreview.entry?.erp_id, activeRequestPreview.postId)
+                    closeRequestPreview()
+                  }}
+                  className="rounded-full border border-rose-300 bg-rose-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-rose-700"
+                >
+                  Reject
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleApproveApplication(activeRequestPreview.entry?.erp_id, activeRequestPreview.postId)
+                    closeRequestPreview()
+                  }}
+                  className="rounded-full border border-emerald-300 bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700"
+                >
+                  Accept
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {canSendConnectionRequest && (
         <div className="card border border-sky-200 bg-sky-50/80">
           <p className="text-sm font-semibold text-sky-900">Connection Request</p>
@@ -1258,6 +1497,105 @@ export default function Dashboard() {
           </div>
         </div>
       </div>
+
+      {canDeletePosts && (
+        <div className="card border border-amber-300/80 bg-gradient-to-br from-[#fffbf0] via-[#fff8e6] to-[#fffcf5] shadow-lg">
+          <div className="flex items-center justify-between gap-3 mb-4">
+            <h3 className="text-lg font-semibold text-amber-900">
+              Requests
+              {pendingApplications.length > 0 && (
+                <span className="ml-3 inline-flex rounded-full border border-amber-400 bg-amber-100 px-3 py-0.5 text-sm font-bold text-amber-800">
+                  {pendingApplications.length}
+                </span>
+              )}
+            </h3>
+            <button
+              type="button"
+              onClick={() => setShowRequestsPanel(!showRequestsPanel)}
+              className="rounded-full border border-amber-400 bg-amber-100 px-3 py-1.5 text-xs font-semibold text-amber-800 transition hover:bg-amber-200"
+            >
+              {showRequestsPanel ? 'Hide' : 'View'}
+            </button>
+          </div>
+
+          {showRequestsPanel && (
+            <div className="space-y-3">
+              {pendingApplications.length === 0 ? (
+                <p className="text-sm text-slate-600">No pending requests at this time.</p>
+              ) : (
+                <div className="overflow-hidden rounded-lg border border-amber-200 bg-white">
+                  <table className="w-full text-left text-xs">
+                    <thead className="border-b border-amber-200 bg-amber-50">
+                      <tr>
+                        <th className="px-3 py-2 font-semibold text-amber-900">Post Title</th>
+                        <th className="px-3 py-2 font-semibold text-amber-900">Applicant</th>
+                        <th className="px-3 py-2 font-semibold text-amber-900">Submitted</th>
+                        <th className="px-3 py-2 font-semibold text-amber-900">Total Cost</th>
+                        <th className="px-3 py-2 font-semibold text-amber-900">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-amber-200">
+                      {pendingApplications.map((request) => {
+                        const postId = Number(request?.post?.id)
+                        const applicantId = Number(request?.applicant?.id)
+                        const applicantUser = usersById.get(applicantId)
+                        const applicantName =
+                          String(request?.applicant?.name || '').trim() ||
+                          String(applicantUser?.name || applicantUser?.username || '').trim() ||
+                          'Unknown applicant'
+                        const applicantAvatarUrl =
+                          toMediaUrl(request?.applicant?.profile_photo || applicantUser?.profile_photo || '') ||
+                          '/images/default-avatar.svg'
+                        const submittedDate = request?.submitted_at
+                          ? new Date(request.submitted_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: request?.submitted_at?.includes(new Date().getFullYear().toString()) ? undefined : '2-digit' })
+                          : 'N/A'
+                        const totalCost = formatCurrency(request?.totals?.grand || 0)
+
+                        return (
+                          <tr key={`request-${request.erp_id}`} className="hover:bg-amber-50/50">
+                            <td className="px-3 py-2 font-medium text-slate-800">{request?.post?.title || 'N/A'}</td>
+                            <td className="px-3 py-2">
+                              <button
+                                type="button"
+                                onClick={() => navigate(`/dashboard/${applicantId}`)}
+                                className="inline-flex items-center gap-2 rounded px-1 py-0.5 text-slate-700 transition hover:bg-amber-100"
+                              >
+                                <img
+                                  src={applicantAvatarUrl}
+                                  alt={applicantName}
+                                  className="h-5 w-5 rounded-full border border-amber-200 object-cover"
+                                />
+                                <span className="font-medium hover:underline">{applicantName}</span>
+                              </button>
+                            </td>
+                            <td className="px-3 py-2 text-slate-600">{submittedDate}</td>
+                            <td className="px-3 py-2 font-semibold text-amber-900">{totalCost}</td>
+                            <td className="px-3 py-2 space-x-1 flex">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const targetPost = userPosts.find((entry) => Number(entry.id) === postId)
+                                  if (targetPost) {
+                                    openPostDetailsModal(targetPost, targetPost.post_type === 'Demand' ? 'Demand' : 'Available')
+                                  }
+                                  setShowRequestsPanel(false)
+                                }}
+                                className="rounded border border-emerald-400 bg-emerald-50 px-2 py-1 text-[10px] font-semibold text-emerald-700 transition hover:bg-emerald-100"
+                              >
+                                Review
+                              </button>
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="card border border-violet-300/80 bg-gradient-to-br from-[#f4e9ff] via-[#ecd9ff] to-[#f7ecff] shadow-lg">
         <p className="text-lg font-semibold text-violet-900">
