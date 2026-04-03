@@ -7,7 +7,7 @@ const links = [
   { to: '/create-post', label: 'Create Post' },
   { to: '/manage-post', label: 'Manage Post' },
   { to: '/connections', label: 'Connections' },
-  { to: '/erp', label: 'ERP' },
+  { to: '/erp', label: 'Process Tracking' },
 ]
 
 export default function Sidebar() {
