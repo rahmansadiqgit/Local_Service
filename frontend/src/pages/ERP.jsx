@@ -188,6 +188,10 @@ export default function ERP() {
       const isDemand = String(post?.post_type || '').toLowerCase() === 'demand'
       if (!isDemand) return true
       const status = String(item?.configuration_snapshot?.application_submission?.status || '').toLowerCase()
+      const isOwner = Number(currentUserId) > 0 && Number(post?.owner_id ?? post?.owner) === Number(currentUserId)
+      if (status === 'submitted' || status === 'pending') {
+        return isOwner
+      }
       return status === 'approved' || status === 'accepted' || status === 'confirmed' || !status
     })
 
@@ -201,7 +205,7 @@ export default function ERP() {
       .slice(0, 3)
 
     return { total, completed, pending, revenue, topServices }
-  }, [erpItems, averageRatingByPost, postMap])
+  }, [erpItems, averageRatingByPost, postMap, currentUserId])
 
   const visibleErpItems = useMemo(() => {
     return erpItems.filter((item) => {
@@ -209,9 +213,13 @@ export default function ERP() {
       const isDemand = String(post?.post_type || '').toLowerCase() === 'demand'
       if (!isDemand) return true
       const status = String(item?.configuration_snapshot?.application_submission?.status || '').toLowerCase()
+      const isOwner = Number(currentUserId) > 0 && Number(post?.owner_id ?? post?.owner) === Number(currentUserId)
+      if (status === 'submitted' || status === 'pending') {
+        return isOwner
+      }
       return status === 'approved' || status === 'accepted' || status === 'confirmed' || !status
     })
-  }, [erpItems, postMap])
+  }, [erpItems, postMap, currentUserId])
 
   const filteredTasks = useMemo(() => {
     return visibleErpItems.filter((erp) => {
@@ -305,6 +313,32 @@ export default function ERP() {
       console.error(error)
       const detail = String(error?.response?.data?.detail || '').trim()
       setMessage(detail || 'Failed to reject booking request.')
+    }
+  }
+
+  const handleApproveApplication = async (erp) => {
+    try {
+      const { data } = await api.post(`/erp/${erp.id}/approve_application/`)
+      setErpItems((prev) => prev.map((item) => (item.id === data.id ? data : item)))
+      setMessage('Application accepted successfully.')
+      window.dispatchEvent(new Event('localix:notifications-refresh'))
+    } catch (error) {
+      console.error(error)
+      const detail = String(error?.response?.data?.detail || '').trim()
+      setMessage(detail || 'Failed to approve application.')
+    }
+  }
+
+  const handleRejectApplication = async (erp) => {
+    try {
+      const { data } = await api.post(`/erp/${erp.id}/reject_application/`)
+      setErpItems((prev) => prev.map((item) => (item.id === data.id ? data : item)))
+      setMessage('Application rejected successfully.')
+      window.dispatchEvent(new Event('localix:notifications-refresh'))
+    } catch (error) {
+      console.error(error)
+      const detail = String(error?.response?.data?.detail || '').trim()
+      setMessage(detail || 'Failed to reject application.')
     }
   }
 
@@ -718,6 +752,8 @@ export default function ERP() {
               onRateProvider={handleRateProvider}
               onApproveBooking={handleApproveBooking}
               onRejectBooking={handleRejectBooking}
+              onApproveApplication={handleApproveApplication}
+              onRejectApplication={handleRejectApplication}
               onOpenOwner={(ownerId) => navigate(`/dashboard/${ownerId}`)}
               toMediaUrl={toMediaUrl}
             />

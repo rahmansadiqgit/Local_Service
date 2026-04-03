@@ -216,6 +216,30 @@ export default function Header() {
     return text.replace(/\s*post\s+link:\s*[^\s]+\s*/gi, " ").replace(/\s{2,}/g, " ").trim()
   }
 
+  const getMemberSectionNotificationTarget = (item) => {
+    const roleKey = String(item?.connection_role || "").trim().toLowerCase()
+    const roleMap = {
+      expertise: "expertise",
+      skill_provider: "skill_provider",
+      supplier: "supplier",
+    }
+
+    const memberRole = roleMap[roleKey]
+    if (!memberRole) return null
+
+    const params = new URLSearchParams({
+      section: "members",
+      role: memberRole,
+    })
+
+    const personName = String(item?.related_user_name || item?.actor_name || "").trim()
+    if (personName) {
+      params.set("name", personName)
+    }
+
+    return `/connections?${params.toString()}`
+  }
+
   const parseInlineLinks = (value) => {
     const text = getVisibleNotificationMessage(value)
     const parts = []
@@ -322,15 +346,14 @@ export default function Header() {
     }
   }
 
-  const isConnectionRequestNotification = (item) => {
-    const title = String(item?.title || "").toLowerCase()
-    return title.includes("connection request")
-  }
-
   const getNotificationTarget = (item) => {
     const title = String(item?.title || "").toLowerCase()
     const message = String(item?.message || "")
     const messageLower = message.toLowerCase()
+
+    if (title.includes("booking request sent") || title.includes("application request sent")) {
+      return "/feed"
+    }
 
     if (title.includes("request declined")) {
       return "/feed"
@@ -342,6 +365,18 @@ export default function Header() {
 
     if (title.includes("post created") || messageLower.includes("post created")) {
       return "/dashboard"
+    }
+
+    const memberSectionTarget = getMemberSectionNotificationTarget(item)
+    if (
+      memberSectionTarget
+      && (
+        title.includes("connection request accepted")
+        || title.includes("connection added")
+        || title.includes("connection removed")
+      )
+    ) {
+      return memberSectionTarget
     }
 
     // Prefer an explicit in-message link when available.

@@ -679,7 +679,7 @@ class ERPViewSet(viewsets.ModelViewSet):
                 message=(
                     f'Your request for "{post_title}" has been sent to the post owner [{owner_name}]({owner_link}). '
                     "⏱ Waiting for approval. "
-                    f"Post link: /erp?erp_id={erp.id}"
+                    "Post link: /feed"
                 ),
             )
         ]
@@ -782,13 +782,18 @@ class ERPViewSet(viewsets.ModelViewSet):
         is_demand_post = str(getattr(post, "post_type", "") or "").strip().lower() == "demand"
         actor_name = getattr(actor, "name", "") or getattr(actor, "username", "") or "A user"
 
+        owner_name = getattr(post_owner, "name", "") or getattr(post_owner, "username", "") or "Post owner"
+        owner_link = f"/dashboard/{post_owner.id}" if post_owner else "/dashboard"
+        applicant_link = f"/dashboard/{actor.id}"
+
         notifications = [
             Notification(
                 user=actor,
-                title="Application Submitted",
+                title="✅ Application Request Sent" if is_demand_post else "Application Submitted",
                 message=(
-                    f'Your application for "{post_title}" has been sent to the post owner for review. '
-                    "You'll be notified once a decision has been made."
+                    f'Your request for "{post_title}" has been sent to the post owner '
+                    f'[{owner_name}]({owner_link}). ⏱ Waiting for approval. '
+                    "Post link: /feed"
                 ) if is_demand_post else f"Your application was submitted successfully. Please wait for acceptance. (Post: '{post_title}')",
             )
         ]
@@ -797,11 +802,11 @@ class ERPViewSet(viewsets.ModelViewSet):
             notifications.append(
                 Notification(
                     user=post_owner,
-                    title="New Application Received" if is_demand_post else "Someone applied to your post - review now",
+                    title="🔔 New Application Request" if is_demand_post else "Someone applied to your post - review now",
                     message=(
-                        f'{actor_name} has applied to your post "{post_title}". '
-                        "Review their application from your Dashboard and approve or reject to proceed. "
-                        "Post link: /dashboard"
+                        f'You have a new application request for your post "{post_title}" from '
+                        f'[{actor_name}]({applicant_link}) waiting for your response. '
+                        f"Post link: /erp?erp_id={erp.id}"
                     ) if is_demand_post else f"{actor_name} submitted an application for '{post_title}'. Open your dashboard to review and accept/reject. Post link: /dashboard",
                 )
             )
@@ -933,9 +938,10 @@ class ERPViewSet(viewsets.ModelViewSet):
             notifications.append(
                 Notification(
                     user=provider,
-                    title="Your Application Was Approved",
+                    title="🎉 Application Approved",
                     message=(
-                        f'Great news! Your application for "{post_title}" has been approved by {owner_name}. '
+                        f'Great news! Your request for "{post_title}" has been accepted by the post owner '
+                        f'[{owner_name}](/dashboard/{actor.id}). '
                         "Your Tracker is now active and ready for setup. "
                         f"Post link: /erp?erp_id={erp.id}"
                     ),
@@ -988,10 +994,11 @@ class ERPViewSet(viewsets.ModelViewSet):
             try:
                 Notification.objects.create(
                     user=provider,
-                    title="Application Not Accepted",
+                    title="⚠️ Request Declined",
                     message=(
-                        f'Unfortunately, your application for "{post_title}" was not accepted by the post owner at this time. '
-                        "You're welcome to explore other available posts."
+                        f'Your application request for "{post_title}" was declined by the post owner '
+                        f'[{owner_name}](/dashboard/{actor.id}). '
+                        "Post link: /feed"
                     ),
                 )
             except Exception:
@@ -2783,6 +2790,17 @@ class ConnectionViewSet(viewsets.GenericViewSet):
         receiver_role_label = "Delivery" if role_label == "Delivery Man" else role_label
         addressee_name = addressee.name or addressee.username or addressee.email
         
+        # Create role-specific messages
+        if receiver_role_label == "Delivery":
+            receiver_message = f"{sender_name} requested to connect with you for making a delivery for him.{f' Message: {message}' if message else ''}"
+            sender_message = f"You requested to connect with {addressee_name} for making a delivery."
+        elif role_label == "Skill Provider":
+            receiver_message = f"{sender_name} requested to connect with you for providing him your skill.{f' Message: {message}' if message else ''}"
+            sender_message = f"You requested to connect with {addressee_name} for receiving his skill."
+        else:
+            receiver_message = f"{sender_name} requested to connect with you as {receiver_role_label}.{f' Message: {message}' if message else ''}"
+            sender_message = f"You requested to connect with {addressee_name} as {role_label}."
+        
         # Notification for receiver
         Notification.objects.create(
             user=addressee,
@@ -2791,7 +2809,7 @@ class ConnectionViewSet(viewsets.GenericViewSet):
             related_user=request.user,
             connection_role=requested_role,
             title="Connection Request",
-            message=f"{sender_name} requested to connect with you as {receiver_role_label}.{f' Message: {message}' if message else ''}",
+            message=receiver_message,
         )
         
         # Notification for sender
@@ -2802,7 +2820,7 @@ class ConnectionViewSet(viewsets.GenericViewSet):
             related_user=addressee,
             connection_role=requested_role,
             title="Connection Request Sent",
-            message=f"You requested to connect with {addressee_name} as {role_label}.",
+            message=sender_message,
         )
 
         return Response(ConnectionSerializer(connection).data, status=status.HTTP_201_CREATED)
@@ -2833,6 +2851,14 @@ class ConnectionViewSet(viewsets.GenericViewSet):
                 or connection.requester.email
             )
             
+            # Create role-specific messages
+            if role_label == "Delivery Man":
+                requester_message = f"{sender_name} accepted your connection request for making delivery."
+                acceptor_message = f"You accepted {requester_name}'s connection request for making delivery for him."
+            else:
+                requester_message = f"{sender_name} accepted your connection request as {role_label}."
+                acceptor_message = f"You accepted {requester_name}'s connection request as {role_label}."
+            
             # Notification for requester (they see: "Antu accepted your connection request")
             Notification.objects.create(
                 user=connection.requester,
@@ -2841,7 +2867,7 @@ class ConnectionViewSet(viewsets.GenericViewSet):
                 related_user=request.user,
                 connection_role=connection.requested_role,
                 title="Connection Request Accepted",
-                message=f"{sender_name} accepted your connection request as {role_label}.",
+                message=requester_message,
             )
             
             # Notification for acceptor (they see: "You accepted Sadiq's connection request")
@@ -2852,7 +2878,7 @@ class ConnectionViewSet(viewsets.GenericViewSet):
                 related_user=connection.requester,
                 connection_role=connection.requested_role,
                 title="Connection Added",
-                message=f"You accepted {requester_name}'s connection request as {role_label}.",
+                message=acceptor_message,
             )
         else:
             connection.status = ConnectionStatus.REJECTED
@@ -2866,6 +2892,14 @@ class ConnectionViewSet(viewsets.GenericViewSet):
                 or connection.requester.email
             )
             
+            # Create role-specific messages
+            if role_label == "Delivery Man":
+                requester_message = f"{sender_name} rejected your connection request for making delivery."
+                rejector_message = f"You rejected {requester_name}'s connection request for making delivery."
+            else:
+                requester_message = f"{sender_name} rejected your connection request as {role_label}."
+                rejector_message = f"You rejected {requester_name}'s connection request as {role_label}."
+            
             # Notification for requester (they see: "Antu rejected your connection request")
             Notification.objects.create(
                 user=connection.requester,
@@ -2874,7 +2908,7 @@ class ConnectionViewSet(viewsets.GenericViewSet):
                 related_user=request.user,
                 connection_role=connection.requested_role,
                 title="Connection Request Rejected",
-                message=f"{sender_name} rejected your connection request as {role_label}.",
+                message=requester_message,
             )
             
             # Notification for rejector (they see: "You rejected Sadiq's connection request")
@@ -2885,7 +2919,7 @@ class ConnectionViewSet(viewsets.GenericViewSet):
                 related_user=connection.requester,
                 connection_role=connection.requested_role,
                 title="Connection Request Rejected",
-                message=f"You rejected {requester_name}'s connection request as {role_label}.",
+                message=rejector_message,
             )
 
         return Response(ConnectionSerializer(connection).data)
@@ -2976,16 +3010,45 @@ class ConnectionViewSet(viewsets.GenericViewSet):
         if requester_side:
             actor_role_text = role_labels.get(requester_side.requested_role, "member")
             actor_role_title = role_labels_title.get(requester_side.requested_role, "Member")
-            actor_message = f"U have removed connection with {target_name} as a {actor_role_title}."
-            target_message = f"{actor_name} has Removed Connection from you as a {actor_role_title}."
+            
+            if actor_role_title == "Delivery Man":
+                actor_message = f"You have removed connection for making delivery for {target_name}."
+                target_message = f"{actor_name} has removed connection from you for making delivery."
+            elif actor_role_title == "Skill Provider":
+                actor_message = f"You have removed connection with a skill provider {target_name}."
+                target_message = f"{actor_name} has removed connection from you as a skill provider."
+            elif actor_role_title == "Expertise":
+                actor_message = f"You have removed connection with {target_name} as a {actor_role_text}."
+                target_message = f"{actor_name} has removed connection from you as a {actor_role_text}."
+            else:
+                actor_message = f"You have removed connection with {target_name} as a {actor_role_text}."
+                target_message = f"{actor_name} has removed connection from you as a {actor_role_text}."
         elif addressee_side:
             target_role_text = role_labels.get(addressee_side.requested_role, "member")
-            if selected_role_text and not is_hired_view:
+            target_role_title = role_labels_title.get(addressee_side.requested_role, "Member")
+            
+            if target_role_title == "Delivery Man":
+                actor_message = f"You have removed connection for making delivery with {target_name}."
+                target_message = f"{actor_name} has removed connection from you for making delivery."
+            elif target_role_title == "Skill Provider":
+                actor_message = f"You have removed connection with a skill provider {target_name}."
+                target_message = f"{actor_name} has removed connection from you as a skill provider."
+            elif target_role_title == "Expertise":
+                actor_message = f"You have removed connection with {target_name} as a {target_role_text}."
+                target_message = f"{actor_name} has removed connection from you as a {target_role_text}."
+            elif selected_role_text and not is_hired_view:
                 actor_message = f"You have removed a {selected_role_text} {target_name}."
                 target_message = f"{actor_name} has removed you as a {selected_role_text}."
             elif is_hired_view:
-                actor_message = f"You have removed connection with {target_name}."
-                target_message = f"{actor_name} has removed connection from you."
+                if target_role_title == "Skill Provider":
+                    actor_message = f"You have removed connection with a skill provider {target_name}."
+                    target_message = f"{actor_name} has removed connection from you as a skill provider."
+                elif target_role_title == "Expertise":
+                    actor_message = f"You have removed connection with {target_name} as a {target_role_text}."
+                    target_message = f"{actor_name} has removed connection from you as a {target_role_text}."
+                else:
+                    actor_message = f"You have removed connection with {target_name}."
+                    target_message = f"{actor_name} has removed connection from you."
             else:
                 actor_message = f"You have removed a {target_role_text} named {target_name}."
                 target_message = f"{actor_name} has removed you as a {target_role_text}."

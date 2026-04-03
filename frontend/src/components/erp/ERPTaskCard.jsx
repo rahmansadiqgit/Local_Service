@@ -33,6 +33,8 @@ export default function ERPTaskCard({
   onRateProvider,
   onApproveBooking,
   onRejectBooking,
+  onApproveApplication,
+  onRejectApplication,
   onOpenOwner,
   toMediaUrl,
 }) {
@@ -81,10 +83,16 @@ export default function ERPTaskCard({
   const supplierNote = String(snapshot?.notes?.supplier_note || snapshot?.supplier_note || '').trim()
   const bookingSubmission = snapshot.booking_submission || {}
   const bookingStatus = String(bookingSubmission?.status || '').trim().toLowerCase()
+  const applicationSubmission = snapshot.application_submission || {}
+  const applicationStatus = String(applicationSubmission?.status || '').trim().toLowerCase()
+  const isDemandPost = String(post?.post_type || '').trim().toLowerCase() === 'demand'
   const isSupplyPost = String(post?.post_type || '').trim().toLowerCase() === 'supply'
   const isBookingAwaitingApproval = isSupplyPost && (bookingStatus === 'submitted' || bookingStatus === 'pending')
   const isBookingApproved = isSupplyPost && (bookingStatus === 'approved' || bookingStatus === 'accepted' || bookingStatus === 'confirmed')
   const isBookingRejected = isSupplyPost && bookingStatus === 'rejected'
+  const isApplicationAwaitingApproval = isDemandPost && (applicationStatus === 'submitted' || applicationStatus === 'pending')
+  const isApplicationApproved = isDemandPost && (applicationStatus === 'approved' || applicationStatus === 'accepted' || applicationStatus === 'confirmed')
+  const isApplicationRejected = isDemandPost && applicationStatus === 'rejected'
 
   const phases = isSupplyPost ? ['Pending', 'Accepted', 'Completed'] : ['Pending', 'On Process', 'Completed']
   const displayStage = isSupplyPost && erp.stage === 'On Process' && isBookingApproved ? 'Accepted' : erp.stage
@@ -287,10 +295,7 @@ export default function ERPTaskCard({
   const canLeaveTask = currentUserRoleResponsibilities.length > 0 && erp.stage !== 'Completed'
   const isReceiver = viewerRole === 'Receiver'
   const canUseMessenger = isProvider || isReceiver || currentUserRoleResponsibilities.length > 0
-  const onProcessChecklist = Array.isArray(phaseTasks?.['On Process']) ? phaseTasks['On Process'] : []
-  const isOnProcessReadyForCompletion =
-    onProcessChecklist.length === 0 || onProcessChecklist.every((task) => Boolean(task?.done))
-  const canCompleteAsReceiver = isReceiver && erp.stage === 'On Process' && isOnProcessReadyForCompletion
+  const canCompleteAsReceiver = isReceiver && erp.stage === 'On Process'
 
   const averageRatingByUser = (() => {
     const totals = new Map()
@@ -812,6 +817,22 @@ export default function ERPTaskCard({
               </span>
             ) : null}
           </div>
+        ) : isDemandPost ? (
+          <div className="mt-2 flex justify-center">
+            {isApplicationAwaitingApproval ? (
+              <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700">
+                Application request pending owner approval
+              </span>
+            ) : isApplicationApproved ? (
+              <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
+                Application confirmed
+              </span>
+            ) : isApplicationRejected ? (
+              <span className="rounded-full border border-rose-200 bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-700">
+                Application declined
+              </span>
+            ) : null}
+          </div>
         ) : null}
 
         {currentUserRoleResponsibilities.length ? (
@@ -904,7 +925,42 @@ export default function ERPTaskCard({
 
       <div className="relative grid grid-cols-3 items-center" data-erp-actions-root>
         <div className="justify-self-start">
-          {isBookingAwaitingApproval && isPostOwner && isProvider ? (
+          {isApplicationAwaitingApproval && isPostOwner ? (
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                disabled={isDecidingBooking}
+                onClick={async () => {
+                  if (!onApproveApplication) return
+                  setIsDecidingBooking(true)
+                  try {
+                    await onApproveApplication(erp)
+                  } finally {
+                    setIsDecidingBooking(false)
+                  }
+                }}
+                className="rounded-full border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-sm font-semibold text-emerald-700 transition hover:border-emerald-400 hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isDecidingBooking ? 'Accepting...' : 'Accept'}
+              </button>
+              <button
+                type="button"
+                disabled={isDecidingBooking}
+                onClick={async () => {
+                  if (!onRejectApplication) return
+                  setIsDecidingBooking(true)
+                  try {
+                    await onRejectApplication(erp)
+                  } finally {
+                    setIsDecidingBooking(false)
+                  }
+                }}
+                className="rounded-full border border-rose-300 bg-rose-50 px-3 py-1.5 text-sm font-semibold text-rose-700 transition hover:border-rose-400 hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Reject
+              </button>
+            </div>
+          ) : isBookingAwaitingApproval && isPostOwner && isProvider ? (
             <div className="flex items-center gap-2">
               <button
                 type="button"
@@ -952,7 +1008,7 @@ export default function ERPTaskCard({
               }}
               className="rounded-full border border-emerald-300 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-700 transition hover:border-emerald-400 hover:bg-emerald-100"
             >
-              Mark Completed
+             Completed
             </button>
           ) : shouldShowProviderParticipantRatingButton ? (
             <button
