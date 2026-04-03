@@ -638,7 +638,7 @@ class ERPViewSet(viewsets.ModelViewSet):
                 notifications.append(
                     Notification(
                         user=target_user,
-                        title="Booking Confirmed",
+                        title="🎉 Booking Confirmed",
                         message=message,
                     )
                 )
@@ -789,7 +789,7 @@ class ERPViewSet(viewsets.ModelViewSet):
         notifications = [
             Notification(
                 user=actor,
-                title="✅ Application Request Sent" if is_demand_post else "Application Submitted",
+                title="✅ Application Request Sent" if is_demand_post else "✅ Application Submitted",
                 message=(
                     f'Your request for "{post_title}" has been sent to the post owner '
                     f'[{owner_name}]({owner_link}). ⏱ Waiting for approval. '
@@ -802,7 +802,7 @@ class ERPViewSet(viewsets.ModelViewSet):
             notifications.append(
                 Notification(
                     user=post_owner,
-                    title="🔔 New Application Request" if is_demand_post else "Someone applied to your post - review now",
+                    title="🔔 New Application Request" if is_demand_post else "👀 Someone applied to your post - review now",
                     message=(
                         f'You have a new application request for your post "{post_title}" from '
                         f'[{actor_name}]({applicant_link}) waiting for your response. '
@@ -925,7 +925,7 @@ class ERPViewSet(viewsets.ModelViewSet):
         notifications = [
             Notification(
                 user=actor,
-                title="Application Approved",
+                title="🎉 Application Approved",
                 message=(
                     f"You've approved {applicant_name}'s application for \"{post_title}\". "
                     "The Tracker is now active - complete your setup to get started. "
@@ -988,6 +988,7 @@ class ERPViewSet(viewsets.ModelViewSet):
             or getattr(post, "post_name", "")
             or "this post"
         )
+        owner_name = getattr(post_owner, "name", "") or getattr(post_owner, "username", "") or "Post owner"
         provider = getattr(erp, "provider", None)
 
         if provider and int(provider.id) != int(actor.id):
@@ -1038,20 +1039,36 @@ class ERPViewSet(viewsets.ModelViewSet):
         )
 
         members = User.objects.filter(id__in=list(added_ids))
-        is_demand_post = str(getattr(getattr(erp, "post", None), "post_type", "") or "").strip().lower() == "demand"
+        post_type_value = str(getattr(getattr(erp, "post", None), "post_type", "") or "").strip().lower()
+        is_demand_post = post_type_value == "demand"
+        is_supply_post = "supply" in post_type_value or "available" in post_type_value
         notifications = []
         for member in members:
             member_name = member.name or member.username or member.email or f"User #{member.id}"
             notifications.append(
                 Notification(
                     user=provider,
-                    title="Team Member Added",
+                    title="👥 Team Member Added",
                     message=(
                         f'{member_name} has been assigned to your booking "{post_title}" as {role_label}. '
                         f"Post link: /erp?erp_id={erp.id}"
                     ),
                 )
             )
+            if is_supply_post or is_demand_post:
+                notifications.append(
+                    Notification(
+                        user=member,
+                        title="👥 Team Member Added",
+                        message=(
+                            f'You are assigned as {role_label} to a Application "{post_title}". '
+                            f"Post link: /erp?erp_id={erp.id}"
+                        ) if is_demand_post else (
+                            f'You are assigned as {role_label} to a booking "{post_title}". '
+                            f"Post link: /erp?erp_id={erp.id}"
+                        ),
+                    )
+                )
 
         if notifications:
             Notification.objects.bulk_create(notifications)
@@ -1181,8 +1198,6 @@ class ERPViewSet(viewsets.ModelViewSet):
             instance = serializer.save(**save_kwargs)
             if requested_is_configured:
                 self._notify_booking_request_sent(instance, actor)
-            if requested_is_configured and not is_supply_post:
-                self._notify_booking_confirmation(instance, actor)
             data = self.get_serializer(instance).data
             headers = self.get_success_headers(data)
             return Response(data, status=status.HTTP_201_CREATED, headers=headers)
@@ -1225,9 +1240,6 @@ class ERPViewSet(viewsets.ModelViewSet):
             if next_is_configured and is_supply_post and previous_booking_status not in {"submitted", "pending"}:
                 self._notify_booking_request_sent(current, request.user)
 
-            if self._to_bool(request.data.get("is_configured", False)) and not is_supply_post and not was_configured:
-                self._notify_booking_confirmation(current, request.user)
-
             return Response(self.get_serializer(current).data)
         except (ValidationError, PermissionDenied):
             raise
@@ -1267,9 +1279,6 @@ class ERPViewSet(viewsets.ModelViewSet):
 
             if next_is_configured and is_supply_post and previous_booking_status not in {"submitted", "pending"}:
                 self._notify_booking_request_sent(current, request.user)
-
-            if self._to_bool(request.data.get("is_configured", False)) and not is_supply_post and not was_configured:
-                self._notify_booking_confirmation(current, request.user)
 
             return Response(self.get_serializer(current).data)
         except (ValidationError, PermissionDenied):
@@ -1596,7 +1605,7 @@ class ERPViewSet(viewsets.ModelViewSet):
         notifications = [
             Notification(
                 user=target,
-                title=f"Open Role Available: {role_title}" if is_demand_post else f"ERP Self-Assign Open: {role_title}",
+                title=f"🧩 Open Role Available: {role_title}" if is_demand_post else f"🧩 ERP Self-Assign Open: {role_title}",
                 message=body,
             )
             for target in receivers
@@ -1809,6 +1818,46 @@ class ERPViewSet(viewsets.ModelViewSet):
 
         erp.stage = stage
         erp.save(update_fields=["stage", "updated_at"])
+
+        post = getattr(erp, "post", None)
+        if post:
+            post_title = (
+                getattr(post, "post_title", "")
+                or getattr(post, "post_name", "")
+                or "this post"
+            )
+            stage_label = str(stage or "").strip() or "Unknown"
+            post_type_value = str(getattr(post, "post_type", "") or "").strip().lower()
+            is_supply_post = "supply" in post_type_value or "available" in post_type_value
+            provider = getattr(erp, "provider", None)
+            receiver = getattr(erp, "receiver", None)
+            recipients = []
+
+            if provider:
+                recipients.append(provider)
+            if receiver and (not provider or int(receiver.id) != int(provider.id)):
+                recipients.append(receiver)
+
+            notifications = [
+                Notification(
+                    user=recipient,
+                    title="✅Booking Status updated" if is_supply_post else "✅ Application Status Updated",
+                    message=(
+                        f'Application #{erp.id} for "{post_title}" has moved to {stage_label}. '
+                        "Check your Tracker for the latest details. "
+                        f"Post link: /erp?erp_id={erp.id}"
+                    ) if not is_supply_post else (
+                        f'Booking #{erp.id} for "{post_title}" has moved to {stage_label}. '
+                        "Check your Booking Tracker for the latest details. "
+                        f"Post link: /erp?erp_id={erp.id}"
+                    ),
+                )
+                for recipient in recipients
+            ]
+
+            if notifications:
+                Notification.objects.bulk_create(notifications)
+
         return Response(self.get_serializer(erp).data)
 
     @action(detail=True, methods=["post"])
@@ -1879,7 +1928,7 @@ class ERPViewSet(viewsets.ModelViewSet):
 
         Notification.objects.create(
             user=erp.provider,
-            title="Task Completed by Receiver" if str(getattr(getattr(erp, "post", None), "post_type", "") or "").strip().lower() == "demand" else "Booking Completed by Receiver",
+            title="✅ Task Completed by Receiver" if str(getattr(getattr(erp, "post", None), "post_type", "") or "").strip().lower() == "demand" else "✅ Booking Completed by Receiver",
             message=(
                 f'{receiver_name} has marked "{post_title}" as complete with a {rating_value}/5 rating. '
                 f'Their comment: "{comment}". '
@@ -1911,7 +1960,7 @@ class ERPViewSet(viewsets.ModelViewSet):
                 [
                     Notification(
                         user=participant,
-                        title="Task Successfully Completed" if str(getattr(getattr(erp, "post", None), "post_type", "") or "").strip().lower() == "demand" else "Booking Completed",
+                        title="✅ Task Successfully Completed" if str(getattr(getattr(erp, "post", None), "post_type", "") or "").strip().lower() == "demand" else "✅ Booking Completed",
                         message=(
                             f'The task "{post_title}" has been marked as complete. '
                             "The provider may now submit individual ratings for all team members involved. "
@@ -1928,7 +1977,7 @@ class ERPViewSet(viewsets.ModelViewSet):
 
         Notification.objects.create(
             user=request.user,
-            title="Completion Submitted Successfully",
+            title="✅ Completion Submitted Successfully" if str(getattr(getattr(erp, "post", None), "post_type", "") or "").strip().lower() == "demand" else "✅ Completion Submitted Successfully",
             message=(
                 f'Your completion and rating for "{post_title}" have been recorded. '
                 "Thank you for using the Booking Tracker — your feedback helps the community! "
@@ -2463,7 +2512,7 @@ class ERPViewSet(viewsets.ModelViewSet):
         self._notify_provider_member_activity(
             erp,
             request.user,
-            "New Message on Your cart" if str(getattr(getattr(erp, "post", None), "post_type", "") or "").strip().lower() == "demand" else "New Message on Booking",
+            "💬 New Message on Your cart" if str(getattr(getattr(erp, "post", None), "post_type", "") or "").strip().lower() == "demand" else "💬 New Message on Booking",
             (
                 f'{actor_name} sent a message on "{post_title}". Tap to view and reply in the chat. '
                 f"Post link: /erp?erp_id={erp.id}"
@@ -2542,7 +2591,7 @@ class ERPViewSet(viewsets.ModelViewSet):
             for recipient in recipients:
                 notification = Notification(
                     user=recipient,
-                    title="ERP Card Deleted",
+                    title="🗑️ ERP Card Deleted",
                     message=(
                         f'The ERP card "{erp_name}" has been deleted by {deleter_role} {deleter_name}. '
                         "This has been removed from your booking tracker."
