@@ -430,10 +430,15 @@ class SkillViewSet(viewsets.ModelViewSet):
     filterset_fields = ["post"]
 
     def list(self, request, *args, **kwargs):
-        queryset = self.filter_queryset(self.get_queryset())
+        queryset = self.filter_queryset(self.get_queryset()).select_related("post")
         skill_items = list(queryset)
         post_ids = {int(item.post_id) for item in skill_items if item.post_id}
         _, _, services_by_post = _collect_consumed_capacity_by_post(post_ids)
+        post_type_by_post_id = {
+            int(item.post_id): str(getattr(getattr(item, "post", None), "post_type", "") or "").strip().lower()
+            for item in skill_items
+            if item.post_id
+        }
 
         serializer = self.get_serializer(skill_items, many=True)
         data = serializer.data
@@ -442,9 +447,12 @@ class SkillViewSet(viewsets.ModelViewSet):
             row_id = _to_int_safe(row.get("id"))
             post_id = _to_int_safe(row.get("post"))
             booked_count = max(_to_int_safe(services_by_post.get(post_id, {}).get(row_id, 0)), 0)
+            is_demand_post = post_type_by_post_id.get(post_id) == "demand"
             row["booked_count"] = booked_count
             row["is_booked"] = booked_count > 0
-            row["is_fully_booked"] = False
+            # For demand posts, once one approved provider claims the service,
+            # the service becomes unavailable for other applicants.
+            row["is_fully_booked"] = is_demand_post and booked_count > 0
 
         return Response(data)
 
@@ -643,12 +651,19 @@ class ERPViewSet(viewsets.ModelViewSet):
             skill = skill_map.get(service_id)
             if not skill:
                 continue
-            # Skill.available_workers was removed from the data model, so there is
-            # no explicit service capacity to enforce by default.
-            # When capacity is not provided (<= 0), treat service bookings as unlimited.
-            total_capacity = self._to_int(getattr(skill, "available_workers", 0), default=0)
-            if total_capacity <= 0:
-                continue
+
+            post_type = str(getattr(post, "post_type", "") or "").strip().lower()
+            if post_type == "demand":
+                # Demand service rows are exclusive: one approved provider per service row.
+                total_capacity = 1
+            else:
+                # Supply services remain multi-bookable by default.
+                # Skill.available_workers was removed from the data model, so when
+                # capacity is absent/non-positive, treat it as unlimited.
+                total_capacity = self._to_int(getattr(skill, "available_workers", 0), default=0)
+                if total_capacity <= 0:
+                    continue
+
             consumed = max(self._to_int(consumed_usage["services"].get(service_id, 0)), 0)
             remaining = max(total_capacity - consumed, 0)
             if requested_count > remaining:
