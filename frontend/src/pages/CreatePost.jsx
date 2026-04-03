@@ -950,6 +950,7 @@ export default function CreatePost() {
                   <option value="hourly">Hourly</option>
                   <option value="daily">Daily</option>
                   <option value="monthly">Monthly</option>
+                  <option value="per_project">Per Project</option>
                 </select>
               </div>
               {isDemand ? (
@@ -963,7 +964,11 @@ export default function CreatePost() {
                         ? 'e.g., 2 (hours)'
                         : row.unit === 'daily'
                           ? 'e.g., 3 (days)'
-                          : 'e.g., 1 (months)'
+                          : row.unit === 'monthly'
+                            ? 'e.g., 1 (months)'
+                            : row.unit === 'per_project'
+                              ? 'e.g., 1 (project)'
+                              : 'e.g., 1'
                     }
                     value={row.needed_budget_unit}
                     onChange={(event) =>
@@ -986,6 +991,8 @@ export default function CreatePost() {
                         ? 'Your Daily Budget (BDT)'
                         : row.unit === 'monthly'
                           ? 'Your Monthly Budget (BDT)'
+                          : row.unit === 'per_project'
+                            ? 'Your Project Budget (BDT)'
                           : 'Your Budget (BDT)'
                         : 'Charge (BDT) Per Unit'}
                 </label>
@@ -1000,6 +1007,8 @@ export default function CreatePost() {
                           ? 'Enter your daily budget (BDT)'
                           : row.unit === 'monthly'
                             ? 'Enter your monthly budget (BDT)'
+                            : row.unit === 'per_project'
+                              ? 'Enter your project budget (BDT)'
                             : 'Enter your budget (BDT)'
                         : 'Enter charge amount per unit (BDT)'
                   }
