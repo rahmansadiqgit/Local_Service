@@ -1,8 +1,12 @@
 import { useCallback, useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 
 import api from '../../api/client'
 import defaultAvatar from '../../assets/default-avatar.svg'
+import ExpertiseTable from '../ExpertiseTable'
+import ProductTable from '../ProductTable'
 import RatingRingAvatar from '../RatingRingAvatar'
+import ServiceTable from '../ServiceTable'
 
 export default function ERPTaskCard({
   erp,
@@ -38,6 +42,7 @@ export default function ERPTaskCard({
   onOpenOwner,
   toMediaUrl,
 }) {
+  const navigate = useNavigate()
   const [isActionsMenuOpen, setIsActionsMenuOpen] = useState(false)
   const [isMembersMenuOpen, setIsMembersMenuOpen] = useState(false)
   const [selectedMemberRole, setSelectedMemberRole] = useState(null)
@@ -70,6 +75,7 @@ export default function ERPTaskCard({
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false)
   const [isDeletingErp, setIsDeletingErp] = useState(false)
   const [deleteError, setDeleteError] = useState('')
+  const [isDecidingBooking, setIsDecidingBooking] = useState(false)
 
   const snapshot = erp.configuration_snapshot || {}
   const snapshotPost = snapshot.post || {}
@@ -77,6 +83,62 @@ export default function ERPTaskCard({
   const snapshotServices = Array.isArray(snapshot.services) ? snapshot.services : []
   const snapshotProducts = Array.isArray(snapshot.products) ? snapshot.products : []
   const snapshotTotals = snapshot.totals || {}
+  const getDisplayQty = (row) => Number(row?.offered_people ?? row?.offered_quantity ?? row?.quantity ?? 0)
+  const getDisplayDuration = (row) => Number(row?.offered_hours ?? row?.offered_unit_per_person ?? row?.duration ?? 0)
+  const getDisplayUnitCost = (row) => Number(
+    row?.offered_budget_per_person
+      ?? row?.offered_rate
+      ?? row?.offered_price
+      ?? row?.unit_cost
+      ?? row?.cost
+      ?? 0,
+  )
+  const getDisplayLineTotal = (row) => Number(row?.line_total ?? row?.lineTotal ?? 0)
+  const selectedExpertiseRows = snapshotExpertise.filter((row) => {
+    if (!row || typeof row !== 'object') return false
+    if (row.included === false) return false
+    const qty = getDisplayQty(row)
+    const lineTotal = getDisplayLineTotal(row)
+    return qty > 0 || lineTotal > 0
+  })
+  const selectedServiceRows = snapshotServices.filter((row) => {
+    if (!row || typeof row !== 'object') return false
+    if (row.included === false) return false
+    const qty = getDisplayQty(row)
+    const lineTotal = getDisplayLineTotal(row)
+    return qty > 0 || lineTotal > 0
+  })
+  const selectedProductRows = snapshotProducts.filter((row) => {
+    if (!row || typeof row !== 'object') return false
+    if (row.included === false) return false
+    const qty = getDisplayQty(row)
+    const lineTotal = getDisplayLineTotal(row)
+    return qty > 0 || lineTotal > 0
+  })
+  const selectedExpertiseForTable = selectedExpertiseRows.map((row, index) => ({
+    id: row?.id ?? `sel-exp-${erp.id}-${index}`,
+    name: row?.name || row?.skill_name || '-',
+    experience: row?.experience ?? '-',
+    unit: row?.unit || '-',
+    cost: Number(getDisplayUnitCost(row) || 0).toFixed(2),
+    available_person: getDisplayQty(row),
+    needed_budget_unit: Number(row?.needed_budget_unit || 0),
+  }))
+  const selectedServicesForTable = selectedServiceRows.map((row, index) => ({
+    id: row?.id ?? `sel-svc-${erp.id}-${index}`,
+    service_name: row?.name || row?.service_name || '-',
+    description: String(row?.description || row?.details || '-'),
+    cost_per_unit: Number(getDisplayUnitCost(row) || 0).toFixed(2),
+    is_fully_booked: false,
+  }))
+  const selectedProductsForTable = selectedProductRows.map((row, index) => ({
+    id: row?.id ?? `sel-prd-${erp.id}-${index}`,
+    product_name: row?.name || row?.product_name || '-',
+    description: String(row?.description || row?.details || '-'),
+    unit: row?.unit || '-',
+    cost_per_unit: Number(getDisplayUnitCost(row) || 0).toFixed(2),
+    available_units: getDisplayQty(row),
+  }))
   const supplierNote = String(snapshot?.notes?.supplier_note || snapshot?.supplier_note || '').trim()
   const bookingSubmission = snapshot.booking_submission || {}
   const bookingStatus = String(bookingSubmission?.status || '').trim().toLowerCase()
@@ -91,8 +153,11 @@ export default function ERPTaskCard({
   const isApplicationApproved = isDemandPost && (applicationStatus === 'approved' || applicationStatus === 'accepted' || applicationStatus === 'confirmed')
   const isApplicationRejected = isDemandPost && applicationStatus === 'rejected'
 
-  const phases = isSupplyPost ? ['Pending', 'Accepted', 'Completed'] : ['Pending', 'On Process', 'Completed']
-  const displayStage = isSupplyPost && erp.stage === 'On Process' && isBookingApproved ? 'Accepted' : erp.stage
+  const phases = isSupplyPost ? ['Pending', 'On Going', 'Completed'] : ['Pending', 'Process', 'Completed']
+  const displayStage =
+    erp.stage === 'On Process'
+      ? (isSupplyPost ? 'On Going' : 'Process')
+      : erp.stage
   const activePhaseIndex = phases.indexOf(displayStage)
 
   const hasRequiredRows = (rows) =>
@@ -116,19 +181,19 @@ export default function ERPTaskCard({
   const memberMenuOptions = [
     hasExpertiseCategory ? 'Expertise' : null,
     hasServicesCategory ? 'Skill provider' : null,
-    hasProductCategory ? 'Delivary Man' : null,
+    hasProductCategory ? 'Delivery Man' : null,
   ].filter(Boolean)
 
   const roleLabelToKey = {
     Expertise: 'expertise',
     'Skill provider': 'skill_provider',
-    'Delivary Man': 'supplier',
+    'Delivery Man': 'supplier',
   }
 
   const roleKeyToLabel = {
     expertise: 'Expertise',
     skill_provider: 'Skill provider',
-    supplier: 'Delivary Man',
+    supplier: 'Delivery Man',
   }
   const associatedMemberRoles = ['expertise', 'skill_provider', 'supplier']
   const roleKeyAliases = {
@@ -184,6 +249,7 @@ export default function ERPTaskCard({
       members,
     }
   })
+  const associatedMembersWithAssignments = associatedMembersByRole.filter((entry) => entry.members.length > 0)
   const hasAssociatedMembers = associatedMembersByRole.some((entry) => entry.members.length > 0)
   const selectedRoleState = selectedMemberRole ? getRoleState(selectedMemberRole) : {}
   const selectedAssigneeIds = Array.isArray(selectedRoleState.assignee_ids)
@@ -262,6 +328,36 @@ export default function ERPTaskCard({
   }
 
   const selectedRoleResponsibilityText = getResponsibilityTextByRole(selectedMemberRole)
+  const expertiseAssignmentsByRow =
+    selectedMemberRole === 'expertise' && selectedRoleState && typeof selectedRoleState.expertise_assignments === 'object'
+      ? selectedRoleState.expertise_assignments
+      : {}
+  const expertiseRowsForAssignment =
+    selectedMemberRole === 'expertise'
+      ? snapshotExpertise
+          .map((row, index) => {
+            const rowId = Number(row?.id)
+            const required = Math.max(0, Number((row?.offered_people ?? row?.quantity) || 0))
+            if (!Number.isFinite(rowId) || rowId <= 0 || required <= 0) return null
+            const assignedRaw = Array.isArray(expertiseAssignmentsByRow[String(rowId)])
+              ? expertiseAssignmentsByRow[String(rowId)]
+              : []
+            const assignedIds = Array.from(
+              new Set(
+                assignedRaw
+                  .map((id) => Number(id))
+                  .filter((id) => Number.isFinite(id) && id > 0),
+              ),
+            )
+            return {
+              rowId,
+              name: String(row?.name || `Expertise ${index + 1}`),
+              required,
+              assignedIds,
+            }
+          })
+          .filter(Boolean)
+      : []
   const currentUserNumericId = Number(currentUserId)
   const hasCurrentUserId = Number.isFinite(currentUserNumericId) && currentUserNumericId > 0
   const assignedWorkerIds = Array.isArray(erp?.assigned_workers)
@@ -488,6 +584,7 @@ export default function ERPTaskCard({
         : 'border border-amber-200 bg-amber-50 text-amber-700'
   const isProviderTheme = isProvider
   const isReceiverTheme = isReceiver
+  const isDetailsOpen = expandedId === erp.id
   const cardShellClass = isProviderTheme
     ? 'border-transparent bg-gradient-to-br from-violet-50 via-purple-50 to-fuchsia-50 shadow-violet-200/45'
     : isReceiverTheme
@@ -531,9 +628,57 @@ export default function ERPTaskCard({
       .map((task) => pendingMemberRoleByTaskKey[String(task.key || '').trim()])
       .filter(Boolean),
   )
-  const shouldPulseMembersButton = pendingMemberRoles.size > 0
-  const shouldPulseActionsButton = openPendingTasks.length > 0 || shouldPulseMembersButton
-  const canUseActionsMenu = !isSupplyPost || isBookingApproved
+  const expertiseRoleStateForStatus = getRoleState('expertise')
+  const expertiseAssignmentsForStatus =
+    expertiseRoleStateForStatus && typeof expertiseRoleStateForStatus.expertise_assignments === 'object'
+      ? expertiseRoleStateForStatus.expertise_assignments
+      : {}
+  const hasIncompleteExpertiseAssignments = hasExpertiseCategory && snapshotExpertise.some((row) => {
+    const rowId = Number(row?.id)
+    const required = Math.max(0, Number((row?.offered_people ?? row?.quantity) || 0))
+    if (!Number.isFinite(rowId) || rowId <= 0 || required <= 0) return false
+
+    const assignedRaw = Array.isArray(expertiseAssignmentsForStatus[String(rowId)])
+      ? expertiseAssignmentsForStatus[String(rowId)]
+      : []
+    const assignedCount = new Set(
+      assignedRaw
+        .map((id) => Number(id))
+        .filter((id) => Number.isFinite(id) && id > 0),
+    ).size
+
+    return assignedCount < required
+  })
+  const hasIncompleteSkillProviderAssignments = hasServicesCategory && getRoleAssigneeIds('skill_provider').length === 0
+  const hasIncompleteSupplierAssignments = hasProductCategory && getRoleAssigneeIds('supplier').length === 0
+  const hasPendingMembersAction =
+    pendingMemberRoles.size > 0
+    || hasIncompleteExpertiseAssignments
+    || hasIncompleteSkillProviderAssignments
+    || hasIncompleteSupplierAssignments
+  const hasPendingTaskAction = openPendingTasks.length > 0
+  const shouldHighlightActionsButton = (hasPendingTaskAction || hasPendingMembersAction) && !isDetailsOpen
+  const canUseActionsMenu = isSupplyPost ? isBookingApproved : (isDemandPost ? isApplicationApproved : true)
+  const menuItemBaseClass =
+    'w-full rounded-xl border border-slate-200 bg-white px-4 py-2 text-left text-sm font-semibold text-slate-700 transition hover:border-violet-200 hover:bg-violet-50 hover:text-violet-700'
+
+  useEffect(() => {
+    if (!isDetailsOpen) return undefined
+
+    const previousOverflow = document.body.style.overflow
+    const previousPaddingRight = document.body.style.paddingRight
+    const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth
+
+    document.body.style.overflow = 'hidden'
+    if (scrollbarWidth > 0) {
+      document.body.style.paddingRight = `${scrollbarWidth}px`
+    }
+
+    return () => {
+      document.body.style.overflow = previousOverflow
+      document.body.style.paddingRight = previousPaddingRight
+    }
+  }, [isDetailsOpen])
 
   useEffect(() => {
     const handleOutsideClick = (event) => {
@@ -554,7 +699,7 @@ export default function ERPTaskCard({
   const renderTaskRow = (task, listType) => {
     const isOpenPending = listType === 'pending' && !task.done
     const isReadyProductTask = task.toggleable && task.key === 'ready_product'
-    const shouldBounceRow = isOpenPending && !(task.toggleable && task.key === 'ready_product')
+    const shouldBounceRow = isOpenPending && !(task.toggleable && task.key === 'ready_product') && !isDetailsOpen
     return (
       <li
         key={`${erp.id}-${listType}-${task.key || task.label}`}
@@ -774,7 +919,11 @@ export default function ERPTaskCard({
   }
 
   return (
-    <div className={`card relative overflow-hidden rounded-3xl border p-4 shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-xl ${cardShellClass}`}>
+    <div
+      className={`card relative overflow-hidden rounded-3xl border p-4 shadow-sm ${cardShellClass} ${
+        isDetailsOpen ? 'shadow-xl' : 'transition-all duration-300 hover:-translate-y-0.5 hover:shadow-xl'
+      }`}
+    >
       <div className="pointer-events-none absolute -right-14 -top-14 h-40 w-40 rounded-full bg-white/40 blur-2xl" />
       <div className="pointer-events-none absolute -left-10 bottom-10 h-28 w-28 rounded-full bg-white/30 blur-2xl" />
 
@@ -858,7 +1007,7 @@ export default function ERPTaskCard({
               alt={counterpartyName}
               rating={getUserRating(counterpartyUserId)}
               size={48}
-              ringWidth={2}
+              ringWidth={3}
             />
             <div className="min-w-0 text-left">
               <p className="text-[11px] uppercase tracking-wide text-slate-500">{counterpartyLabel}</p>
@@ -889,7 +1038,7 @@ export default function ERPTaskCard({
           <div className="relative grid grid-cols-3 gap-2">
             {phases.map((phase, index) => {
               const isDone = index < activePhaseIndex
-              const isActive = phase === erp.stage
+              const isActive = phase === displayStage
 
               return (
                 <div key={`phase-flow-${erp.id}-${phase}`} className="flex flex-col items-center gap-1 text-center">
@@ -1080,7 +1229,7 @@ export default function ERPTaskCard({
                 }
               }}
               className={`rounded-full border px-4 py-2 text-sm font-semibold transition ${
-                shouldPulseActionsButton
+                shouldHighlightActionsButton
                   ? 'animate-bounce border-rose-300 bg-rose-100 text-rose-700 hover:border-rose-400 hover:bg-rose-200'
                   : 'border-slate-300 bg-white text-slate-700 hover:border-slate-400'
               }`}
@@ -1094,26 +1243,6 @@ export default function ERPTaskCard({
 
         {isActionsMenuOpen && canUseActionsMenu ? (
           <div className="absolute bottom-full right-0 z-30 mb-2 w-56 space-y-2 rounded-xl border border-slate-200 bg-white p-2 shadow-sm">
-            <button
-              type="button"
-              onClick={() => {
-                onSetPending(erp)
-                setIsActionsMenuOpen(false)
-                setIsMembersMenuOpen(false)
-              }}
-              disabled={!isProvider}
-              title={!isProvider ? 'Only provider can manage Pending actions' : ''}
-              className={`w-full rounded-full px-4 py-2 text-sm font-semibold transition ${
-                erp.stage === 'Pending'
-                  ? 'bg-brand-600 text-white shadow-sm hover:bg-brand-700'
-                  : !isProvider
-                    ? 'cursor-not-allowed border border-slate-200 bg-slate-100 text-slate-400'
-                    : 'border border-slate-300 bg-white text-slate-700 hover:border-brand-300 hover:text-brand-700'
-              }`}
-            >
-              Pending
-            </button>
-
             {isProvider ? (
               <button
                 type="button"
@@ -1122,10 +1251,10 @@ export default function ERPTaskCard({
                   setIsActionsMenuOpen(false)
                   setIsMembersMenuOpen(false)
                 }}
-                className={`w-full rounded-full border px-4 py-2 text-sm font-semibold transition ${
-                  openPendingTasks.length > 0
-                    ? 'animate-bounce border-rose-300 bg-rose-100 text-rose-700 hover:bg-rose-200'
-                    : 'border-violet-300 bg-violet-50 text-violet-700 hover:bg-violet-100'
+                className={`${menuItemBaseClass} ${
+                  hasPendingTaskAction
+                    ? 'animate-bounce !border-rose-300 !bg-rose-100 !text-rose-700 hover:!bg-rose-200'
+                    : ''
                 }`}
               >
                 Tasks
@@ -1139,7 +1268,7 @@ export default function ERPTaskCard({
                 setIsActionsMenuOpen(false)
                 setIsMembersMenuOpen(false)
               }}
-              className="w-full rounded-full border border-slate-700 bg-white px-4 py-2 text-sm font-bold text-slate-800 transition hover:bg-slate-50"
+              className={menuItemBaseClass}
             >
               Generate PDF
             </button>
@@ -1148,10 +1277,10 @@ export default function ERPTaskCard({
               <button
                 type="button"
                 onClick={() => setIsMembersMenuOpen((prev) => !prev)}
-                className={`w-full rounded-full border px-4 py-2 text-sm font-semibold transition ${
-                  shouldPulseMembersButton
-                    ? 'animate-bounce border-rose-300 bg-rose-100 text-rose-700 hover:border-rose-400'
-                    : 'border-slate-300 bg-white text-slate-700 hover:border-slate-400'
+                className={`${menuItemBaseClass} ${
+                  hasPendingMembersAction
+                    ? 'animate-bounce !border-rose-300 !bg-rose-100 !text-rose-700 hover:!border-rose-400 hover:!bg-rose-200'
+                    : ''
                 }`}
               >
                 Members
@@ -1174,7 +1303,7 @@ export default function ERPTaskCard({
                           }}
                           className={`block w-full rounded-lg px-3 py-2 text-left text-xs font-medium transition ${
                             shouldPulseRole
-                              ? 'animate-bounce border border-rose-200 bg-rose-100 text-rose-700 hover:bg-rose-200'
+                              ? 'animate-bounce !border !border-rose-200 !bg-rose-100 !text-rose-700 hover:!bg-rose-200'
                               : 'text-slate-700 hover:bg-slate-50'
                           }`}
                         >
@@ -1195,7 +1324,7 @@ export default function ERPTaskCard({
                 onClick={() => {
                   setIsDeleteConfirmOpen(true)
                 }}
-                className="w-full rounded-full border border-rose-300 bg-rose-50 px-4 py-2 text-sm font-semibold text-rose-700 transition hover:bg-rose-100"
+                className="w-full rounded-xl border border-rose-300 bg-rose-50 px-4 py-2 text-left text-sm font-semibold text-rose-700 transition hover:bg-rose-100"
               >
                 Delete
               </button>
@@ -1204,7 +1333,7 @@ export default function ERPTaskCard({
                 type="button"
                 disabled
                 title="Only provider and receiver can delete this ERP card"
-                className="w-full rounded-full border border-slate-200 bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-400 cursor-not-allowed"
+                className="w-full cursor-not-allowed rounded-xl border border-slate-200 bg-slate-100 px-4 py-2 text-left text-sm font-semibold text-slate-400"
               >
                 Delete (Read-only)
               </button>
@@ -1217,7 +1346,7 @@ export default function ERPTaskCard({
                 setIsActionsMenuOpen(false)
                 setIsMembersMenuOpen(false)
               }}
-              className="w-full rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-400"
+              className="w-full rounded-xl border border-violet-200 bg-violet-50 px-4 py-2 text-left text-sm font-semibold text-violet-700 transition hover:bg-violet-100"
             >
               {expandedId === erp.id ? 'Hide Details' : 'View Details'}
             </button>
@@ -1302,51 +1431,109 @@ export default function ERPTaskCard({
             </div>
           ) : null}
 
-          <div className="max-h-40 space-y-1 overflow-y-auto rounded-md border border-slate-100 bg-slate-50 p-2">
-            {visibleMembers.length ? (
-              visibleMembers.map((user) => {
-                const checked = selectedAssigneeIds.includes(Number(user.id))
-                const isCurrentUser = Number(user.id) === Number(currentUserId)
-                return (
-                  <label
-                    key={`erp-member-${selectedMemberRole}-${user.id}`}
-                    className={`flex items-center justify-between gap-2 rounded-md px-2 py-1 ${isProvider ? 'cursor-pointer hover:bg-white' : ''}`}
-                  >
-                    <span className="min-w-0">
-                      <span className="block truncate text-slate-700">
-                        {isCurrentUser
-                          ? 'Assign myself'
-                          : user.name || user.username || `User #${user.id}`}
-                      </span>
-                      <span className="block truncate text-[10px] text-slate-500">
-                        {selectedRoleResponsibilityText}
-                      </span>
-                    </span>
-                    {isProvider ? (
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        onChange={(event) =>
-                          onUpdateMemberAssignment?.(
-                            erp,
-                            selectedMemberRole,
-                            Number(user.id),
-                            event.target.checked,
-                          )
-                        }
-                      />
+          {selectedMemberRole === 'expertise' && expertiseRowsForAssignment.length > 0 ? (
+            <div className="max-h-64 space-y-2 overflow-y-auto rounded-md border border-slate-100 bg-slate-50 p-2">
+              {expertiseRowsForAssignment.map((row) => (
+                <div key={`expertise-row-${erp.id}-${row.rowId}`} className="rounded-md border border-slate-200 bg-white p-2">
+                  <p className="text-[11px] font-semibold text-slate-800">
+                    {row.name} ({row.assignedIds.length}/{row.required})
+                  </p>
+                  <div className="mt-1 space-y-1">
+                    {visibleMembers.length ? (
+                      visibleMembers.map((user) => {
+                        const checked = row.assignedIds.includes(Number(user.id))
+                        const isCurrentUser = Number(user.id) === Number(currentUserId)
+                        const disableAssign = !checked && row.assignedIds.length >= row.required
+                        return (
+                          <label
+                            key={`erp-member-${selectedMemberRole}-${row.rowId}-${user.id}`}
+                            className={`flex items-center justify-between gap-2 rounded-md px-2 py-1 ${isProvider ? 'cursor-pointer hover:bg-slate-50' : ''}`}
+                          >
+                            <span className="min-w-0">
+                              <span className="block truncate text-slate-700">
+                                {isCurrentUser
+                                  ? 'Assign myself'
+                                  : user.name || user.username || `User #${user.id}`}
+                              </span>
+                            </span>
+                            {isProvider ? (
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                disabled={disableAssign}
+                                title={disableAssign ? `Required ${row.required} already assigned for ${row.name}` : ''}
+                                onChange={(event) =>
+                                  onUpdateMemberAssignment?.(
+                                    erp,
+                                    selectedMemberRole,
+                                    Number(user.id),
+                                    event.target.checked,
+                                    { expertiseId: row.rowId },
+                                  )
+                                }
+                              />
+                            ) : checked ? (
+                              <span className="text-[11px] font-semibold text-emerald-700">Assigned</span>
+                            ) : null}
+                          </label>
+                        )
+                      })
                     ) : (
-                      <span className="text-[11px] font-semibold text-emerald-700">Assigned</span>
+                      <p className="text-[11px] text-slate-500">
+                        {isProvider ? 'No connections found.' : 'No assigned members yet.'}
+                      </p>
                     )}
-                  </label>
-                )
-              })
-            ) : (
-              <p className="text-[11px] text-slate-500">
-                {isProvider ? 'No connections found.' : 'No assigned members yet.'}
-              </p>
-            )}
-          </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="max-h-40 space-y-1 overflow-y-auto rounded-md border border-slate-100 bg-slate-50 p-2">
+              {visibleMembers.length ? (
+                visibleMembers.map((user) => {
+                  const checked = selectedAssigneeIds.includes(Number(user.id))
+                  const isCurrentUser = Number(user.id) === Number(currentUserId)
+                  return (
+                    <label
+                      key={`erp-member-${selectedMemberRole}-${user.id}`}
+                      className={`flex items-center justify-between gap-2 rounded-md px-2 py-1 ${isProvider ? 'cursor-pointer hover:bg-white' : ''}`}
+                    >
+                      <span className="min-w-0">
+                        <span className="block truncate text-slate-700">
+                          {isCurrentUser
+                            ? 'Assign myself'
+                            : user.name || user.username || `User #${user.id}`}
+                        </span>
+                        <span className="block truncate text-[10px] text-slate-500">
+                          {selectedRoleResponsibilityText}
+                        </span>
+                      </span>
+                      {isProvider ? (
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={(event) =>
+                            onUpdateMemberAssignment?.(
+                              erp,
+                              selectedMemberRole,
+                              Number(user.id),
+                              event.target.checked,
+                            )
+                          }
+                        />
+                      ) : (
+                        <span className="text-[11px] font-semibold text-emerald-700">Assigned</span>
+                      )}
+                    </label>
+                  )
+                })
+              ) : (
+                <p className="text-[11px] text-slate-500">
+                  {isProvider ? 'No connections found.' : 'No assigned members yet.'}
+                </p>
+              )}
+            </div>
+          )}
         </div>
       ) : null}
 
@@ -1500,21 +1687,47 @@ export default function ERPTaskCard({
         </div>
       ) : null}
 
-      {expandedId === erp.id && (
-        <div className="space-y-4 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
-          <div className="rounded-xl border border-slate-200 bg-white p-3">
+      {isDetailsOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-2 sm:p-4" onClick={() => onToggleDetails(erp.id)}>
+          <div className="max-h-[95vh] w-full max-w-7xl overflow-y-auto rounded-3xl border border-violet-200 bg-[#ece8f3] p-4 shadow-2xl sm:p-5" onClick={(event) => event.stopPropagation()}>
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-violet-200 bg-white px-4 py-3">
+            <div>
+              <p className="text-sm font-semibold text-violet-700">{isDemandPost ? 'Demand Post' : 'Available Post'}</p>
+              <p className="text-3xl font-bold text-violet-900">{post?.post_title || snapshotPost.title || post?.post_name || '-'}</p>
+            </div>
+            <div className="flex items-center gap-3">
+              {isPostOwner ? (
+                <button
+                  type="button"
+                  onClick={() => navigate(`/edit-post/${post?.id || snapshotPost?.id || ''}`)}
+                  className="rounded-full border border-sky-300 bg-sky-500 px-5 py-2 text-sm font-semibold text-white transition hover:bg-sky-600"
+                >
+                  Edit Post
+                </button>
+              ) : null}
+              <button
+                type="button"
+                onClick={() => onToggleDetails(erp.id)}
+                className="rounded-full border border-violet-300 bg-white px-5 py-2 text-sm font-semibold text-violet-700 transition hover:bg-violet-50"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        <div className="space-y-4 text-sm text-slate-600">
+          <div className="rounded-2xl border border-violet-200 bg-white p-4">
             <h4 className="text-sm font-semibold text-slate-800">Post Details</h4>
             <div className="mt-2 grid gap-2 sm:grid-cols-2">
-              <p><span className="font-semibold text-slate-700">Title:</span> {snapshotPost.title || post?.post_title || '-'}</p>
-              <p><span className="font-semibold text-slate-700">Type:</span> {snapshotPost.type || post?.post_type || '-'}</p>
-              <p><span className="font-semibold text-slate-700">Name:</span> {snapshotPost.name || post?.post_name || '-'}</p>
-              <p><span className="font-semibold text-slate-700">Location:</span> {snapshotPost.location || post?.location || '-'}</p>
-              <p><span className="font-semibold text-slate-700">Brand:</span> {snapshotPost.brand_company_name || post?.brand_company_name || '-'}</p>
+              <p><span className="font-semibold text-slate-700">Post Type:</span> {post?.post_type || snapshotPost.type || '-'}</p>
+              <p><span className="font-semibold text-slate-700">Post Categories:</span> {post?.post_name || snapshotPost.name || '-'}</p>
+              <p><span className="font-semibold text-slate-700">Post Title:</span> {post?.post_title || snapshotPost.title || '-'}</p>
+              <p><span className="font-semibold text-slate-700">Location:</span> {post?.location || snapshotPost.location || '-'}</p>
+              <p><span className="font-semibold text-slate-700">Brand / Company:</span> {post?.brand_company_name || snapshotPost.brand_company_name || '-'}</p>
               <p>
                 <span className="font-semibold text-slate-700">Website:</span>{' '}
-                {snapshotPost.website_link || post?.website_link ? (
+                {post?.website_link || snapshotPost.website_link ? (
                   <a
-                    href={snapshotPost.website_link || post?.website_link}
+                    href={post?.website_link || snapshotPost.website_link}
                     target="_blank"
                     rel="noreferrer"
                     className="text-brand-600"
@@ -1526,22 +1739,19 @@ export default function ERPTaskCard({
             </div>
             <p className="mt-2">
               <span className="font-semibold text-slate-700">Description:</span>{' '}
-              {snapshotPost.description || post?.description || '-'}
+              {post?.description || snapshotPost.description || '-'}
             </p>
             <p className="mt-2">
-              <span className="font-semibold text-slate-700">Assigned Workers:</span> {(erp.assigned_workers || []).length}
-            </p>
-            <p className="mt-2">
-              <span className="font-semibold text-slate-700">Note for Delivary Man:</span>{' '}
+              <span className="font-semibold text-slate-700">Note for Delivery Man:</span>{' '}
               {supplierNote || '-'}
             </p>
           </div>
 
-          <div className="rounded-xl border border-slate-200 bg-white p-3">
+          <div className="rounded-2xl border border-violet-200 bg-white p-4">
             <h4 className="text-sm font-semibold text-slate-800">Associated Members</h4>
             {hasAssociatedMembers ? (
               <div className="mt-3 space-y-3">
-                {associatedMembersByRole.map(({ roleKey, roleLabel, members }) => (
+                {associatedMembersWithAssignments.map(({ roleKey, roleLabel, members }) => (
                   <div key={`erp-associated-${erp.id}-${roleKey}`} className="space-y-2">
                     <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{roleLabel}</p>
                     {members.length ? (
@@ -1586,71 +1796,45 @@ export default function ERPTaskCard({
             )}
           </div>
 
-          {[{
-            title: 'Expertise (Modified)',
-            rows: snapshotExpertise,
-            columns: [
-              { key: 'name', label: 'Name' },
-              { key: 'duration', label: 'Duration' },
-              { key: 'unit', label: 'Unit' },
-              { key: 'unit_cost', label: 'Unit Cost' },
-              { key: 'quantity', label: 'People' },
-              { key: 'line_total', label: 'Line Total' },
-            ],
-          }, {
-            title: 'Services (Modified)',
-            rows: snapshotServices,
-            columns: [
-              { key: 'name', label: 'Name' },
-              { key: 'unit_cost', label: 'Unit Cost' },
-              { key: 'quantity', label: 'Packages' },
-              { key: 'line_total', label: 'Line Total' },
-            ],
-          }, {
-            title: 'Products (Modified)',
-            rows: snapshotProducts,
-          }].map((section) => {
-            const isProductsSection = section.title === 'Products (Modified)'
-            const isServicesSection = section.title === 'Services (Modified)'
-            const showDuration = !isProductsSection && !isServicesSection
-            const showUnit = !isServicesSection
-
-            return (
-            section.rows.length > 0 ? (
-              <div key={section.title} className="rounded-xl border border-slate-200 bg-white p-3">
-                <h4 className="text-sm font-semibold text-slate-800">{section.title}</h4>
-                <div className="mt-2 overflow-x-auto">
-                  <table className="min-w-full text-left text-xs">
-                    <thead>
-                      <tr className="border-b border-slate-200 text-slate-500">
-                        <th className="px-2 py-1">Name</th>
-                        {showUnit ? <th className="px-2 py-1">Unit</th> : null}
-                        <th className="px-2 py-1">Qty</th>
-                        {showDuration ? <th className="px-2 py-1">Duration</th> : null}
-                        <th className="px-2 py-1">Unit Cost</th>
-                        <th className="px-2 py-1">Line Total</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {section.rows.map((row) => (
-                        <tr key={`${section.title}-${row.id}`} className="border-b border-slate-100 last:border-none">
-                          <td className="px-2 py-1 font-medium text-slate-700">{row.name || '-'}</td>
-                          {showUnit ? <td className="px-2 py-1">{row.unit || '-'}</td> : null}
-                          <td className="px-2 py-1">{Number(row.quantity || 0)}</td>
-                          {showDuration ? <td className="px-2 py-1">{Number(row.duration || 0)}</td> : null}
-                          <td className="px-2 py-1">${Number(row.unit_cost || 0).toFixed(2)}</td>
-                          <td className="px-2 py-1 font-semibold text-slate-700">${Number(row.line_total || 0).toFixed(2)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+          {selectedExpertiseForTable.length ? (
+            <div className="rounded-2xl border border-violet-200 bg-white p-4">
+              <h4 className="text-sm font-semibold text-slate-800">Expertise (Selected)</h4>
+              <div className="mt-2">
+                <ExpertiseTable
+                  expertises={selectedExpertiseForTable}
+                  postType={isDemandPost ? 'Demand' : 'Supply'}
+                />
               </div>
-            ) : null
-            )
-          })}
+            </div>
+          ) : null}
 
-          <div className="rounded-xl border border-slate-200 bg-white p-3">
+          {selectedServicesForTable.length ? (
+            <div className="rounded-2xl border border-violet-200 bg-white p-4">
+              <h4 className="text-sm font-semibold text-slate-800">Services (Selected)</h4>
+              <div className="mt-2">
+                <ServiceTable
+                  services={selectedServicesForTable}
+                  postType={isDemandPost ? 'Demand' : 'Supply'}
+                  showDescription
+                />
+              </div>
+            </div>
+          ) : null}
+
+          {selectedProductsForTable.length ? (
+            <div className="rounded-2xl border border-violet-200 bg-white p-4">
+              <h4 className="text-sm font-semibold text-slate-800">Products (Selected)</h4>
+              <div className="mt-2">
+                <ProductTable
+                  products={selectedProductsForTable}
+                  postType={isDemandPost ? 'Demand' : 'Supply'}
+                  showDescription
+                />
+              </div>
+            </div>
+          ) : null}
+
+          <div className="rounded-2xl border border-violet-200 bg-white p-4">
             <h4 className="text-sm font-semibold text-slate-800">Final Cost Summary</h4>
             <div className="mt-2 grid gap-2 sm:grid-cols-2">
               <p><span className="font-semibold text-slate-700">Expertise Total:</span> ${Number(snapshotTotals.expertise || 0).toFixed(2)}</p>
@@ -1660,6 +1844,8 @@ export default function ERPTaskCard({
             </div>
           </div>
 
+        </div>
+        </div>
         </div>
       )}
 

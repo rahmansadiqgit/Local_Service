@@ -236,7 +236,7 @@ export default function PostCard({
               alt={profile?.name || 'Profile'}
               rating={Number.isFinite(profileRatingValue) ? profileRatingValue : null}
               size={48}
-              ringWidth={2}
+              ringWidth={3}
             />
           </button>
           <div className="min-w-0">

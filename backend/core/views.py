@@ -850,7 +850,7 @@ class ERPViewSet(viewsets.ModelViewSet):
                 user=actor,
                 title="✅ Booking Request Sent",
                 message=(
-                    f'Your request for "{post_title}" has been sent to the post owner [{owner_name}]({owner_link}). '
+                    f'Your booking request for "{post_title}" has been sent to the post owner [{owner_name}]({owner_link}). '
                     "⏱ Waiting for approval. "
                     f"Post link: /erp?erp_id={erp.id}"
                 ),
@@ -901,7 +901,7 @@ class ERPViewSet(viewsets.ModelViewSet):
                     user=requester,
                     title="🎉 Booking Confirmed",
                     message=(
-                        f'Your request for "{post_title}" has been accepted by the post owner [{owner_name}]({owner_link}). '
+                        f'Your booking request for "{post_title}" has been accepted by the post owner [{owner_name}]({owner_link}). '
                         f"Post link: /erp?erp_id={erp.id}"
                     ),
                 )
@@ -910,7 +910,7 @@ class ERPViewSet(viewsets.ModelViewSet):
                     user=requester,
                     title="⚠️ Request Declined",
                     message=(
-                        f'Your request for "{post_title}" was declined by the post owner [{owner_name}]({owner_link}). '
+                        f'Your booking request for "{post_title}" was declined by the post owner [{owner_name}]({owner_link}). '
                         "Post link: /feed"
                     ),
                 )
@@ -962,11 +962,11 @@ class ERPViewSet(viewsets.ModelViewSet):
         notifications = [
             Notification(
                 user=actor,
-                title="✅ Application Request Sent" if is_demand_post else "✅ Application Submitted",
+                title="✅ Applying Request Sent" if is_demand_post else "✅ Application Submitted",
                 message=(
-                    f'Your request for "{post_title}" has been sent to the post owner '
+                    f'Your apply request for "{post_title}" has been sent to the post owner '
                     f'[{owner_name}]({owner_link}). ⏱ Waiting for approval. '
-                    "Post link: /feed"
+                    f"Post link: /erp?erp_id={erp.id}"
                 ) if is_demand_post else f"Your application was submitted successfully. Please wait for acceptance. (Post: '{post_title}')",
             )
         ]
@@ -975,9 +975,9 @@ class ERPViewSet(viewsets.ModelViewSet):
             notifications.append(
                 Notification(
                     user=post_owner,
-                    title="🔔 New Application Request" if is_demand_post else "👀 Someone applied to your post - review now",
+                    title="🔔 New Apply Request" if is_demand_post else "👀 Someone applied to your post - review now",
                     message=(
-                        f'You have a new application request for your post "{post_title}" from '
+                        f'You have a new apply request for "{post_title}" from '
                         f'[{actor_name}]({applicant_link}) waiting for your response. '
                         f"Post link: /erp?erp_id={erp.id}"
                     ) if is_demand_post else f"{actor_name} submitted an application for '{post_title}'. Open your dashboard to review and accept/reject. Post link: /dashboard",
@@ -1095,12 +1095,13 @@ class ERPViewSet(viewsets.ModelViewSet):
             or getattr(provider, "username", "")
             or "Applicant"
         )
+        applicant_link = f"/dashboard/{provider.id}" if provider else "/dashboard"
         notifications = [
             Notification(
                 user=actor,
                 title="🎉 Application Approved",
                 message=(
-                    f"You've approved {applicant_name}'s application for \"{post_title}\". "
+                    f"You've approved [{applicant_name}]({applicant_link})'s application for \"{post_title}\". "
                     "The Tracker is now active - complete your setup to get started. "
                     f"Post link: /erp?erp_id={erp.id}"
                 ),
@@ -1111,11 +1112,10 @@ class ERPViewSet(viewsets.ModelViewSet):
             notifications.append(
                 Notification(
                     user=provider,
-                    title="🎉 Application Approved",
+                    title="🎉 Apply request Confirmed",
                     message=(
-                        f'Great news! Your request for "{post_title}" has been accepted by the post owner '
+                        f'Your apply request for "{post_title}" has been accepted by the post owner '
                         f'[{owner_name}](/dashboard/{actor.id}). '
-                        "Your Tracker is now active and ready for setup. "
                         f"Post link: /erp?erp_id={erp.id}"
                     ),
                 )
@@ -1170,7 +1170,7 @@ class ERPViewSet(viewsets.ModelViewSet):
                     user=provider,
                     title="⚠️ Request Declined",
                     message=(
-                        f'Your application request for "{post_title}" was declined by the post owner '
+                        f'Your apply request for "{post_title}" was declined by the post owner '
                         f'[{owner_name}](/dashboard/{actor.id}). '
                         "Post link: /feed"
                     ),
@@ -1198,46 +1198,68 @@ class ERPViewSet(viewsets.ModelViewSet):
         except Exception:
             logger.exception("Failed provider-member activity notification for ERP %s", getattr(erp, "id", None))
 
-    def _notify_manual_member_additions(self, erp, role, added_ids):
+    def _notify_manual_member_additions(self, erp, role, added_ids, assigner=None):
         provider = getattr(erp, "provider", None)
+        receiver = getattr(erp, "receiver", None)
+        assigner = assigner or provider
         if not provider or not added_ids:
             return
 
-        role_label = role.replace("_", " ").title()
+        role_labels = {
+            "expertise": "Expertise",
+            "skill_provider": "Service",
+            "supplier": "Delivery",
+        }
+        role_label = role_labels.get(role, role.replace("_", " ").title())
         post_title = (
             self._as_dict(getattr(erp, "configuration_snapshot", None)).get("post", {}).get("title")
             or getattr(erp.post, "post_title", "")
             or getattr(erp.post, "post_name", "")
             or f"Booking #{erp.id}"
         )
+        assigner_name = (
+            getattr(assigner, "name", "")
+            or getattr(assigner, "username", "")
+            or "Provider"
+        )
+        assigner_link = f"/dashboard/{assigner.id}" if getattr(assigner, "id", None) else "/dashboard"
 
         members = User.objects.filter(id__in=list(added_ids))
-        post_type_value = str(getattr(getattr(erp, "post", None), "post_type", "") or "").strip().lower()
-        is_demand_post = post_type_value == "demand"
-        is_supply_post = "supply" in post_type_value or "available" in post_type_value
         notifications = []
         for member in members:
             member_name = member.name or member.username or member.email or f"User #{member.id}"
+            member_link = f"/dashboard/{member.id}"
+
             notifications.append(
                 Notification(
                     user=provider,
-                    title="👥 Team Member Added",
+                    title="👷‍♂️ Team Member Added",
                     message=(
-                        f'{member_name} has been assigned to your booking "{post_title}" as {role_label}. '
+                        f'You are assigned [{member_name}]({member_link}) him to your "{post_title}" as a {role_label} provider. '
                         f"Post link: /erp?erp_id={erp.id}"
                     ),
                 )
             )
-            if is_supply_post or is_demand_post:
+
+            notifications.append(
+                Notification(
+                    user=member,
+                    title="🧑‍🏭 You Are Assigned To A Task",
+                    message=(
+                        f'You are assigned to "{post_title}" as {role_label} provider by '
+                        f'[{assigner_name}]({assigner_link}). '
+                        f"Post link: /erp?erp_id={erp.id}"
+                    ),
+                )
+            )
+
+            if receiver and int(receiver.id) != int(provider.id):
                 notifications.append(
                     Notification(
-                        user=member,
-                        title="👥 Team Member Added",
+                        user=receiver,
+                        title="👷‍♂️ Team Member Added",
                         message=(
-                            f'You are assigned as {role_label} to a Application "{post_title}". '
-                            f"Post link: /erp?erp_id={erp.id}"
-                        ) if is_demand_post else (
-                            f'You are assigned as {role_label} to a booking "{post_title}". '
+                            f'[{member_name}]({member_link}) has been assigned to your booking "{post_title}" as a {role_label} provider. '
                             f"Post link: /erp?erp_id={erp.id}"
                         ),
                     )
@@ -1339,16 +1361,6 @@ class ERPViewSet(viewsets.ModelViewSet):
                 raise ValidationError({"post": "Post is required."})
 
             provider, receiver, category = self._resolve_roles(actor, post)
-
-            existing = (
-                ERP.objects.filter(post=post, provider=provider, receiver=receiver)
-                .order_by("-updated_at", "-id")
-                .first()
-            )
-
-            if existing:
-                data = self.get_serializer(existing).data
-                return Response(data, status=status.HTTP_200_OK)
 
             requested_is_configured = self._to_bool(serializer.validated_data.get("is_configured", False))
             is_supply_post = self._is_supply_post(post)
@@ -1489,12 +1501,8 @@ class ERPViewSet(viewsets.ModelViewSet):
 
         erp.configuration_snapshot = snapshot
         erp.is_configured = True
-        # Move approved supply bookings directly into active execution flow.
-        if str(erp.stage or "").strip().lower() == "pending":
-            erp.stage = "On Process"
-            erp.save(update_fields=["configuration_snapshot", "is_configured", "stage", "updated_at"])
-        else:
-            erp.save(update_fields=["configuration_snapshot", "is_configured", "updated_at"])
+        # Keep stage in Pending; provider moves to next state manually after assigning members/tasks.
+        erp.save(update_fields=["configuration_snapshot", "is_configured", "updated_at"])
 
         self._notify_supply_booking_decision(erp, actor, approved=True)
         return Response(self.get_serializer(erp).data, status=status.HTTP_200_OK)
@@ -1569,6 +1577,32 @@ class ERPViewSet(viewsets.ModelViewSet):
             except (TypeError, ValueError):
                 continue
 
+        expertise_assignments = {}
+        raw_expertise_assignments = role_bucket.get("expertise_assignments") or {}
+        if isinstance(raw_expertise_assignments, dict):
+            for raw_item_id, raw_assignees in raw_expertise_assignments.items():
+                try:
+                    item_id = int(raw_item_id)
+                except (TypeError, ValueError):
+                    continue
+                if item_id <= 0 or not isinstance(raw_assignees, list):
+                    continue
+                cleaned = []
+                for raw_uid in raw_assignees:
+                    try:
+                        parsed_uid = int(raw_uid)
+                    except (TypeError, ValueError):
+                        continue
+                    if parsed_uid > 0:
+                        cleaned.append(parsed_uid)
+                expertise_assignments[str(item_id)] = sorted(list(set(cleaned)))
+
+        if role == "expertise" and expertise_assignments:
+            expertise_union = set(assignee_ids)
+            for ids in expertise_assignments.values():
+                expertise_union.update(ids)
+            assignee_ids = sorted(list(expertise_union))
+
         existing_target_ids = role_bucket.get("self_assign_target_ids") or []
         target_ids = []
         for raw_id in existing_target_ids:
@@ -1585,6 +1619,7 @@ class ERPViewSet(viewsets.ModelViewSet):
 
         role_bucket = {
             "assignee_ids": sorted(list(set(assignee_ids))),
+            "expertise_assignments": expertise_assignments if role == "expertise" else {},
             "self_assign_enabled": bool(role_bucket.get("self_assign_enabled", False)),
             "self_assign_message": str(role_bucket.get("self_assign_message", "") or "").strip(),
             "self_assign_post_link": str(role_bucket.get("self_assign_post_link", "") or "").strip(),
@@ -1600,6 +1635,122 @@ class ERPViewSet(viewsets.ModelViewSet):
     def _save_snapshot(self, erp, snapshot):
         erp.configuration_snapshot = snapshot
         erp.save(update_fields=["configuration_snapshot", "updated_at"])
+
+    def _list_role_assignee_ids(self, members, role):
+        ids = set()
+        for role_bucket in self._iter_role_buckets(members, role):
+            if role == "expertise":
+                expertise_assignments = role_bucket.get("expertise_assignments") or {}
+                if isinstance(expertise_assignments, dict):
+                    for raw_assignees in expertise_assignments.values():
+                        if not isinstance(raw_assignees, list):
+                            continue
+                        for raw_id in raw_assignees:
+                            try:
+                                parsed = int(raw_id)
+                            except (TypeError, ValueError):
+                                continue
+                            if parsed > 0:
+                                ids.add(parsed)
+            for raw_id in role_bucket.get("assignee_ids") or []:
+                try:
+                    parsed = int(raw_id)
+                except (TypeError, ValueError):
+                    continue
+                if parsed > 0:
+                    ids.add(parsed)
+        return sorted(list(ids))
+
+    def _requires_snapshot_rows(self, rows):
+        if not isinstance(rows, list):
+            return False
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            if row.get("included") is False:
+                continue
+            qty = max(self._to_int(row.get("quantity", row.get("qty", 0))), 0)
+            offered_people = max(self._to_int(row.get("offered_people", 0)), 0)
+            line_total = float(row.get("line_total", 0) or 0)
+            if qty > 0 or offered_people > 0 or line_total > 0:
+                return True
+        return False
+
+    def _required_expertise_assignee_count(self, snapshot):
+        total = 0
+        for row in (self._as_dict(snapshot).get("expertise") or []):
+            if not isinstance(row, dict):
+                continue
+            if row.get("included") is False:
+                continue
+            people = max(self._to_int(row.get("offered_people", row.get("quantity", 0))), 0)
+            total += people
+        return total
+
+    def _validate_assignments_before_on_process(self, erp):
+        snapshot = self._as_dict(getattr(erp, "configuration_snapshot", None))
+        members = self._as_dict(snapshot.get("members"))
+
+        expertise_ids = self._list_role_assignee_ids(members, "expertise")
+        skill_provider_ids = self._list_role_assignee_ids(members, "skill_provider")
+        supplier_ids = self._list_role_assignee_ids(members, "supplier")
+
+        required_expertise = self._required_expertise_assignee_count(snapshot)
+        has_service_rows = self._requires_snapshot_rows(snapshot.get("services") or [])
+        has_product_rows = self._requires_snapshot_rows(snapshot.get("products") or [])
+
+        errors = []
+        expertise_bucket = self._as_dict(members.get("expertise"))
+        expertise_assignments = self._as_dict(expertise_bucket.get("expertise_assignments"))
+        expertise_rows = snapshot.get("expertise") or []
+        per_row_errors = []
+        checked_rows = 0
+
+        for row in expertise_rows:
+            if not isinstance(row, dict) or row.get("included") is False:
+                continue
+            row_id = self._to_int(row.get("id"), default=0)
+            required_people = max(self._to_int(row.get("offered_people", row.get("quantity", 0))), 0)
+            if row_id <= 0 or required_people <= 0:
+                continue
+
+            assigned_for_row = set()
+            for raw_id in expertise_assignments.get(str(row_id), []) or []:
+                try:
+                    parsed = int(raw_id)
+                except (TypeError, ValueError):
+                    continue
+                if parsed > 0:
+                    assigned_for_row.add(parsed)
+
+            checked_rows += 1
+            if len(assigned_for_row) != required_people:
+                row_name = str(row.get("name") or f"Expertise #{row_id}")
+                per_row_errors.append(
+                    f'Expertise "{row_name}": required {required_people}, assigned {len(assigned_for_row)}.'
+                )
+
+        if per_row_errors:
+            errors.extend(per_row_errors)
+        elif required_expertise > 0 and checked_rows == 0 and len(expertise_ids) != required_expertise:
+            # Backward compatibility for older snapshots with global-only expertise assignment.
+            errors.append(
+                f"Expertise assignment mismatch: required exactly {required_expertise}, currently assigned {len(expertise_ids)}."
+            )
+
+        if has_service_rows and len(skill_provider_ids) < 1:
+            errors.append("At least one Service provider must be assigned.")
+
+        if has_product_rows and len(supplier_ids) < 1:
+            errors.append("At least one Delivery provider must be assigned.")
+
+        if errors:
+            raise ValidationError(
+                {
+                    "detail": "Complete required member assignment before moving to next state.",
+                    "items": errors,
+                }
+            )
 
     def _get_provider_rated_user_ids(self, erp):
         snapshot = self._as_dict(erp.configuration_snapshot)
@@ -1680,6 +1831,7 @@ class ERPViewSet(viewsets.ModelViewSet):
                 assignee_ids = role_bucket.get("assignee_ids") or []
                 response[role] = {
                     "assignee_ids": [int(uid) for uid in assignee_ids if str(uid).isdigit()],
+                    "expertise_assignments": role_bucket.get("expertise_assignments", {}) if role == "expertise" else {},
                     "self_assign_enabled": bool(role_bucket.get("self_assign_enabled", False)),
                 }
             return Response(response)
@@ -1711,21 +1863,88 @@ class ERPViewSet(viewsets.ModelViewSet):
         snapshot, members, role_bucket = self._get_member_bucket(erp, role)
         existing = set(role_bucket.get("assignee_ids") or [])
 
-        if mode == "set":
-            updated = valid_ids
-        elif mode == "add":
-            updated = existing.union(valid_ids)
-        else:
-            updated = existing.difference(valid_ids)
+        if role == "expertise" and request.data.get("expertise_id") is not None:
+            try:
+                expertise_id = int(request.data.get("expertise_id"))
+            except (TypeError, ValueError):
+                return Response({"detail": "Valid expertise_id is required for expertise assignment."}, status=status.HTTP_400_BAD_REQUEST)
 
-        role_bucket["assignee_ids"] = sorted(list(updated))
+            if expertise_id <= 0:
+                return Response({"detail": "Valid expertise_id is required for expertise assignment."}, status=status.HTTP_400_BAD_REQUEST)
+
+            expertise_assignments = self._as_dict(role_bucket.get("expertise_assignments"))
+            existing_for_item = set()
+            for raw_id in expertise_assignments.get(str(expertise_id), []) or []:
+                try:
+                    parsed = int(raw_id)
+                except (TypeError, ValueError):
+                    continue
+                if parsed > 0:
+                    existing_for_item.add(parsed)
+
+            if mode == "set":
+                updated_for_item = set(valid_ids)
+            elif mode == "add":
+                updated_for_item = existing_for_item.union(valid_ids)
+            else:
+                updated_for_item = existing_for_item.difference(valid_ids)
+
+            required_people = 0
+            for row in (self._as_dict(snapshot).get("expertise") or []):
+                if not isinstance(row, dict):
+                    continue
+                if self._to_int(row.get("id"), default=0) != expertise_id:
+                    continue
+                if row.get("included") is False:
+                    continue
+                required_people = max(self._to_int(row.get("offered_people", row.get("quantity", 0))), 0)
+                break
+
+            if required_people > 0 and len(updated_for_item) > required_people:
+                return Response(
+                    {
+                        "detail": f"Expertise #{expertise_id} allows maximum {required_people} assignee(s)."
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            if updated_for_item:
+                expertise_assignments[str(expertise_id)] = sorted(list(updated_for_item))
+            else:
+                expertise_assignments.pop(str(expertise_id), None)
+
+            updated_global = set()
+            for item_ids in expertise_assignments.values():
+                if not isinstance(item_ids, list):
+                    continue
+                for raw_uid in item_ids:
+                    try:
+                        parsed_uid = int(raw_uid)
+                    except (TypeError, ValueError):
+                        continue
+                    if parsed_uid > 0:
+                        updated_global.add(parsed_uid)
+
+            role_bucket["expertise_assignments"] = expertise_assignments
+            role_bucket["assignee_ids"] = sorted(list(updated_global))
+            updated = updated_global
+        else:
+            if mode == "set":
+                updated = valid_ids
+            elif mode == "add":
+                updated = existing.union(valid_ids)
+            else:
+                updated = existing.difference(valid_ids)
+
+            role_bucket["assignee_ids"] = sorted(list(updated))
+
         members[role] = role_bucket
         snapshot["members"] = members
         self._save_snapshot(erp, snapshot)
 
         added_ids = updated.difference(existing)
         if added_ids:
-            self._notify_manual_member_additions(erp, role, added_ids)
+            self._notify_manual_member_additions(erp, role, added_ids, assigner=request.user)
 
         return Response(self.get_serializer(erp).data)
 
@@ -1848,40 +2067,77 @@ class ERPViewSet(viewsets.ModelViewSet):
 
 
         ids = set(role_bucket.get("assignee_ids") or [])
-        expertise_updated = False
-        # Only update available_person for expertise role in demand posts
+        existing = set(ids)
         if role == "expertise":
-            post = getattr(erp, "post", None)
-            if post and str(getattr(post, "post_type", "")).strip().lower() == "demand":
-                from core.models import Expertise
-                # Find the expertise row for this ERP and user (assume 1:1 mapping by post and user)
-                expertise_qs = Expertise.objects.filter(post=post)
-                # If you have a way to map user to a specific expertise row, add logic here
-                # For now, decrement the first available expertise with available_person > 0
-                if should_assign:
-                    for exp in expertise_qs.order_by("id"):
-                        if exp.available_person > 0:
-                            exp.available_person -= 1
-                            exp.save(update_fields=["available_person"])
-                            expertise_updated = True
-                            break
-                else:
-                    # On unassign, increment the first expertise with available_person < original
-                    for exp in expertise_qs.order_by("id"):
-                        exp.available_person += 1
-                        exp.save(update_fields=["available_person"])
-                        expertise_updated = True
+            expertise_assignments = self._as_dict(role_bucket.get("expertise_assignments"))
+            expertise_rows = [
+                row for row in (self._as_dict(snapshot).get("expertise") or [])
+                if isinstance(row, dict) and row.get("included") is not False
+            ]
+
+            if should_assign:
+                already_assigned = False
+                for row in expertise_rows:
+                    row_id = self._to_int(row.get("id"), default=0)
+                    if row_id <= 0:
+                        continue
+                    assigned_ids = set(int(uid) for uid in expertise_assignments.get(str(row_id), []) if str(uid).isdigit())
+                    if int(request.user.id) in assigned_ids:
+                        already_assigned = True
                         break
 
-        if should_assign:
-            ids.add(request.user.id)
+                if not already_assigned:
+                    for row in expertise_rows:
+                        row_id = self._to_int(row.get("id"), default=0)
+                        required_people = max(self._to_int(row.get("offered_people", row.get("quantity", 0))), 0)
+                        if row_id <= 0 or required_people <= 0:
+                            continue
+                        assigned_ids = set(int(uid) for uid in expertise_assignments.get(str(row_id), []) if str(uid).isdigit())
+                        if len(assigned_ids) < required_people:
+                            assigned_ids.add(int(request.user.id))
+                            expertise_assignments[str(row_id)] = sorted(list(assigned_ids))
+                            break
+            else:
+                for row in expertise_rows:
+                    row_id = self._to_int(row.get("id"), default=0)
+                    if row_id <= 0:
+                        continue
+                    assigned_ids = set(int(uid) for uid in expertise_assignments.get(str(row_id), []) if str(uid).isdigit())
+                    if int(request.user.id) in assigned_ids:
+                        assigned_ids.discard(int(request.user.id))
+                        if assigned_ids:
+                            expertise_assignments[str(row_id)] = sorted(list(assigned_ids))
+                        else:
+                            expertise_assignments.pop(str(row_id), None)
+                        break
+
+            ids = set()
+            for item_ids in expertise_assignments.values():
+                if not isinstance(item_ids, list):
+                    continue
+                for raw_uid in item_ids:
+                    try:
+                        parsed_uid = int(raw_uid)
+                    except (TypeError, ValueError):
+                        continue
+                    if parsed_uid > 0:
+                        ids.add(parsed_uid)
+            role_bucket["expertise_assignments"] = expertise_assignments
         else:
-            ids.discard(request.user.id)
+            if should_assign:
+                ids.add(request.user.id)
+            else:
+                ids.discard(request.user.id)
 
         role_bucket["assignee_ids"] = sorted(list(ids))
         members[role] = role_bucket
         snapshot["members"] = members
         self._save_snapshot(erp, snapshot)
+
+        if should_assign:
+            added_ids = ids.difference(existing)
+            if added_ids:
+                self._notify_manual_member_additions(erp, role, added_ids, assigner=request.user)
 
         actor_name = request.user.name or request.user.username or request.user.email or f"User #{request.user.id}"
         role_label = role.replace("_", " ").title()
@@ -1948,6 +2204,33 @@ class ERPViewSet(viewsets.ModelViewSet):
                 left_roles.append(str(role_key))
 
             role_bucket["assignee_ids"] = sorted(list(unique_ids))
+
+            expertise_assignments = role_bucket.get("expertise_assignments")
+            if isinstance(expertise_assignments, dict):
+                cleaned_assignments = {}
+                for item_key, item_raw_ids in expertise_assignments.items():
+                    if not isinstance(item_raw_ids, list):
+                        continue
+                    item_ids = set()
+                    for raw_uid in item_raw_ids:
+                        try:
+                            parsed_uid = int(raw_uid)
+                        except (TypeError, ValueError):
+                            continue
+                        if parsed_uid > 0 and parsed_uid != user_id:
+                            item_ids.add(parsed_uid)
+                    if item_ids:
+                        cleaned_assignments[str(item_key)] = sorted(list(item_ids))
+
+                if cleaned_assignments != expertise_assignments:
+                    changed = True
+                role_bucket["expertise_assignments"] = cleaned_assignments
+
+                recomputed_union = set()
+                for item_ids in cleaned_assignments.values():
+                    for parsed_uid in item_ids:
+                        recomputed_union.add(int(parsed_uid))
+                role_bucket["assignee_ids"] = sorted(list(recomputed_union))
 
             # Also remove from self-assign target visibility so ERP card disappears after leave.
             existing_targets = role_bucket.get("self_assign_target_ids", None)
@@ -2040,6 +2323,9 @@ class ERPViewSet(viewsets.ModelViewSet):
         if stage == "On Process" and (not erp.provider or erp.provider.id != request.user.id):
             raise PermissionDenied("Only provider can move task to On Process.")
 
+        if stage == "On Process":
+            self._validate_assignments_before_on_process(erp)
+
         erp.stage = stage
         erp.save(update_fields=["stage", "updated_at"])
 
@@ -2053,6 +2339,8 @@ class ERPViewSet(viewsets.ModelViewSet):
             stage_label = str(stage or "").strip() or "Unknown"
             post_type_value = str(getattr(post, "post_type", "") or "").strip().lower()
             is_supply_post = "supply" in post_type_value or "available" in post_type_value
+            if stage_label == "On Process":
+                stage_label = "On Going" if is_supply_post else "Process"
             provider = getattr(erp, "provider", None)
             receiver = getattr(erp, "receiver", None)
             recipients = []
@@ -2152,16 +2440,9 @@ class ERPViewSet(viewsets.ModelViewSet):
 
         Notification.objects.create(
             user=erp.provider,
-            title="✅ Task Completed by Receiver" if str(getattr(getattr(erp, "post", None), "post_type", "") or "").strip().lower() == "demand" else "✅ Booking Completed by Receiver",
+            title="⭐ You Got A Ratings",
             message=(
-                f'{receiver_name} has marked "{post_title}" as complete with a {rating_value}/5 rating. '
-                f'Their comment: "{comment}". '
-                "You can now rate the participating team members. "
-                f"Post link: /erp?erp_id={erp.id}"
-            ) if str(getattr(getattr(erp, "post", None), "post_type", "") or "").strip().lower() == "demand" else (
-                f'{receiver_name} has marked booking "{post_title}" as complete. '
-                f'They left a {rating_value}/5 rating with the comment: "{comment}". '
-                "You may now rate the team members who participated. "
+                f"You get a ratings from [{receiver_name}](/dashboard/{request.user.id}). "
                 f"Post link: /erp?erp_id={erp.id}"
             ),
         )
@@ -2302,10 +2583,9 @@ class ERPViewSet(viewsets.ModelViewSet):
         )
         Notification.objects.create(
             user=participant,
-            title="You Received a New Rating",
+            title="⭐ You Got A Ratings",
             message=(
-                f'{provider_name} has rated your contribution to "{post_title}" — {rating_value}/5. '
-                f'Their feedback: "{comment}" '
+                f"You get a ratings from [{provider_name}](/dashboard/{request.user.id}). "
                 f"Post link: /erp?erp_id={erp.id}"
             ),
         )
@@ -2394,14 +2674,9 @@ class ERPViewSet(viewsets.ModelViewSet):
         )
         Notification.objects.create(
             user=erp.provider,
-            title="New Feedback on Your Service" if str(getattr(getattr(erp, "post", None), "post_type", "") or "").strip().lower() == "demand" else "New Feedback on Your Booking",
+            title="⭐ You Got A Ratings",
             message=(
-                f'{actor_name} rated your service on "{post_title}" — {rating_value}/5 '
-                f'with the comment: "{comment}". Your feedback history has been updated. '
-                f"Post link: /erp?erp_id={erp.id}"
-            ) if str(getattr(getattr(erp, "post", None), "post_type", "") or "").strip().lower() == "demand" else (
-                f'{actor_name} has rated your service for "{post_title}" — {rating_value}/5 '
-                f'with the comment: "{comment}". Keep up the great work! '
+                f"You get a ratings from [{actor_name}](/dashboard/{request.user.id}). "
                 f"Post link: /erp?erp_id={erp.id}"
             ),
         )
@@ -2480,7 +2755,7 @@ class ERPViewSet(viewsets.ModelViewSet):
         member_roles = [
             ("expertise", "Expertise"),
             ("skill_provider", "Skill provider"),
-            ("supplier", "Delivary Man"),
+            ("supplier", "Delivery Man"),
         ]
         snapshot_members = snapshot.get("members") or {}
         associated_member_ids = set()
