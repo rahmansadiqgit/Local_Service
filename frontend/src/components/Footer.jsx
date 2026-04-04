@@ -1,6 +1,17 @@
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import useAuth from "../context/useAuth";
 
 export default function Footer() {
+  const navigate = useNavigate();
+  const { user } = useAuth();
+
+  const handleReportClick = (e) => {
+    if (!user) {
+      e.preventDefault();
+      navigate("/login");
+    }
+  };
+
   return (
     <footer className="relative bg-slate-800 text-white">
 
@@ -32,14 +43,6 @@ export default function Footer() {
             <ul className="space-y-2 text-sm">
               <li>
                 <Link
-                  to="/"
-                  className="text-white drop-shadow hover:text-yellow-300 transition"
-                >
-                  Feed
-                </Link>
-              </li>
-              <li>
-                <Link
                   to="/services"
                   className="text-white drop-shadow hover:text-yellow-300 transition"
                 >
@@ -64,8 +67,9 @@ export default function Footer() {
               </li>
               <li>
                 <Link
-                  to="/report"
-                  className="text-white drop-shadow hover:text-yellow-300 transition"
+                  to={user ? "/report" : "/login"}
+                  onClick={handleReportClick}
+                  className={`transition ${user ? 'text-white drop-shadow hover:text-yellow-300' : 'text-white drop-shadow hover:text-yellow-300 cursor-pointer'}`}
                 >
                   Report a Problem
                 </Link>
