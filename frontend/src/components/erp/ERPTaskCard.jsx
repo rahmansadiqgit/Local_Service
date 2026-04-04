@@ -71,9 +71,6 @@ export default function ERPTaskCard({
   const [isDeletingErp, setIsDeletingErp] = useState(false)
   const [deleteError, setDeleteError] = useState('')
 
-  const phases = ['Pending', 'On Process', 'Completed']
-  const activePhaseIndex = phases.indexOf(erp.stage)
-
   const snapshot = erp.configuration_snapshot || {}
   const snapshotPost = snapshot.post || {}
   const snapshotExpertise = Array.isArray(snapshot.expertise) ? snapshot.expertise : []
