@@ -1820,8 +1820,14 @@ export default function ERPTaskCard({
                     {row.name} ({row.assignedIds.length}/{row.required})
                   </p>
                   <div className="mt-1 space-y-1">
-                    {visibleMembers.length ? (
-                      visibleMembers.map((user) => {
+                    {(isProvider
+                      ? visibleMembers
+                      : assignedMembersForSelectedRole.filter((user) => row.assignedIds.includes(Number(user.id)))
+                    ).length ? (
+                      (isProvider
+                        ? visibleMembers
+                        : assignedMembersForSelectedRole.filter((user) => row.assignedIds.includes(Number(user.id)))
+                      ).map((user) => {
                         const checked = row.assignedIds.includes(Number(user.id))
                         const isCurrentUser = Number(user.id) === Number(currentUserId)
                         const disableAssign = !checked && row.assignedIds.length >= row.required
@@ -1832,7 +1838,7 @@ export default function ERPTaskCard({
                           >
                             <span className="min-w-0">
                               <span className="block truncate text-slate-700">
-                                {isCurrentUser
+                                {isProvider && isCurrentUser
                                   ? 'Assign myself'
                                   : user.name || user.username || `User #${user.id}`}
                               </span>
@@ -1881,7 +1887,7 @@ export default function ERPTaskCard({
                     >
                       <span className="min-w-0">
                         <span className="block truncate text-slate-700">
-                          {isCurrentUser
+                          {isProvider && isCurrentUser
                             ? 'Assign myself'
                             : user.name || user.username || `User #${user.id}`}
                         </span>

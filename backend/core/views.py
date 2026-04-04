@@ -2545,13 +2545,29 @@ class ERPViewSet(viewsets.ModelViewSet):
             self._notify_provider_member_activity(
                 erp,
                 request.user,
-                "Team Member Declined",
+                "Team Member Rejected Assignment",
                 (
-                    f'{actor_name} declined the open assignment for "{post_title}". '
-                    "You may want to republish or assign a replacement. "
+                    f'{actor_name} rejected the assignment request for "{post_title}". '
+                    "You can assign someone else or republish this request. "
                     f"Post link: /erp?erp_id={erp.id}&members_role={role}&member_id={int(request.user.id)}"
                 ),
             )
+            try:
+                provider_name = (
+                    getattr(getattr(erp, "provider", None), "name", "")
+                    or getattr(getattr(erp, "provider", None), "username", "")
+                    or "Provider"
+                )
+                Notification.objects.create(
+                    user=request.user,
+                    title="You Rejected Assignment",
+                    message=(
+                        f'You rejected the assignment request for "{post_title}" from {provider_name}. '
+                        f"Post link: /erp?erp_id={erp.id}&members_role={role}&member_id={int(request.user.id)}"
+                    ),
+                )
+            except Exception:
+                logger.exception("Failed to create self-assign reject notification for user %s on ERP %s", getattr(request.user, "id", None), getattr(erp, "id", None))
         else:
             self._notify_provider_member_activity(
                 erp,
