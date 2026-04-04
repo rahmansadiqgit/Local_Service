@@ -864,6 +864,42 @@ export default function ERPTaskCard({
   const menuItemBaseClass =
     'w-full rounded-xl border border-slate-200 bg-white px-4 py-2 text-left text-sm font-semibold text-slate-700 transition hover:border-violet-200 hover:bg-violet-50 hover:text-violet-700'
 
+  // Calculate member-view filtered tables (only show rows where member is assigned)
+  const getMemberViewExpTableData = () => {
+    if (isProvider || !selectedMemberRole || selectedMemberRole !== 'expertise' || !hasExpertiseCategory) {
+      return selectedExpertiseForTable
+    }
+    // For members viewing expertise role: filter to only rows where they're assigned
+    const roleAssignments = getRoleState(selectedMemberRole)?.expertise_assignments || {}
+    return selectedExpertiseForTable.filter((row) => {
+      const rowIdStr = String(row.id)
+      const assignedIds = Array.isArray(roleAssignments[rowIdStr])
+        ? roleAssignments[rowIdStr].map((id) => Number(id)).filter((id) => Number.isFinite(id) && id > 0)
+        : []
+      return assignedIds.includes(Number(currentUserId))
+    })
+  }
+
+  const getMemberViewServiceTableData = () => {
+    if (isProvider || !selectedMemberRole || selectedMemberRole !== 'skill_provider' || !hasServicesCategory) {
+      return selectedServicesForTable
+    }
+    // Services + skill_provider will be added if backend supports per-row assignment tracking for services
+    return selectedServicesForTable
+  }
+
+  const getMemberViewProductTableData = () => {
+    if (isProvider || !selectedMemberRole || selectedMemberRole !== 'supplier' || !hasProductCategory) {
+      return selectedProductsForTable
+    }
+    // Products + supplier will be added if backend supports per-row assignment tracking for products
+    return selectedProductsForTable
+  }
+
+  const displayExpertiseForTable = getMemberViewExpTableData()
+  const displayServicesForTable = getMemberViewServiceTableData()
+  const displayProductsForTable = getMemberViewProductTableData()
+
   useEffect(() => {
     if (!isDetailsOpen) return undefined
 
@@ -1195,6 +1231,57 @@ export default function ERPTaskCard({
             </div>
           </div>
         ) : null}
+
+        {/* Show assigned tasks summary for members viewing their assignments */}
+        {!isProvider && currentUserRoleResponsibilities.length > 0 && (
+          <div className="relative mx-auto mt-3 w-full max-w-3xl rounded-2xl border-2 border-emerald-300 bg-emerald-50 px-4 py-3">
+            <p className="text-sm font-bold text-emerald-900">✓ Your Assigned Tasks</p>
+            <div className="mt-2 space-y-2">
+              {currentUserRoleResponsibilities.map((roleResp) => {
+                const roleKey = roleResp.roleKey
+                const roleAssignments = getRoleState(roleKey)?.expertise_assignments || {}
+                const assignedRowIds = Object.entries(roleAssignments)
+                  .filter(([, assignedIds]) => {
+                    const ids = Array.isArray(assignedIds)
+                      ? assignedIds.map((id) => Number(id)).filter((id) => Number.isFinite(id) && id > 0)
+                      : []
+                    return ids.includes(Number(currentUserId))
+                  })
+                  .map(([rowId]) => rowId)
+
+                if (assignedRowIds.length === 0) return null
+
+                const assignedRows = (roleKey === 'expertise' ? snapshotExpertise : roleKey === 'skill_provider' ? snapshotServices : snapshotProducts)
+                  .filter((row) => assignedRowIds.includes(String(row.id)))
+                  .slice(0, 5) // Show first 5
+
+                return (
+                  <div key={`assigned-tasks-${erp.id}-${roleKey}`} className="rounded-lg border border-emerald-200 bg-white p-2.5">
+                    <p className="text-xs font-semibold text-emerald-800">
+                      {roleResp.roleLabel === 'Expertise' ? '👨‍💼' : roleResp.roleLabel === 'Skill provider' ? '🔧' : '📦'} {roleResp.roleLabel}
+                    </p>
+                    <ul className="mt-1 list-inside space-y-0.5 text-[11px] text-slate-700">
+                      {assignedRows.map((row) => (
+                        <li key={`assigned-row-${row.id}`} className="flex items-start gap-1.5">
+                          <span className="mt-0.5 text-emerald-600">•</span>
+                          <span>{row.name || row.skill_name || row.service_name || row.product_name || '-'}</span>
+                        </li>
+                      ))}
+                    </ul>
+                    {assignedRowIds.length > 5 && (
+                      <p className="mt-1 text-[10px] italic text-slate-500">
+                        +{assignedRowIds.length - 5} more task{assignedRowIds.length - 5 === 1 ? '' : 's'}
+                      </p>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+            <p className="mt-2 text-[11px] text-emerald-700">
+              Scroll down to see full details of your assigned responsibilities
+            </p>
+          </div>
+        )}
       </div>
 
       <div className="relative mt-2">
@@ -1577,6 +1664,16 @@ export default function ERPTaskCard({
               </button>
             </div>
           </div>
+
+          {!isProvider && (
+            <div className="rounded-md border border-emerald-200 bg-emerald-50/60 p-2.5">
+              <p className="text-[11px] font-semibold text-emerald-800">Your Assignment Status</p>
+              <p className="mt-1 text-[11px] text-emerald-700">
+                You are assigned to work as {roleKeyToLabel[selectedMemberRole] || 'member'}. 
+                Review the responsibilities below and confirm you can complete the assigned tasks.
+              </p>
+            </div>
+          )}
 
           {isProvider && isAssignByPostOpen ? (
             <div className="space-y-2 rounded-md border border-brand-200 bg-brand-50/40 p-2">
@@ -2183,24 +2280,30 @@ export default function ERPTaskCard({
             )}
           </div>
 
-          {selectedExpertiseForTable.length ? (
+          {displayExpertiseForTable.length ? (
             <div className="rounded-2xl border border-violet-200 bg-white p-4">
-              <h4 className="text-sm font-semibold text-slate-800">Expertise (Selected)</h4>
+              <h4 className="text-sm font-semibold text-slate-800">
+                Expertise (Selected)
+                {!isProvider && selectedMemberRole === 'expertise' ? ' - Your Assignments' : ''}
+              </h4>
               <div className="mt-2">
                 <ExpertiseTable
-                  expertises={selectedExpertiseForTable}
+                  expertises={displayExpertiseForTable}
                   postType={isDemandPost ? 'Demand' : 'Supply'}
                 />
               </div>
             </div>
           ) : null}
 
-          {selectedServicesForTable.length ? (
+          {displayServicesForTable.length ? (
             <div className="rounded-2xl border border-violet-200 bg-white p-4">
-              <h4 className="text-sm font-semibold text-slate-800">Services (Selected)</h4>
+              <h4 className="text-sm font-semibold text-slate-800">
+                Services (Selected)
+                {!isProvider && selectedMemberRole === 'skill_provider' ? ' - Your Assignments' : ''}
+              </h4>
               <div className="mt-2">
                 <ServiceTable
-                  services={selectedServicesForTable}
+                  services={displayServicesForTable}
                   postType={isDemandPost ? 'Demand' : 'Supply'}
                   showDescription
                 />
@@ -2208,12 +2311,15 @@ export default function ERPTaskCard({
             </div>
           ) : null}
 
-          {selectedProductsForTable.length ? (
+          {displayProductsForTable.length ? (
             <div className="rounded-2xl border border-violet-200 bg-white p-4">
-              <h4 className="text-sm font-semibold text-slate-800">Products (Selected)</h4>
+              <h4 className="text-sm font-semibold text-slate-800">
+                Products (Selected)
+                {!isProvider && selectedMemberRole === 'supplier' ? ' - Your Assignments' : ''}
+              </h4>
               <div className="mt-2">
                 <ProductTable
-                  products={selectedProductsForTable}
+                  products={displayProductsForTable}
                   postType={isDemandPost ? 'Demand' : 'Supply'}
                   showDescription
                 />

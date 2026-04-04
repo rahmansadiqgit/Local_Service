@@ -1249,7 +1249,7 @@ class ERPViewSet(viewsets.ModelViewSet):
                     message=(
                         f'You are assigned to "{post_title}" as {role_label} provider by '
                         f'[{assigner_name}]({assigner_link}). '
-                        f"Post link: /erp?erp_id={erp.id}"
+                        f"Post link: /erp?erp_id={erp.id}&members_role={role}&member_id={int(member.id)}"
                     ),
                 )
             )
@@ -1262,6 +1262,77 @@ class ERPViewSet(viewsets.ModelViewSet):
                         message=(
                             f'[{member_name}]({member_link}) has been assigned to your booking "{post_title}" as a {role_label} provider. '
                             f"Post link: /erp?erp_id={erp.id}&members_role={role}&member_id={int(member.id)}"
+                        ),
+                    )
+                )
+
+        if notifications:
+            Notification.objects.bulk_create(notifications)
+
+    def _notify_manual_member_removals(self, erp, role, removed_ids, remover=None):
+        provider = getattr(erp, "provider", None)
+        receiver = getattr(erp, "receiver", None)
+        remover = remover or provider
+        if not provider or not removed_ids:
+            return
+
+        role_labels = {
+            "expertise": "Expertise",
+            "skill_provider": "Service",
+            "supplier": "Delivery",
+        }
+        role_label = role_labels.get(role, role.replace("_", " ").title())
+        post_title = (
+            self._as_dict(getattr(erp, "configuration_snapshot", None)).get("post", {}).get("title")
+            or getattr(erp.post, "post_title", "")
+            or getattr(erp.post, "post_name", "")
+            or f"Booking #{erp.id}"
+        )
+        remover_name = (
+            getattr(remover, "name", "")
+            or getattr(remover, "username", "")
+            or "Provider"
+        )
+        remover_link = f"/dashboard/{remover.id}" if getattr(remover, "id", None) else "/dashboard"
+
+        members = User.objects.filter(id__in=list(removed_ids))
+        notifications = []
+        for member in members:
+            member_name = member.name or member.username or member.email or f"User #{member.id}"
+            member_link = f"/dashboard/{member.id}"
+            focus_link = f"/erp?erp_id={erp.id}&members_role={role}&member_id={int(member.id)}"
+
+            notifications.append(
+                Notification(
+                    user=provider,
+                    title="🗑️ Team Member Removed",
+                    message=(
+                        f'You removed [{member_name}]({member_link}) from "{post_title}" ({role_label}). '
+                        f"Post link: {focus_link}"
+                    ),
+                )
+            )
+
+            notifications.append(
+                Notification(
+                    user=member,
+                    title="🗑️ You Were Removed From Task",
+                    message=(
+                        f'You were removed from "{post_title}" ({role_label}) by '
+                        f'[{remover_name}]({remover_link}). '
+                        f"Post link: {focus_link}"
+                    ),
+                )
+            )
+
+            if receiver and int(receiver.id) != int(provider.id) and int(receiver.id) != int(member.id):
+                notifications.append(
+                    Notification(
+                        user=receiver,
+                        title="🗑️ Team Member Removed",
+                        message=(
+                            f'[{member_name}]({member_link}) was removed from your booking "{post_title}" ({role_label}). '
+                            f"Post link: {focus_link}"
                         ),
                     )
                 )
@@ -2157,6 +2228,10 @@ class ERPViewSet(viewsets.ModelViewSet):
         if added_ids:
             self._notify_manual_member_additions(erp, role, added_ids, assigner=request.user)
 
+        removed_ids = existing.difference(updated)
+        if removed_ids:
+            self._notify_manual_member_removals(erp, role, removed_ids, remover=request.user)
+
         return Response(self.get_serializer(erp).data)
 
     @action(detail=True, methods=["post"])
@@ -2717,6 +2792,28 @@ class ERPViewSet(viewsets.ModelViewSet):
             or f"ERP #{erp.id}"
         )
         left_roles_text = ", ".join(sorted(set(left_roles))) if left_roles else "assigned roles"
+
+        def normalize_member_role(value):
+            role_value = str(value or "").strip().lower()
+            if role_value in {"expertise"}:
+                return "expertise"
+            if role_value in {"skill_provider", "service_provider"}:
+                return "skill_provider"
+            if role_value in {"supplier", "delivery_man", "delivary_man", "delivery"}:
+                return "supplier"
+            return ""
+
+        focus_role = ""
+        for raw_role in left_roles:
+            parsed = normalize_member_role(raw_role)
+            if parsed:
+                focus_role = parsed
+                break
+
+        focus_link = f"/erp?erp_id={erp.id}"
+        if focus_role:
+            focus_link = f"{focus_link}&members_role={focus_role}&member_id={int(request.user.id)}"
+
         self._notify_provider_member_activity(
             erp,
             request.user,
@@ -2724,9 +2821,36 @@ class ERPViewSet(viewsets.ModelViewSet):
             (
                 f'{actor_name} has left the booking "{post_title}". '
                 "You may want to assign a replacement. "
-                f"Post link: /erp?erp_id={erp.id}"
+                f"Post link: {focus_link}"
             ),
         )
+
+        receiver = getattr(erp, "receiver", None)
+        provider = getattr(erp, "provider", None)
+        if receiver and provider and int(receiver.id) not in {int(provider.id), int(request.user.id)}:
+            try:
+                Notification.objects.create(
+                    user=receiver,
+                    title="Team Member Left",
+                    message=(
+                        f'{actor_name} left your booking "{post_title}" from {left_roles_text}. '
+                        f"Post link: {focus_link}"
+                    ),
+                )
+            except Exception:
+                logger.exception("Failed to create receiver leave notification for ERP %s", getattr(erp, "id", None))
+
+        try:
+            Notification.objects.create(
+                user=request.user,
+                title="You Left Task",
+                message=(
+                    f'You left "{post_title}" from {left_roles_text}. '
+                    f"Post link: {focus_link}"
+                ),
+            )
+        except Exception:
+            logger.exception("Failed to create self leave notification for user %s on ERP %s", getattr(request.user, "id", None), getattr(erp, "id", None))
 
         return Response(self.get_serializer(erp).data)
 
