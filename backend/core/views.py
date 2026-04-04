@@ -1,6 +1,7 @@
 from io import BytesIO
 import textwrap
 import logging
+from urllib.parse import urlencode
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.tokens import default_token_generator
@@ -2107,9 +2108,16 @@ class ERPViewSet(viewsets.ModelViewSet):
                 allowed_target_ids=target_ids,
             )
 
-            if parsed_scope:
-                selected_scope = parsed_scope
-                target_ids = scoped_target_ids
+            if not parsed_scope:
+                return Response(
+                    {
+                        "detail": "Select at least one responsibility and one target connection member before publishing.",
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            selected_scope = parsed_scope
+            target_ids = scoped_target_ids
 
             if not target_ids:
                 return Response(
@@ -2135,26 +2143,74 @@ class ERPViewSet(viewsets.ModelViewSet):
         receivers = User.objects.filter(id__in=list(target_ids)).exclude(id=request.user.id)
         provider_name = request.user.name or request.user.username or request.user.email or "Provider"
         is_demand_post = str(getattr(getattr(erp, "post", None), "post_type", "") or "").strip().lower() == "demand"
-        if is_demand_post:
-            body = (
-                f'{provider_name} is looking for someone to fill the {role_title} role on "{post_title}". '
-                "Visit your Connections to apply. "
-                "Post link: /connections"
-            )
-        else:
-            body = f"ERP #{erp.id} is open for self-assignment as {role_title} for post '{post_title}'."
-            if custom_message:
-                body = f"{body} Message: {custom_message}"
-            body = f"{body} Post link: {post_link}"
+        notifications = []
+        notification_entries = []
 
-        notifications = [
-            Notification(
-                user=target,
-                title=f"🧩 Open Role Available: {role_title}" if is_demand_post else f"🧩 ERP Self-Assign Open: {role_title}",
-                message=body,
+        if selected_scope:
+            for scope_entry in selected_scope:
+                responsibility_id = str(scope_entry.get("responsibility_id") or "").strip()
+                responsibility_name = str(scope_entry.get("responsibility_name") or "").strip() or role_title
+                for raw_target_id in scope_entry.get("target_ids") or []:
+                    try:
+                        parsed_target_id = int(raw_target_id)
+                    except (TypeError, ValueError):
+                        continue
+                    if parsed_target_id <= 0 or parsed_target_id == request.user.id:
+                        continue
+                    notification_entries.append(
+                        {
+                            "target_id": parsed_target_id,
+                            "responsibility_id": responsibility_id,
+                            "responsibility_name": responsibility_name,
+                        }
+                    )
+        else:
+            for target in receivers:
+                notification_entries.append(
+                    {
+                        "target_id": int(target.id),
+                        "responsibility_id": "",
+                        "responsibility_name": role_title,
+                    }
+                )
+
+        for entry in notification_entries:
+            query = {
+                "section": "self_assign",
+                "erp_id": erp.id,
+                "role": role,
+            }
+            if entry["responsibility_id"]:
+                query["responsibility_id"] = entry["responsibility_id"]
+
+            details_link = f"/connections?{urlencode(query)}"
+            responsibility_text = entry["responsibility_name"]
+
+            if is_demand_post:
+                body = (
+                    f'{provider_name} is looking for someone to fill the {role_title} role on "{post_title}". '
+                    f'You are requested to assign for the posted specific responsibility: {responsibility_text}. '
+                    f'[Click here to see details]({details_link})'
+                )
+                title = f"🧩 Open Role Available: {role_title}"
+            else:
+                body = (
+                    f'You are requested to assign for the posted specific responsibility: {responsibility_text} on "{post_title}". '
+                    f'Provider: {provider_name}. '
+                    f'[Click here to see details]({details_link})'
+                )
+                if custom_message:
+                    body = f"{body} Message: {custom_message}"
+                title = f"🧩 ERP Self-Assign Open: {role_title}"
+
+            notifications.append(
+                Notification(
+                    user=User.objects.filter(id=entry["target_id"]).first(),
+                    title=title,
+                    message=body,
+                )
             )
-            for target in receivers
-        ]
+        notifications = [item for item in notifications if item.user]
         if notifications:
             Notification.objects.bulk_create(notifications)
 

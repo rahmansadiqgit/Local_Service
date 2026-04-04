@@ -147,10 +147,16 @@ export default function Connections() {
     const section = String(params.get('section') || '').trim().toLowerCase()
     const name = String(params.get('name') || '').trim().toLowerCase()
     const role = String(params.get('role') || '').trim().toLowerCase()
+    const erpId = String(params.get('erp_id') || '').trim()
+    const responsibilityId = String(params.get('responsibility_id') || '').trim()
+    const responsibility = String(params.get('responsibility') || '').trim().toLowerCase()
     return {
       section,
       name,
       role,
+      erpId,
+      responsibilityId,
+      responsibility,
       hasNameTarget: Boolean(name),
     }
   }, [location.search])
@@ -364,6 +370,43 @@ export default function Connections() {
         })
     })
   }, [erpItems, currentUserId])
+
+  useEffect(() => {
+    if (deepLinkTarget.section !== 'self_assign') return
+    if (!openSelfAssignPosts.length) return
+
+    const responsibilityQuery = deepLinkTarget.responsibility
+    const targetResponsibilityId = String(deepLinkTarget.responsibilityId || '').trim()
+    const targetErpId = Number(deepLinkTarget.erpId)
+
+    const matchedPost = openSelfAssignPosts.find((entry) => {
+      const matchesErp = Number.isFinite(targetErpId) ? Number(entry?.erp?.id) === targetErpId : true
+      const matchesRole = deepLinkTarget.role ? String(entry?.role || '').toLowerCase() === deepLinkTarget.role : true
+      const matchesResponsibilityId = targetResponsibilityId
+        ? String(entry?.responsibilityId || '').trim() === targetResponsibilityId
+        : true
+      const matchesResponsibility = responsibilityQuery
+        ? String(entry?.responsibilityText || '').trim().toLowerCase().includes(responsibilityQuery)
+        : true
+      return matchesErp && matchesRole && matchesResponsibilityId && matchesResponsibility
+    })
+
+    window.requestAnimationFrame(() => {
+      const sectionNode = document.getElementById('self-assign-posts-section')
+      if (sectionNode) {
+        sectionNode.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      }
+
+      if (matchedPost) {
+        const cardNode = document.getElementById(
+          `self-assign-card-${matchedPost.erp.id}-${matchedPost.role}-${matchedPost.responsibilityId || 'all'}`,
+        )
+        if (cardNode) {
+          cardNode.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        }
+      }
+    })
+  }, [deepLinkTarget, openSelfAssignPosts])
 
   const handleSelfAssign = async (erpId, role, assign, responsibilityId = null) => {
     const loadingKey = `${erpId}-${role}-${responsibilityId || 'all'}`
@@ -720,7 +763,7 @@ export default function Connections() {
           </div>
         </div>
 
-        <div className="space-y-6 lg:sticky lg:top-6 lg:h-fit">
+        <div className="space-y-6 lg:sticky lg:top-6 lg:h-fit" id="self-assign-posts-section">
           <div className={profileLikeBoxClass}>
             <h3 className="text-lg font-semibold">Self-Assign ERP Posts</h3>
             <p className="mt-1 text-xs text-slate-500">If provider generated assignment post, you can assign or remove yourself here.</p>
@@ -740,7 +783,11 @@ export default function Connections() {
                     provider?.name || provider?.username || (erp.provider ? `User #${erp.provider}` : 'Unknown')
                   const erpTaskLink = `/erp?erp_id=${erp.id}`
                   return (
-                    <div key={`${erp.id}-${role}-${responsibilityId || 'all'}`} className="rounded-lg border border-slate-200 bg-white p-2">
+                    <div
+                      key={`${erp.id}-${role}-${responsibilityId || 'all'}`}
+                      id={`self-assign-card-${erp.id}-${role}-${responsibilityId || 'all'}`}
+                      className="rounded-lg border border-slate-200 bg-white p-2"
+                    >
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <p className="text-sm font-semibold text-slate-800">{titleText}</p>
                         <p className="text-xs text-slate-500">Role: {roleLabel}</p>
