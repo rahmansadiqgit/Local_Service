@@ -40,6 +40,8 @@ export default function ERPTaskCard({
   onRejectApplication,
   onOpenOwner,
   toMediaUrl,
+  focusMemberRole = '',
+  focusMemberId = null,
 }) {
   const navigate = useNavigate()
   const [isActionsMenuOpen, setIsActionsMenuOpen] = useState(false)
@@ -251,6 +253,7 @@ export default function ERPTaskCard({
     skill_provider: 'Skill provider',
     supplier: 'Delivery Man',
   }
+
   const associatedMemberRoles = ['expertise', 'skill_provider', 'supplier']
   const roleKeyAliases = {
     expertise: ['expertise'],
@@ -328,6 +331,13 @@ export default function ERPTaskCard({
         ? 'Receiver'
         : 'Viewer'
   const isProvider = viewerRole === 'Provider'
+  useEffect(() => {
+    if (!focusMemberRole) return
+    if (!isProvider) return
+    if (selectedMemberRole === focusMemberRole) return
+    if (!['expertise', 'skill_provider', 'supplier'].includes(focusMemberRole)) return
+    setSelectedMemberRole(focusMemberRole)
+  }, [focusMemberRole, isProvider, selectedMemberRole])
   const postOwnerId = Number(post?.owner_id || post?.owner || 0)
   const isPostOwner = Number.isFinite(postOwnerId) && postOwnerId > 0 && Number(postOwnerId) === Number(currentUserId)
   const assignedMembersForSelectedRole = users.filter((user) =>
@@ -1678,7 +1688,7 @@ export default function ERPTaskCard({
           {isProvider && isAssignByPostOpen && (selectedMemberRole === 'expertise' || selectedMemberRole === 'skill_provider') ? (
             <div className="space-y-2 rounded-md border border-slate-200 bg-slate-50 p-2">
               <p className="text-[11px] font-semibold text-slate-700">
-                Self-assign targeting (responsibility -> members)
+                Self-assign targeting (responsibility -&gt; members)
               </p>
               {selectedRoleResponsibilityOptions.length ? (
                 selectedRoleResponsibilityOptions.map((item) => {

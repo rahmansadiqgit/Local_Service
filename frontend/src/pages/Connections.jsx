@@ -277,10 +277,6 @@ export default function Connections() {
     }
 
     return (erpItems || []).flatMap((erp) => {
-      if (String(erp?.stage || '').trim().toLowerCase() === 'on process') {
-        return []
-      }
-
       const snapshot = erp.configuration_snapshot || {}
       const members = snapshot.members || {}
 
@@ -301,10 +297,15 @@ export default function Connections() {
           const assignedIds = rawAssignedIds
             .map((id) => Number(id))
             .filter((id) => Number.isFinite(id) && id > 0)
+          const rejectedIds = Array.isArray(members[key]?.self_assign_rejected_ids)
+            ? members[key].self_assign_rejected_ids
+                .map((id) => Number(id))
+                .filter((id) => Number.isFinite(id) && id > 0)
+            : []
 
           // Show only to explicitly targeted users, or users already assigned in this role.
           const currentId = Number(currentUserId)
-          return targetIds.includes(currentId) || assignedIds.includes(currentId)
+          return (targetIds.includes(currentId) || assignedIds.includes(currentId)) && !rejectedIds.includes(currentId)
         })
         .flatMap(({ key, label }) => {
           const roleBucket = members[key] || {}
@@ -326,6 +327,14 @@ export default function Connections() {
                 : []
               const currentId = Number(currentUserId)
               if (targetIds.length > 0 && !targetIds.includes(currentId)) {
+                return null
+              }
+              const rejectedIds = Array.isArray(entry?.rejected_ids)
+                ? entry.rejected_ids
+                    .map((id) => Number(id))
+                    .filter((id) => Number.isFinite(id) && id > 0)
+                : []
+              if (rejectedIds.includes(currentId)) {
                 return null
               }
               return {
@@ -408,18 +417,24 @@ export default function Connections() {
     })
   }, [deepLinkTarget, openSelfAssignPosts])
 
-  const handleSelfAssign = async (erpId, role, assign, responsibilityId = null) => {
+  const handleSelfAssign = async (erpId, role, assign, responsibilityId = null, reject = false) => {
     const loadingKey = `${erpId}-${role}-${responsibilityId || 'all'}`
     setSelfAssignLoading(loadingKey)
     try {
-      const payload = { role, assign }
+      const payload = { role, assign, reject }
       if (responsibilityId) {
         payload.responsibility_id = responsibilityId
       }
 
       const { data } = await api.post(`/erp/${erpId}/self_assign/`, payload)
-      setErpItems((prev) => prev.map((item) => (item.id === data.id ? data : item)))
-      setMessage(assign ? 'You assigned yourself successfully.' : 'You removed yourself successfully.')
+      setErpItems((prev) => prev.map((item) => (Number(item?.id) === Number(data?.id) ? data : item)))
+      setMessage(
+        reject
+          ? 'You declined the open assignment.'
+          : assign
+            ? 'You assigned yourself successfully.'
+            : 'You removed yourself successfully.',
+      )
       await loadOverview()
       window.dispatchEvent(new Event('localix:notifications-refresh'))
     } catch (error) {
@@ -807,18 +822,30 @@ export default function Connections() {
                       </p>
 
                       <div className="mt-2 flex justify-end">
-                        <button
-                          type="button"
-                          disabled={selfAssignLoading === loadingKey}
-                          onClick={() => handleSelfAssign(erp.id, role, !isAssigned, responsibilityId)}
-                          className="rounded-full border border-brand-200 px-3 py-1 text-xs font-semibold text-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
-                        >
-                          {selfAssignLoading === loadingKey
-                            ? 'Updating...'
-                            : isAssigned
-                              ? 'Remove Myself'
-                              : 'Assign Myself'}
-                        </button>
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            disabled={selfAssignLoading === loadingKey}
+                            onClick={() => handleSelfAssign(erp.id, role, !isAssigned, responsibilityId)}
+                            className="rounded-full border border-brand-200 px-3 py-1 text-xs font-semibold text-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            {selfAssignLoading === loadingKey
+                              ? 'Updating...'
+                              : isAssigned
+                                ? 'Remove Myself'
+                                : 'Assign Myself'}
+                          </button>
+                          {!isAssigned ? (
+                            <button
+                              type="button"
+                              disabled={selfAssignLoading === loadingKey}
+                              onClick={() => handleSelfAssign(erp.id, role, false, responsibilityId, true)}
+                              className="rounded-full border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-600 disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                              {selfAssignLoading === loadingKey ? 'Updating...' : 'Reject'}
+                            </button>
+                          ) : null}
+                        </div>
                       </div>
                     </div>
                   )

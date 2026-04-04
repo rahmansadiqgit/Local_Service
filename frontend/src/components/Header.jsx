@@ -352,10 +352,85 @@ export default function Header() {
     const messageLower = message.toLowerCase()
     const relatedUserId = Number(item?.related_user)
 
+    const selfAssignLinkMatch = message.match(/\[([^\]]+)\]\((\/connections\?[^\s)]+)\)/i)
+    if (selfAssignLinkMatch && selfAssignLinkMatch[2]) {
+      return selfAssignLinkMatch[2].trim()
+    }
+
+    const normalizeErpPostLink = (rawLink, sourceMessage) => {
+      const trimmed = String(rawLink || '').trim()
+      if (!trimmed.startsWith('/erp?')) return trimmed
+      if (/members_role=/i.test(trimmed) && /member_id=/i.test(trimmed)) return trimmed
+
+      const msg = String(sourceMessage || '')
+      const roleText = String((msg.match(/as\s+a\s+([^\n\r]+?)\s+provider/i) || [])[1] || '').trim().toLowerCase()
+      let normalizedRole = ''
+      if (roleText.includes('expertise')) normalizedRole = 'expertise'
+      else if (roleText.includes('skill')) normalizedRole = 'skill_provider'
+      else if (roleText.includes('delivery') || roleText.includes('supplier')) normalizedRole = 'supplier'
+
+      const memberIdFromLink = Number((msg.match(/\]\(\/dashboard\/(\d+)\)/) || [])[1])
+      const [basePath, rawQuery = ''] = trimmed.split('?')
+      const params = new URLSearchParams(rawQuery)
+      if (normalizedRole && !params.get('members_role')) {
+        params.set('members_role', normalizedRole)
+      }
+      if (Number.isFinite(memberIdFromLink) && memberIdFromLink > 0 && !params.get('member_id')) {
+        params.set('member_id', String(memberIdFromLink))
+      }
+      return `${basePath}?${params.toString()}`
+    }
+
     // Prefer an explicit in-message link when available.
     const postLinkMatch = message.match(/post\s+link:\s*([^\s]+)/i)
     if (postLinkMatch && postLinkMatch[1]) {
-      return postLinkMatch[1].trim()
+      const rawLink = postLinkMatch[1].trim()
+      const normalizedLink = normalizeErpPostLink(rawLink, message)
+      const isJoinedNotification = title.includes('new team member joined')
+      const hasMemberParams = /members_role=/i.test(normalizedLink) && /member_id=/i.test(normalizedLink)
+
+      // For joined notifications, keep enriching when legacy post links lack role/member params.
+      if (!isJoinedNotification || hasMemberParams) {
+        return normalizedLink
+      }
+    }
+
+    if (title.includes('new team member joined')) {
+      const bookingTitleMatch = message.match(/joined\s+your\s+booking\s+"([^"]+)"/i)
+      const memberNameMatch = message.match(/^\s*([^\n\r]+?)\s+joined\s+your\s+booking/i)
+      const bookingTitle = String(bookingTitleMatch?.[1] || '').trim()
+      const memberName = String(memberNameMatch?.[1] || '').trim()
+
+      // Prefer a direct ERP deep-link from a matching Team Member Added notification.
+      const normalizedTitle = bookingTitle.toLowerCase()
+      const normalizedMember = memberName.toLowerCase()
+      const linkedSibling = (Array.isArray(notifications) ? notifications : []).find((entry) => {
+        const siblingTitle = String(entry?.title || '').toLowerCase()
+        if (!siblingTitle.includes('team member added')) return false
+        const siblingMessage = String(entry?.message || '')
+        const siblingMessageLower = siblingMessage.toLowerCase()
+        const hasSamePost = normalizedTitle
+          ? siblingMessageLower.includes(`"${normalizedTitle}"`) || siblingMessageLower.includes(normalizedTitle)
+          : true
+        const hasSameMember = normalizedMember ? siblingMessageLower.includes(normalizedMember) : true
+        return hasSamePost && hasSameMember && /post\s+link:\s*\/erp\?/i.test(siblingMessage)
+      })
+
+      if (linkedSibling?.message) {
+        const siblingLinkMatch = String(linkedSibling.message).match(/post\s+link:\s*([^\s]+)/i)
+        if (siblingLinkMatch?.[1]) {
+          return normalizeErpPostLink(siblingLinkMatch[1].trim(), String(linkedSibling.message))
+        }
+      }
+
+      const params = new URLSearchParams()
+      if (bookingTitle) {
+        params.set('focus_post_title', bookingTitle)
+      }
+      if (memberName) {
+        params.set('focus_member_name', memberName)
+      }
+      return params.toString() ? `/erp?${params.toString()}` : '/erp'
     }
 
     if (

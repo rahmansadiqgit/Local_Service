@@ -1237,7 +1237,7 @@ class ERPViewSet(viewsets.ModelViewSet):
                     title="👷‍♂️ Team Member Added",
                     message=(
                         f'You are assigned [{member_name}]({member_link}) him to your "{post_title}" as a {role_label} provider. '
-                        f"Post link: /erp?erp_id={erp.id}"
+                        f"Post link: /erp?erp_id={erp.id}&members_role={role}&member_id={int(member.id)}"
                     ),
                 )
             )
@@ -1261,7 +1261,7 @@ class ERPViewSet(viewsets.ModelViewSet):
                         title="👷‍♂️ Team Member Added",
                         message=(
                             f'[{member_name}]({member_link}) has been assigned to your booking "{post_title}" as a {role_label} provider. '
-                            f"Post link: /erp?erp_id={erp.id}"
+                            f"Post link: /erp?erp_id={erp.id}&members_role={role}&member_id={int(member.id)}"
                         ),
                     )
                 )
@@ -1328,6 +1328,74 @@ class ERPViewSet(viewsets.ModelViewSet):
 
         visible_ids = []
         for item in merged_queryset.select_related("post"):
+            snapshot = self._as_dict(item.configuration_snapshot)
+            members = self._as_dict(snapshot.get("members"))
+            open_self_assign_visible = False
+
+            for role in self._allowed_member_roles():
+                for role_bucket in self._iter_role_buckets(members, role):
+                    if not bool(role_bucket.get("self_assign_enabled", False)):
+                        continue
+
+                    rejected_ids = set()
+                    for raw_id in role_bucket.get("self_assign_rejected_ids") or []:
+                        try:
+                            rejected_ids.add(int(raw_id))
+                        except (TypeError, ValueError):
+                            continue
+                    if int(user.id) in rejected_ids:
+                        continue
+
+                    scoped_entries = role_bucket.get("self_assign_scope") or []
+                    if isinstance(scoped_entries, list) and scoped_entries:
+                        for scope_entry in scoped_entries:
+                            if not isinstance(scope_entry, dict):
+                                continue
+                            scope_targets = set()
+                            for raw_id in scope_entry.get("target_ids") or []:
+                                try:
+                                    scope_targets.add(int(raw_id))
+                                except (TypeError, ValueError):
+                                    continue
+                            if int(user.id) not in scope_targets:
+                                continue
+
+                            scope_rejected_ids = set()
+                            for raw_id in scope_entry.get("rejected_ids") or []:
+                                try:
+                                    scope_rejected_ids.add(int(raw_id))
+                                except (TypeError, ValueError):
+                                    continue
+                            if int(user.id) in scope_rejected_ids:
+                                continue
+
+                            open_self_assign_visible = True
+                            break
+                    else:
+                        raw_targets = role_bucket.get("self_assign_target_ids", None)
+                        target_ids = set()
+                        for raw_id in (raw_targets or []):
+                            try:
+                                target_ids.add(int(raw_id))
+                            except (TypeError, ValueError):
+                                continue
+
+                        if raw_targets is None and not target_ids and item.provider:
+                            target_ids = self._get_accepted_connection_member_ids(item.provider, role=role)
+
+                        if int(user.id) in target_ids:
+                            open_self_assign_visible = True
+
+                    if open_self_assign_visible:
+                        break
+
+                if open_self_assign_visible:
+                    break
+
+            if open_self_assign_visible:
+                visible_ids.append(int(item.id))
+                continue
+
             # Demand applications stay visible to the demand post owner for review.
             # Keep them visible for the applicant too so opening /erp?erp_id=<id>
             # right after submit shows the exact card they just created.
@@ -1636,8 +1704,25 @@ class ERPViewSet(viewsets.ModelViewSet):
                         "responsibility_id": responsibility_id,
                         "responsibility_name": str(entry.get("responsibility_name") or "").strip(),
                         "target_ids": sorted(list(set(target_list))),
+                        "rejected_ids": sorted(
+                            [
+                                parsed_target
+                                for raw_target in entry.get("rejected_ids") or []
+                                for parsed_target in [self._to_int(raw_target, default=0)]
+                                if parsed_target > 0
+                            ]
+                        ),
                     }
                 )
+
+        rejected_ids = []
+        for raw_id in role_bucket.get("self_assign_rejected_ids") or []:
+            try:
+                parsed_id = int(raw_id)
+            except (TypeError, ValueError):
+                continue
+            if parsed_id > 0:
+                rejected_ids.append(parsed_id)
 
         post_id_value = role_bucket.get("self_assign_post_id")
         try:
@@ -1654,6 +1739,7 @@ class ERPViewSet(viewsets.ModelViewSet):
             "self_assign_post_title": str(role_bucket.get("self_assign_post_title", "") or "").strip(),
             "self_assign_post_id": post_id_value,
             "self_assign_target_ids": sorted(list(set(target_ids))),
+            "self_assign_rejected_ids": sorted(list(set(rejected_ids))),
             "self_assign_scope": normalized_scope,
             "self_assign_published_at": role_bucket.get("self_assign_published_at"),
         }
@@ -2134,6 +2220,7 @@ class ERPViewSet(viewsets.ModelViewSet):
         role_bucket["self_assign_post_title"] = str(post_title)
         role_bucket["self_assign_post_id"] = int(erp.post_id) if erp.post_id else None
         role_bucket["self_assign_target_ids"] = target_ids
+        role_bucket["self_assign_rejected_ids"] = []
         role_bucket["self_assign_scope"] = selected_scope
         role_bucket["self_assign_published_at"] = timezone.now().isoformat()
         members[role] = role_bucket
@@ -2234,6 +2321,7 @@ class ERPViewSet(viewsets.ModelViewSet):
         role_bucket["self_assign_post_title"] = ""
         role_bucket["self_assign_post_id"] = None
         role_bucket["self_assign_target_ids"] = []
+        role_bucket["self_assign_rejected_ids"] = []
         role_bucket["self_assign_scope"] = []
         role_bucket["self_assign_published_at"] = None
         members[role] = role_bucket
@@ -2280,7 +2368,13 @@ class ERPViewSet(viewsets.ModelViewSet):
                 normalized_scope.append(
                     {
                         "responsibility_id": scope_id,
-                        "target_ids": scope_targets,
+                        "target_ids": sorted(list(scope_targets)),
+                        "rejected_ids": [
+                            parsed_target
+                            for raw_target in item.get("rejected_ids") or []
+                            for parsed_target in [self._to_int(raw_target, default=0)]
+                            if parsed_target > 0
+                        ],
                     }
                 )
 
@@ -2308,12 +2402,37 @@ class ERPViewSet(viewsets.ModelViewSet):
         if request.user.id not in allowed_member_ids:
             raise PermissionDenied("Only connection members can self-assign to this ERP role.")
 
-        assign = request.data.get("assign", True)
-        should_assign = bool(assign)
+        assign = self._to_bool(request.data.get("assign", True))
+        reject = self._to_bool(request.data.get("reject", False))
+        if reject and assign:
+            return Response({"detail": "Reject requests must not also assign the user."}, status=status.HTTP_400_BAD_REQUEST)
+        should_assign = assign and not reject
+
+        if selected_scope_entry is not None:
+            rejected_ids = set()
+            for raw_id in selected_scope_entry.get("rejected_ids") or []:
+                try:
+                    rejected_ids.add(int(raw_id))
+                except (TypeError, ValueError):
+                    continue
+        else:
+            rejected_ids = set()
+            for raw_id in role_bucket.get("self_assign_rejected_ids") or []:
+                try:
+                    rejected_ids.add(int(raw_id))
+                except (TypeError, ValueError):
+                    continue
 
 
         ids = set(role_bucket.get("assignee_ids") or [])
         existing = set(ids)
+
+        if should_assign and int(request.user.id) in rejected_ids:
+            return Response(
+                {"detail": "You already rejected this self-assign post. Ask the provider to republish it if needed."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         if role == "expertise":
             expertise_assignments = self._as_dict(role_bucket.get("expertise_assignments"))
             expertise_rows = [
@@ -2383,6 +2502,17 @@ class ERPViewSet(viewsets.ModelViewSet):
                 ids.discard(request.user.id)
 
         role_bucket["assignee_ids"] = sorted(list(ids))
+        if selected_scope_entry is not None:
+            if reject:
+                rejected_ids.add(int(request.user.id))
+            else:
+                rejected_ids.discard(int(request.user.id))
+            selected_scope_entry["rejected_ids"] = sorted(list(rejected_ids))
+            role_bucket["self_assign_scope"] = normalized_scope
+        else:
+            if reject:
+                rejected_ids.add(int(request.user.id))
+            role_bucket["self_assign_rejected_ids"] = sorted(list(rejected_ids))
         members[role] = role_bucket
         snapshot["members"] = members
         self._save_snapshot(erp, snapshot)
@@ -2408,7 +2538,18 @@ class ERPViewSet(viewsets.ModelViewSet):
                 "New Team Member Joined",
                 (
                     f'{actor_name} joined your booking "{post_title}" via the open assignment. '
-                    f"Post link: /erp?erp_id={erp.id}"
+                    f"Post link: /erp?erp_id={erp.id}&members_role={role}&member_id={int(request.user.id)}"
+                ),
+            )
+        elif reject:
+            self._notify_provider_member_activity(
+                erp,
+                request.user,
+                "Team Member Declined",
+                (
+                    f'{actor_name} declined the open assignment for "{post_title}". '
+                    "You may want to republish or assign a replacement. "
+                    f"Post link: /erp?erp_id={erp.id}&members_role={role}&member_id={int(request.user.id)}"
                 ),
             )
         else:
@@ -2419,7 +2560,7 @@ class ERPViewSet(viewsets.ModelViewSet):
                 (
                     f'{actor_name} has left the booking "{post_title}". '
                     "You may want to assign a replacement. "
-                    f"Post link: /erp?erp_id={erp.id}"
+                    f"Post link: /erp?erp_id={erp.id}&members_role={role}&member_id={int(request.user.id)}"
                 ),
             )
 
