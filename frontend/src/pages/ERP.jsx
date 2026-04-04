@@ -486,6 +486,35 @@ export default function ERP() {
       Array.isArray(memberAssignments.skill_provider?.assignee_ids)
         ? memberAssignments.skill_provider.assignee_ids.length > 0
         : hasWorkers
+    const serviceAssignmentsByRow =
+      memberAssignments?.skill_provider && typeof memberAssignments.skill_provider.service_assignments === 'object'
+        ? memberAssignments.skill_provider.service_assignments
+        : {}
+    const serviceChecks = snapshotServices
+      .map((row, index) => {
+        if (!row || typeof row !== 'object' || row.included === false) return null
+        const serviceName = String(row?.name || row?.service_name || '').trim()
+        if (!serviceName) return null
+
+        const rowId = Number(row?.id)
+        const responsibilityId = Number.isFinite(rowId) && rowId > 0 ? `service:${rowId}` : `service:index:${index}`
+        const assignedIds = Array.isArray(serviceAssignmentsByRow[responsibilityId])
+          ? serviceAssignmentsByRow[responsibilityId]
+              .map((id) => Number(id))
+              .filter((id) => Number.isFinite(id) && id > 0)
+          : []
+
+        return {
+          responsibilityId,
+          name: serviceName,
+          assigned: new Set(assignedIds).size,
+        }
+      })
+      .filter(Boolean)
+    const hasPerServiceChecks = serviceChecks.length > 0
+    const isSkillProviderPerResponsibilityComplete = hasPerServiceChecks
+      ? serviceChecks.every((row) => row.assigned >= 1)
+      : hasAssignedSkillProvider
     const hasAssignedSupplier =
       Array.isArray(memberAssignments.supplier?.assignee_ids)
         ? memberAssignments.supplier.assignee_ids.length > 0
@@ -516,9 +545,13 @@ export default function ERP() {
       }
 
       if (hasServicesCategory) {
+        const serviceRequirementText = hasPerServiceChecks
+          ? ` (${serviceChecks.map((row) => `${row.name}: ${row.assigned}/1`).join(', ')})`
+          : ' (at least one)'
+
         pendingTasks.push({
-          label: 'Assign Skill provider in Members → Skill provider (at least one)',
-          done: hasAssignedSkillProvider,
+          label: `Assign Skill provider in Members → Skill provider${serviceRequirementText}`,
+          done: isSkillProviderPerResponsibilityComplete,
           key: 'member_skill_provider',
         })
       }
@@ -611,6 +644,9 @@ export default function ERP() {
       }
       if (role === 'expertise' && Number.isFinite(Number(options?.expertiseId)) && Number(options.expertiseId) > 0) {
         payload.expertise_id = Number(options.expertiseId)
+      }
+      if (role === 'skill_provider' && String(options?.responsibilityId || '').trim()) {
+        payload.responsibility_id = String(options.responsibilityId).trim()
       }
 
       const { data } = await api.patch(`/erp/${erp.id}/members/`, {

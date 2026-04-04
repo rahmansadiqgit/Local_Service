@@ -313,6 +313,10 @@ export default function Connections() {
             key === 'expertise' && roleBucket && typeof roleBucket.expertise_assignments === 'object'
               ? roleBucket.expertise_assignments
               : {}
+          const serviceAssignments =
+            key === 'skill_provider' && roleBucket && typeof roleBucket.service_assignments === 'object'
+              ? roleBucket.service_assignments
+              : {}
           const scopedResponsibilities = Array.isArray(roleBucket?.self_assign_scope)
             ? roleBucket.self_assign_scope
             : []
@@ -344,6 +348,8 @@ export default function Connections() {
                 assignedIds:
                   key === 'expertise'
                     ? (Array.isArray(expertiseAssignments?.[responsibilityId]) ? expertiseAssignments[responsibilityId] : [])
+                    : key === 'skill_provider'
+                      ? (Array.isArray(serviceAssignments?.[responsibilityId]) ? serviceAssignments[responsibilityId] : [])
                     : (Array.isArray(roleBucket?.assignee_ids) ? roleBucket.assignee_ids : []),
               }
             })
@@ -625,13 +631,13 @@ export default function Connections() {
               className="text-xl font-extrabold tracking-tight text-violet-900 sm:text-3xl"
               style={{ fontFamily: "'Sora', 'Trebuchet MS', sans-serif" }}
             >
-              Connections
+              My Network
             </h2>
             <p className="mt-0.5 text-xs font-semibold text-violet-800/80 sm:text-sm">Manage your Localix network.</p>
           </div>
           <img
             src="/images/connections.png"
-            alt="Connections header illustration"
+            alt="My Network header illustration"
             className="pointer-events-none absolute right-4 top-1/2 h-36 w-36 -translate-y-1/2 object-contain sm:h-40 sm:w-40 lg:h-44 lg:w-44"
           />
         </div>
