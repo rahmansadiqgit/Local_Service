@@ -2,13 +2,19 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import api from '../api/client';
 import RatingRingAvatar from '../components/RatingRingAvatar';
+import useAuth from '../context/useAuth';
 
 export default function Profile() {
   const { id } = useParams();
   const navigate = useNavigate()
+  const { refreshUser } = useAuth()
   const settingsMenuRef = useRef(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [profile, setProfile] = useState(null)
+  const [editingStatus, setEditingStatus] = useState(false)
+  const [tempAvailableStatus, setTempAvailableStatus] = useState('')
+  const [tempDemandStatus, setTempDemandStatus] = useState('')
+  const [updatingStatus, setUpdatingStatus] = useState(false)
 
   const resolveMediaUrl = (value) => {
     if (!value) return ''
@@ -39,12 +45,33 @@ export default function Profile() {
           data = res.data;
         }
         setProfile(data);
+        setTempAvailableStatus(data?.supply_status ? data.supply_status.split(',')[0].trim() : '');
+        setTempDemandStatus(data?.demand_status ? data.demand_status.split(',')[0].trim() : '');
       } catch (error) {
         console.error(error);
       }
     };
     load();
   }, [id]);
+
+  const handleStatusSave = async () => {
+    setUpdatingStatus(true);
+    try {
+      const payload = {
+        supply_status: tempAvailableStatus,
+        demand_status: tempDemandStatus,
+      };
+      const { data } = await api.patch('/users/profile/', payload);
+      setProfile(data);
+      setEditingStatus(false);
+      await refreshUser(data);
+    } catch (error) {
+      console.error(error);
+      alert('Failed to update status. Please try again.');
+    } finally {
+      setUpdatingStatus(false);
+    }
+  };
 
   useEffect(() => {
     const handleOutsideClick = (event) => {
@@ -168,13 +195,85 @@ export default function Profile() {
             <p className="text-sm text-slate-600">{profile?.email}</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            {/* Role removed */}
-            <span className="rounded-full border border-violet-400 bg-violet-600 px-3 py-1 text-xs font-semibold text-white shadow-sm">
-              Available: {currentAvailableStatus}
-            </span>
-            <span className="rounded-full border border-fuchsia-400 bg-fuchsia-600 px-3 py-1 text-xs font-semibold text-white shadow-sm">
-              Demand: {currentDemandStatus}
-            </span>
+            {/* Show dropdowns for own profile, badges for others */}
+            {!id ? (
+              editingStatus ? (
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-semibold text-violet-700">Available</label>
+                    <select
+                      value={tempAvailableStatus}
+                      onChange={(e) => setTempAvailableStatus(e.target.value)}
+                      className="rounded-lg border border-violet-300 bg-white px-2 py-1.5 text-sm font-medium text-slate-700"
+                    >
+                      <option value="">None</option>
+                      <option value="Active">Active</option>
+                      <option value="Available">Available</option>
+                      <option value="Viewer">Viewer</option>
+                    </select>
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-semibold text-fuchsia-700">Demand</label>
+                    <select
+                      value={tempDemandStatus}
+                      onChange={(e) => setTempDemandStatus(e.target.value)}
+                      className="rounded-lg border border-fuchsia-300 bg-white px-2 py-1.5 text-sm font-medium text-slate-700"
+                    >
+                      <option value="">None</option>
+                      <option value="Busy">Busy</option>
+                      <option value="Active">Active</option>
+                      <option value="Inactive">Inactive</option>
+                    </select>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={handleStatusSave}
+                      disabled={updatingStatus}
+                      className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-50"
+                    >
+                      {updatingStatus ? 'Saving...' : 'Save'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditingStatus(false);
+                        setTempAvailableStatus(profile?.supply_status ? profile.supply_status.split(',')[0].trim() : '');
+                        setTempDemandStatus(profile?.demand_status ? profile.demand_status.split(',')[0].trim() : '');
+                      }}
+                      className="rounded-lg bg-slate-400 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-slate-500"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="rounded-full border border-violet-400 bg-violet-600 px-3 py-1 text-xs font-semibold text-white shadow-sm">
+                    Available: {currentAvailableStatus}
+                  </span>
+                  <span className="rounded-full border border-fuchsia-400 bg-fuchsia-600 px-3 py-1 text-xs font-semibold text-white shadow-sm">
+                    Demand: {currentDemandStatus}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setEditingStatus(true)}
+                    className="rounded-lg border border-slate-300 bg-white px-3 py-1 text-xs font-semibold text-slate-700 transition hover:bg-slate-100"
+                  >
+                    Edit
+                  </button>
+                </div>
+              )
+            ) : (
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="rounded-full border border-violet-400 bg-violet-600 px-3 py-1 text-xs font-semibold text-white shadow-sm">
+                  Available: {currentAvailableStatus}
+                </span>
+                <span className="rounded-full border border-fuchsia-400 bg-fuchsia-600 px-3 py-1 text-xs font-semibold text-white shadow-sm">
+                  Demand: {currentDemandStatus}
+                </span>
+              </div>
+            )}
           </div>
         </div>
 

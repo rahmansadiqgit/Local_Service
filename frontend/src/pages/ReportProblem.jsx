@@ -1,7 +1,18 @@
+import { useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useState } from 'react'
 import api from '../api/client'
+import useAuth from '../context/useAuth'
 
 export default function ReportProblem() {
+  const navigate = useNavigate()
+  const { user } = useAuth()
+
+  useEffect(() => {
+    if (!user) {
+      navigate('/login')
+    }
+  }, [user, navigate])
   const [form, setForm] = useState({
     subject: '',
     details: '',
