@@ -1,6 +1,7 @@
 from io import BytesIO
 import textwrap
 import logging
+from urllib.parse import urlencode
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.tokens import default_token_generator
@@ -1236,7 +1237,7 @@ class ERPViewSet(viewsets.ModelViewSet):
                     title="👷‍♂️ Team Member Added",
                     message=(
                         f'You are assigned [{member_name}]({member_link}) him to your "{post_title}" as a {role_label} provider. '
-                        f"Post link: /erp?erp_id={erp.id}"
+                        f"Post link: /erp?erp_id={erp.id}&members_role={role}&member_id={int(member.id)}"
                     ),
                 )
             )
@@ -1248,7 +1249,7 @@ class ERPViewSet(viewsets.ModelViewSet):
                     message=(
                         f'You are assigned to "{post_title}" as {role_label} provider by '
                         f'[{assigner_name}]({assigner_link}). '
-                        f"Post link: /erp?erp_id={erp.id}"
+                        f"Post link: /erp?erp_id={erp.id}&members_role={role}&member_id={int(member.id)}"
                     ),
                 )
             )
@@ -1260,7 +1261,78 @@ class ERPViewSet(viewsets.ModelViewSet):
                         title="👷‍♂️ Team Member Added",
                         message=(
                             f'[{member_name}]({member_link}) has been assigned to your booking "{post_title}" as a {role_label} provider. '
-                            f"Post link: /erp?erp_id={erp.id}"
+                            f"Post link: /erp?erp_id={erp.id}&members_role={role}&member_id={int(member.id)}"
+                        ),
+                    )
+                )
+
+        if notifications:
+            Notification.objects.bulk_create(notifications)
+
+    def _notify_manual_member_removals(self, erp, role, removed_ids, remover=None):
+        provider = getattr(erp, "provider", None)
+        receiver = getattr(erp, "receiver", None)
+        remover = remover or provider
+        if not provider or not removed_ids:
+            return
+
+        role_labels = {
+            "expertise": "Expertise",
+            "skill_provider": "Service",
+            "supplier": "Delivery",
+        }
+        role_label = role_labels.get(role, role.replace("_", " ").title())
+        post_title = (
+            self._as_dict(getattr(erp, "configuration_snapshot", None)).get("post", {}).get("title")
+            or getattr(erp.post, "post_title", "")
+            or getattr(erp.post, "post_name", "")
+            or f"Booking #{erp.id}"
+        )
+        remover_name = (
+            getattr(remover, "name", "")
+            or getattr(remover, "username", "")
+            or "Provider"
+        )
+        remover_link = f"/dashboard/{remover.id}" if getattr(remover, "id", None) else "/dashboard"
+
+        members = User.objects.filter(id__in=list(removed_ids))
+        notifications = []
+        for member in members:
+            member_name = member.name or member.username or member.email or f"User #{member.id}"
+            member_link = f"/dashboard/{member.id}"
+            focus_link = f"/erp?erp_id={erp.id}&members_role={role}&member_id={int(member.id)}"
+
+            notifications.append(
+                Notification(
+                    user=provider,
+                    title="🗑️ Team Member Removed",
+                    message=(
+                        f'You removed [{member_name}]({member_link}) from "{post_title}" ({role_label}). '
+                        f"Post link: {focus_link}"
+                    ),
+                )
+            )
+
+            notifications.append(
+                Notification(
+                    user=member,
+                    title="🗑️ You Were Removed From Task",
+                    message=(
+                        f'You were removed from "{post_title}" ({role_label}) by '
+                        f'[{remover_name}]({remover_link}). '
+                        f"Post link: {focus_link}"
+                    ),
+                )
+            )
+
+            if receiver and int(receiver.id) != int(provider.id) and int(receiver.id) != int(member.id):
+                notifications.append(
+                    Notification(
+                        user=receiver,
+                        title="🗑️ Team Member Removed",
+                        message=(
+                            f'[{member_name}]({member_link}) was removed from your booking "{post_title}" ({role_label}). '
+                            f"Post link: {focus_link}"
                         ),
                     )
                 )
@@ -1327,6 +1399,74 @@ class ERPViewSet(viewsets.ModelViewSet):
 
         visible_ids = []
         for item in merged_queryset.select_related("post"):
+            snapshot = self._as_dict(item.configuration_snapshot)
+            members = self._as_dict(snapshot.get("members"))
+            open_self_assign_visible = False
+
+            for role in self._allowed_member_roles():
+                for role_bucket in self._iter_role_buckets(members, role):
+                    if not bool(role_bucket.get("self_assign_enabled", False)):
+                        continue
+
+                    rejected_ids = set()
+                    for raw_id in role_bucket.get("self_assign_rejected_ids") or []:
+                        try:
+                            rejected_ids.add(int(raw_id))
+                        except (TypeError, ValueError):
+                            continue
+                    if int(user.id) in rejected_ids:
+                        continue
+
+                    scoped_entries = role_bucket.get("self_assign_scope") or []
+                    if isinstance(scoped_entries, list) and scoped_entries:
+                        for scope_entry in scoped_entries:
+                            if not isinstance(scope_entry, dict):
+                                continue
+                            scope_targets = set()
+                            for raw_id in scope_entry.get("target_ids") or []:
+                                try:
+                                    scope_targets.add(int(raw_id))
+                                except (TypeError, ValueError):
+                                    continue
+                            if int(user.id) not in scope_targets:
+                                continue
+
+                            scope_rejected_ids = set()
+                            for raw_id in scope_entry.get("rejected_ids") or []:
+                                try:
+                                    scope_rejected_ids.add(int(raw_id))
+                                except (TypeError, ValueError):
+                                    continue
+                            if int(user.id) in scope_rejected_ids:
+                                continue
+
+                            open_self_assign_visible = True
+                            break
+                    else:
+                        raw_targets = role_bucket.get("self_assign_target_ids", None)
+                        target_ids = set()
+                        for raw_id in (raw_targets or []):
+                            try:
+                                target_ids.add(int(raw_id))
+                            except (TypeError, ValueError):
+                                continue
+
+                        if raw_targets is None and not target_ids and item.provider:
+                            target_ids = self._get_accepted_connection_member_ids(item.provider, role=role)
+
+                        if int(user.id) in target_ids:
+                            open_self_assign_visible = True
+
+                    if open_self_assign_visible:
+                        break
+
+                if open_self_assign_visible:
+                    break
+
+            if open_self_assign_visible:
+                visible_ids.append(int(item.id))
+                continue
+
             # Demand applications stay visible to the demand post owner for review.
             # Keep them visible for the applicant too so opening /erp?erp_id=<id>
             # right after submit shows the exact card they just created.
@@ -1611,6 +1751,50 @@ class ERPViewSet(viewsets.ModelViewSet):
             except (TypeError, ValueError):
                 continue
 
+        normalized_scope = []
+        raw_scope = role_bucket.get("self_assign_scope") or []
+        if isinstance(raw_scope, list):
+            for entry in raw_scope:
+                if not isinstance(entry, dict):
+                    continue
+                responsibility_id = str(entry.get("responsibility_id") or "").strip()
+                if not responsibility_id:
+                    continue
+
+                target_list = []
+                for raw_target in entry.get("target_ids") or []:
+                    try:
+                        parsed_target = int(raw_target)
+                    except (TypeError, ValueError):
+                        continue
+                    if parsed_target > 0:
+                        target_list.append(parsed_target)
+
+                normalized_scope.append(
+                    {
+                        "responsibility_id": responsibility_id,
+                        "responsibility_name": str(entry.get("responsibility_name") or "").strip(),
+                        "target_ids": sorted(list(set(target_list))),
+                        "rejected_ids": sorted(
+                            [
+                                parsed_target
+                                for raw_target in entry.get("rejected_ids") or []
+                                for parsed_target in [self._to_int(raw_target, default=0)]
+                                if parsed_target > 0
+                            ]
+                        ),
+                    }
+                )
+
+        rejected_ids = []
+        for raw_id in role_bucket.get("self_assign_rejected_ids") or []:
+            try:
+                parsed_id = int(raw_id)
+            except (TypeError, ValueError):
+                continue
+            if parsed_id > 0:
+                rejected_ids.append(parsed_id)
+
         post_id_value = role_bucket.get("self_assign_post_id")
         try:
             post_id_value = int(post_id_value) if post_id_value is not None else None
@@ -1626,6 +1810,8 @@ class ERPViewSet(viewsets.ModelViewSet):
             "self_assign_post_title": str(role_bucket.get("self_assign_post_title", "") or "").strip(),
             "self_assign_post_id": post_id_value,
             "self_assign_target_ids": sorted(list(set(target_ids))),
+            "self_assign_rejected_ids": sorted(list(set(rejected_ids))),
+            "self_assign_scope": normalized_scope,
             "self_assign_published_at": role_bucket.get("self_assign_published_at"),
         }
         members[role] = role_bucket
@@ -1686,6 +1872,102 @@ class ERPViewSet(viewsets.ModelViewSet):
             people = max(self._to_int(row.get("offered_people", row.get("quantity", 0))), 0)
             total += people
         return total
+
+    def _list_responsibilities_for_role(self, snapshot, role):
+        data = self._as_dict(snapshot)
+
+        if role == "expertise":
+            responsibilities = []
+            for row in data.get("expertise") or []:
+                if not isinstance(row, dict) or row.get("included") is False:
+                    continue
+                row_id = self._to_int(row.get("id"), default=0)
+                required_people = max(self._to_int(row.get("offered_people", row.get("quantity", 0))), 0)
+                if row_id <= 0 or required_people <= 0:
+                    continue
+                responsibilities.append(
+                    {
+                        "id": str(row_id),
+                        "name": str(row.get("name") or f"Expertise #{row_id}").strip(),
+                    }
+                )
+            return responsibilities
+
+        if role == "skill_provider":
+            responsibilities = []
+            for index, row in enumerate(data.get("services") or []):
+                if not isinstance(row, dict) or row.get("included") is False:
+                    continue
+                service_name = str(row.get("name") or row.get("service_name") or "").strip()
+                if not service_name:
+                    continue
+                row_id = self._to_int(row.get("id"), default=0)
+                identifier = f"service:{row_id}" if row_id > 0 else f"service:index:{index}"
+                responsibilities.append(
+                    {
+                        "id": str(identifier),
+                        "name": service_name,
+                    }
+                )
+            return responsibilities
+
+        return []
+
+    def _parse_selected_self_assign_scope(self, role, snapshot, raw_scope, allowed_target_ids):
+        if role not in {"expertise", "skill_provider"}:
+            return [], []
+
+        responsibilities = self._list_responsibilities_for_role(snapshot, role)
+        valid_ids = {entry["id"] for entry in responsibilities}
+        name_by_id = {entry["id"]: entry["name"] for entry in responsibilities}
+        allowed_target_set = {int(uid) for uid in (allowed_target_ids or [])}
+
+        if not isinstance(raw_scope, list):
+            raw_scope = []
+
+        parsed_scope = []
+        for entry in raw_scope:
+            if not isinstance(entry, dict):
+                continue
+            responsibility_id = str(entry.get("responsibility_id") or "").strip()
+            if not responsibility_id or responsibility_id not in valid_ids:
+                continue
+
+            target_ids = []
+            for raw_id in entry.get("target_ids") or []:
+                try:
+                    parsed_id = int(raw_id)
+                except (TypeError, ValueError):
+                    continue
+                if parsed_id > 0 and parsed_id in allowed_target_set:
+                    target_ids.append(parsed_id)
+
+            parsed_scope.append(
+                {
+                    "responsibility_id": responsibility_id,
+                    "responsibility_name": str(entry.get("responsibility_name") or name_by_id.get(responsibility_id) or "").strip(),
+                    "target_ids": sorted(list(set(target_ids))),
+                }
+            )
+
+        deduped_scope = []
+        seen_responsibility_ids = set()
+        for item in parsed_scope:
+            rid = item["responsibility_id"]
+            if rid in seen_responsibility_ids:
+                continue
+            seen_responsibility_ids.add(rid)
+            deduped_scope.append(item)
+
+        union_target_ids = sorted(
+            {
+                int(uid)
+                for item in deduped_scope
+                for uid in (item.get("target_ids") or [])
+                if int(uid) > 0
+            }
+        )
+        return deduped_scope, union_target_ids
 
     def _validate_assignments_before_on_process(self, erp):
         snapshot = self._as_dict(getattr(erp, "configuration_snapshot", None))
@@ -1946,6 +2228,10 @@ class ERPViewSet(viewsets.ModelViewSet):
         if added_ids:
             self._notify_manual_member_additions(erp, role, added_ids, assigner=request.user)
 
+        removed_ids = existing.difference(updated)
+        if removed_ids:
+            self._notify_manual_member_removals(erp, role, removed_ids, remover=request.user)
+
         return Response(self.get_serializer(erp).data)
 
     @action(detail=True, methods=["post"])
@@ -1974,6 +2260,34 @@ class ERPViewSet(viewsets.ModelViewSet):
         )
         target_ids = sorted(list(self._get_accepted_connection_member_ids(request.user, role=role)))
 
+        selected_scope = []
+        if role in {"expertise", "skill_provider"}:
+            parsed_scope, scoped_target_ids = self._parse_selected_self_assign_scope(
+                role=role,
+                snapshot=erp.configuration_snapshot,
+                raw_scope=request.data.get("selected_responsibilities", []),
+                allowed_target_ids=target_ids,
+            )
+
+            if not parsed_scope:
+                return Response(
+                    {
+                        "detail": "Select at least one responsibility and one target connection member before publishing.",
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            selected_scope = parsed_scope
+            target_ids = scoped_target_ids
+
+            if not target_ids:
+                return Response(
+                    {
+                        "detail": "Select at least one responsibility and one target connection member before publishing.",
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
         snapshot, members, role_bucket = self._get_member_bucket(erp, role)
         role_bucket["self_assign_enabled"] = True
         role_bucket["self_assign_message"] = custom_message
@@ -1981,6 +2295,8 @@ class ERPViewSet(viewsets.ModelViewSet):
         role_bucket["self_assign_post_title"] = str(post_title)
         role_bucket["self_assign_post_id"] = int(erp.post_id) if erp.post_id else None
         role_bucket["self_assign_target_ids"] = target_ids
+        role_bucket["self_assign_rejected_ids"] = []
+        role_bucket["self_assign_scope"] = selected_scope
         role_bucket["self_assign_published_at"] = timezone.now().isoformat()
         members[role] = role_bucket
         snapshot["members"] = members
@@ -1989,26 +2305,74 @@ class ERPViewSet(viewsets.ModelViewSet):
         receivers = User.objects.filter(id__in=list(target_ids)).exclude(id=request.user.id)
         provider_name = request.user.name or request.user.username or request.user.email or "Provider"
         is_demand_post = str(getattr(getattr(erp, "post", None), "post_type", "") or "").strip().lower() == "demand"
-        if is_demand_post:
-            body = (
-                f'{provider_name} is looking for someone to fill the {role_title} role on "{post_title}". '
-                "Visit your Connections to apply. "
-                "Post link: /connections"
-            )
-        else:
-            body = f"ERP #{erp.id} is open for self-assignment as {role_title} for post '{post_title}'."
-            if custom_message:
-                body = f"{body} Message: {custom_message}"
-            body = f"{body} Post link: {post_link}"
+        notifications = []
+        notification_entries = []
 
-        notifications = [
-            Notification(
-                user=target,
-                title=f"🧩 Open Role Available: {role_title}" if is_demand_post else f"🧩 ERP Self-Assign Open: {role_title}",
-                message=body,
+        if selected_scope:
+            for scope_entry in selected_scope:
+                responsibility_id = str(scope_entry.get("responsibility_id") or "").strip()
+                responsibility_name = str(scope_entry.get("responsibility_name") or "").strip() or role_title
+                for raw_target_id in scope_entry.get("target_ids") or []:
+                    try:
+                        parsed_target_id = int(raw_target_id)
+                    except (TypeError, ValueError):
+                        continue
+                    if parsed_target_id <= 0 or parsed_target_id == request.user.id:
+                        continue
+                    notification_entries.append(
+                        {
+                            "target_id": parsed_target_id,
+                            "responsibility_id": responsibility_id,
+                            "responsibility_name": responsibility_name,
+                        }
+                    )
+        else:
+            for target in receivers:
+                notification_entries.append(
+                    {
+                        "target_id": int(target.id),
+                        "responsibility_id": "",
+                        "responsibility_name": role_title,
+                    }
+                )
+
+        for entry in notification_entries:
+            query = {
+                "section": "self_assign",
+                "erp_id": erp.id,
+                "role": role,
+            }
+            if entry["responsibility_id"]:
+                query["responsibility_id"] = entry["responsibility_id"]
+
+            details_link = f"/connections?{urlencode(query)}"
+            responsibility_text = entry["responsibility_name"]
+
+            if is_demand_post:
+                body = (
+                    f'{provider_name} is looking for someone to fill the {role_title} role on "{post_title}". '
+                    f'You are requested to assign for the posted specific responsibility: {responsibility_text}. '
+                    f'[Click here to see details]({details_link})'
+                )
+                title = f"🧩 Open Role Available: {role_title}"
+            else:
+                body = (
+                    f'You are requested to assign for the posted specific responsibility: {responsibility_text} on "{post_title}". '
+                    f'Provider: {provider_name}. '
+                    f'[Click here to see details]({details_link})'
+                )
+                if custom_message:
+                    body = f"{body} Message: {custom_message}"
+                title = f"🧩 ERP Self-Assign Open: {role_title}"
+
+            notifications.append(
+                Notification(
+                    user=User.objects.filter(id=entry["target_id"]).first(),
+                    title=title,
+                    message=body,
+                )
             )
-            for target in receivers
-        ]
+        notifications = [item for item in notifications if item.user]
         if notifications:
             Notification.objects.bulk_create(notifications)
 
@@ -2032,6 +2396,8 @@ class ERPViewSet(viewsets.ModelViewSet):
         role_bucket["self_assign_post_title"] = ""
         role_bucket["self_assign_post_id"] = None
         role_bucket["self_assign_target_ids"] = []
+        role_bucket["self_assign_rejected_ids"] = []
+        role_bucket["self_assign_scope"] = []
         role_bucket["self_assign_published_at"] = None
         members[role] = role_bucket
         snapshot["members"] = members
@@ -2053,27 +2419,104 @@ class ERPViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        raw_targets = role_bucket.get("self_assign_target_ids", None)
-        allowed_member_ids = set(raw_targets or [])
-        if raw_targets is None and not allowed_member_ids and erp.provider:
-            # Backward compatibility for old records published before role target IDs were saved.
-            allowed_member_ids = self._get_accepted_connection_member_ids(erp.provider, role=role)
+        requested_responsibility_id = str(request.data.get("responsibility_id", "") or "").strip()
+        scoped_entries = role_bucket.get("self_assign_scope") or []
+
+        allowed_member_ids = set()
+        selected_scope_entry = None
+        if isinstance(scoped_entries, list) and scoped_entries:
+            normalized_scope = []
+            for item in scoped_entries:
+                if not isinstance(item, dict):
+                    continue
+                scope_id = str(item.get("responsibility_id") or "").strip()
+                if not scope_id:
+                    continue
+                scope_targets = set()
+                for raw_target in item.get("target_ids") or []:
+                    try:
+                        parsed_target = int(raw_target)
+                    except (TypeError, ValueError):
+                        continue
+                    if parsed_target > 0:
+                        scope_targets.add(parsed_target)
+                normalized_scope.append(
+                    {
+                        "responsibility_id": scope_id,
+                        "target_ids": sorted(list(scope_targets)),
+                        "rejected_ids": [
+                            parsed_target
+                            for raw_target in item.get("rejected_ids") or []
+                            for parsed_target in [self._to_int(raw_target, default=0)]
+                            if parsed_target > 0
+                        ],
+                    }
+                )
+
+            if normalized_scope:
+                if requested_responsibility_id:
+                    selected_scope_entry = next(
+                        (entry for entry in normalized_scope if entry["responsibility_id"] == requested_responsibility_id),
+                        None,
+                    )
+                elif len(normalized_scope) == 1:
+                    selected_scope_entry = normalized_scope[0]
+
+                if selected_scope_entry:
+                    allowed_member_ids = set(selected_scope_entry["target_ids"])
+                else:
+                    for entry in normalized_scope:
+                        allowed_member_ids.update(entry["target_ids"])
+        else:
+            raw_targets = role_bucket.get("self_assign_target_ids", None)
+            allowed_member_ids = set(raw_targets or [])
+            if raw_targets is None and not allowed_member_ids and erp.provider:
+                # Backward compatibility for old records published before role target IDs were saved.
+                allowed_member_ids = self._get_accepted_connection_member_ids(erp.provider, role=role)
 
         if request.user.id not in allowed_member_ids:
             raise PermissionDenied("Only connection members can self-assign to this ERP role.")
 
-        assign = request.data.get("assign", True)
-        should_assign = bool(assign)
+        assign = self._to_bool(request.data.get("assign", True))
+        reject = self._to_bool(request.data.get("reject", False))
+        if reject and assign:
+            return Response({"detail": "Reject requests must not also assign the user."}, status=status.HTTP_400_BAD_REQUEST)
+        should_assign = assign and not reject
+
+        if selected_scope_entry is not None:
+            rejected_ids = set()
+            for raw_id in selected_scope_entry.get("rejected_ids") or []:
+                try:
+                    rejected_ids.add(int(raw_id))
+                except (TypeError, ValueError):
+                    continue
+        else:
+            rejected_ids = set()
+            for raw_id in role_bucket.get("self_assign_rejected_ids") or []:
+                try:
+                    rejected_ids.add(int(raw_id))
+                except (TypeError, ValueError):
+                    continue
 
 
         ids = set(role_bucket.get("assignee_ids") or [])
         existing = set(ids)
+
+        if should_assign and int(request.user.id) in rejected_ids:
+            return Response(
+                {"detail": "You already rejected this self-assign post. Ask the provider to republish it if needed."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         if role == "expertise":
             expertise_assignments = self._as_dict(role_bucket.get("expertise_assignments"))
             expertise_rows = [
                 row for row in (self._as_dict(snapshot).get("expertise") or [])
                 if isinstance(row, dict) and row.get("included") is not False
             ]
+            selected_row_id = self._to_int(requested_responsibility_id, default=0)
+            if selected_scope_entry and selected_row_id <= 0:
+                selected_row_id = self._to_int(selected_scope_entry.get("responsibility_id"), default=0)
 
             if should_assign:
                 already_assigned = False
@@ -2089,6 +2532,8 @@ class ERPViewSet(viewsets.ModelViewSet):
                 if not already_assigned:
                     for row in expertise_rows:
                         row_id = self._to_int(row.get("id"), default=0)
+                        if selected_row_id > 0 and row_id != selected_row_id:
+                            continue
                         required_people = max(self._to_int(row.get("offered_people", row.get("quantity", 0))), 0)
                         if row_id <= 0 or required_people <= 0:
                             continue
@@ -2100,6 +2545,8 @@ class ERPViewSet(viewsets.ModelViewSet):
             else:
                 for row in expertise_rows:
                     row_id = self._to_int(row.get("id"), default=0)
+                    if selected_row_id > 0 and row_id != selected_row_id:
+                        continue
                     if row_id <= 0:
                         continue
                     assigned_ids = set(int(uid) for uid in expertise_assignments.get(str(row_id), []) if str(uid).isdigit())
@@ -2130,6 +2577,17 @@ class ERPViewSet(viewsets.ModelViewSet):
                 ids.discard(request.user.id)
 
         role_bucket["assignee_ids"] = sorted(list(ids))
+        if selected_scope_entry is not None:
+            if reject:
+                rejected_ids.add(int(request.user.id))
+            else:
+                rejected_ids.discard(int(request.user.id))
+            selected_scope_entry["rejected_ids"] = sorted(list(rejected_ids))
+            role_bucket["self_assign_scope"] = normalized_scope
+        else:
+            if reject:
+                rejected_ids.add(int(request.user.id))
+            role_bucket["self_assign_rejected_ids"] = sorted(list(rejected_ids))
         members[role] = role_bucket
         snapshot["members"] = members
         self._save_snapshot(erp, snapshot)
@@ -2155,9 +2613,36 @@ class ERPViewSet(viewsets.ModelViewSet):
                 "New Team Member Joined",
                 (
                     f'{actor_name} joined your booking "{post_title}" via the open assignment. '
-                    f"Post link: /erp?erp_id={erp.id}"
+                    f"Post link: /erp?erp_id={erp.id}&members_role={role}&member_id={int(request.user.id)}"
                 ),
             )
+        elif reject:
+            self._notify_provider_member_activity(
+                erp,
+                request.user,
+                "Team Member Rejected Assignment",
+                (
+                    f'{actor_name} rejected the assignment request for "{post_title}". '
+                    "You can assign someone else or republish this request. "
+                    f"Post link: /erp?erp_id={erp.id}&members_role={role}&member_id={int(request.user.id)}"
+                ),
+            )
+            try:
+                provider_name = (
+                    getattr(getattr(erp, "provider", None), "name", "")
+                    or getattr(getattr(erp, "provider", None), "username", "")
+                    or "Provider"
+                )
+                Notification.objects.create(
+                    user=request.user,
+                    title="You Rejected Assignment",
+                    message=(
+                        f'You rejected the assignment request for "{post_title}" from {provider_name}. '
+                        f"Post link: /erp?erp_id={erp.id}&members_role={role}&member_id={int(request.user.id)}"
+                    ),
+                )
+            except Exception:
+                logger.exception("Failed to create self-assign reject notification for user %s on ERP %s", getattr(request.user, "id", None), getattr(erp, "id", None))
         else:
             self._notify_provider_member_activity(
                 erp,
@@ -2166,7 +2651,7 @@ class ERPViewSet(viewsets.ModelViewSet):
                 (
                     f'{actor_name} has left the booking "{post_title}". '
                     "You may want to assign a replacement. "
-                    f"Post link: /erp?erp_id={erp.id}"
+                    f"Post link: /erp?erp_id={erp.id}&members_role={role}&member_id={int(request.user.id)}"
                 ),
             )
 
@@ -2248,6 +2733,40 @@ class ERPViewSet(viewsets.ModelViewSet):
                     changed = True
                 role_bucket["self_assign_target_ids"] = sorted(list(set(clean_targets)))
 
+            existing_scope = role_bucket.get("self_assign_scope")
+            if isinstance(existing_scope, list):
+                cleaned_scope = []
+                scope_changed = False
+                for entry in existing_scope:
+                    if not isinstance(entry, dict):
+                        scope_changed = True
+                        continue
+
+                    raw_targets = entry.get("target_ids") or []
+                    next_targets = []
+                    for raw_target in raw_targets:
+                        try:
+                            parsed_target = int(raw_target)
+                        except (TypeError, ValueError):
+                            scope_changed = True
+                            continue
+                        if parsed_target > 0 and parsed_target != user_id:
+                            next_targets.append(parsed_target)
+                        elif parsed_target == user_id:
+                            scope_changed = True
+
+                    cleaned_scope.append(
+                        {
+                            "responsibility_id": str(entry.get("responsibility_id") or "").strip(),
+                            "responsibility_name": str(entry.get("responsibility_name") or "").strip(),
+                            "target_ids": sorted(list(set(next_targets))),
+                        }
+                    )
+
+                if scope_changed:
+                    changed = True
+                role_bucket["self_assign_scope"] = cleaned_scope
+
             members[role_key] = role_bucket
 
         # Backward compatibility: some records may still track member assignment here.
@@ -2273,6 +2792,28 @@ class ERPViewSet(viewsets.ModelViewSet):
             or f"ERP #{erp.id}"
         )
         left_roles_text = ", ".join(sorted(set(left_roles))) if left_roles else "assigned roles"
+
+        def normalize_member_role(value):
+            role_value = str(value or "").strip().lower()
+            if role_value in {"expertise"}:
+                return "expertise"
+            if role_value in {"skill_provider", "service_provider"}:
+                return "skill_provider"
+            if role_value in {"supplier", "delivery_man", "delivary_man", "delivery"}:
+                return "supplier"
+            return ""
+
+        focus_role = ""
+        for raw_role in left_roles:
+            parsed = normalize_member_role(raw_role)
+            if parsed:
+                focus_role = parsed
+                break
+
+        focus_link = f"/erp?erp_id={erp.id}"
+        if focus_role:
+            focus_link = f"{focus_link}&members_role={focus_role}&member_id={int(request.user.id)}"
+
         self._notify_provider_member_activity(
             erp,
             request.user,
@@ -2280,9 +2821,36 @@ class ERPViewSet(viewsets.ModelViewSet):
             (
                 f'{actor_name} has left the booking "{post_title}". '
                 "You may want to assign a replacement. "
-                f"Post link: /erp?erp_id={erp.id}"
+                f"Post link: {focus_link}"
             ),
         )
+
+        receiver = getattr(erp, "receiver", None)
+        provider = getattr(erp, "provider", None)
+        if receiver and provider and int(receiver.id) not in {int(provider.id), int(request.user.id)}:
+            try:
+                Notification.objects.create(
+                    user=receiver,
+                    title="Team Member Left",
+                    message=(
+                        f'{actor_name} left your booking "{post_title}" from {left_roles_text}. '
+                        f"Post link: {focus_link}"
+                    ),
+                )
+            except Exception:
+                logger.exception("Failed to create receiver leave notification for ERP %s", getattr(erp, "id", None))
+
+        try:
+            Notification.objects.create(
+                user=request.user,
+                title="You Left Task",
+                message=(
+                    f'You left "{post_title}" from {left_roles_text}. '
+                    f"Post link: {focus_link}"
+                ),
+            )
+        except Exception:
+            logger.exception("Failed to create self leave notification for user %s on ERP %s", getattr(request.user, "id", None), getattr(erp, "id", None))
 
         return Response(self.get_serializer(erp).data)
 
