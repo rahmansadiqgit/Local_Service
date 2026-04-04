@@ -9,9 +9,9 @@ export default function ERPHeader() {
             className="text-xl font-extrabold tracking-tight text-violet-900 sm:text-3xl"
             style={{ fontFamily: "'Sora', 'Trebuchet MS', sans-serif" }}
           >
-            ERP Management
+            Process Tracker
           </h2>
-          <p className="mt-0.5 text-xs text-violet-800/80 sm:text-sm">Monitor and manage ERP tasks.</p>
+          <p className="mt-0.5 text-xs text-violet-800/80 sm:text-sm">Monitor and manage your tasks.</p>
         </div>
         <img
           src="/images/erp.png"
