@@ -363,16 +363,69 @@ export default function ERPTaskCard({
     : []
   const visibleMembers = isProvider ? providerMembersWithSelfFirst : assignedMembersForSelectedRole
 
-  const getResponsibilityItemsByRole = (roleKey) => {
+  const getResponsibilityItemsByRole = (roleKey, options = {}) => {
+    const scopedUserId = Number(options?.forUserId)
+    const hasScopedUser = Number.isFinite(scopedUserId) && scopedUserId > 0
+
     if (roleKey === 'expertise') {
+      const roleState = getRoleState('expertise')
+      const expertiseAssignments =
+        roleState && typeof roleState.expertise_assignments === 'object'
+          ? roleState.expertise_assignments
+          : {}
+
       return snapshotExpertise
-        .map((item) => String(item?.name || '').trim())
+        .map((item) => {
+          const rowId = Number(item?.id)
+          const name = String(item?.name || '').trim()
+          if (!name) return ''
+
+          if (!hasScopedUser) return name
+          if (!Number.isFinite(rowId) || rowId <= 0) return ''
+
+          const assignedIds = Array.isArray(expertiseAssignments[String(rowId)])
+            ? expertiseAssignments[String(rowId)]
+                .map((id) => Number(id))
+                .filter((id) => Number.isFinite(id) && id > 0)
+            : []
+
+          return assignedIds.includes(scopedUserId) ? name : ''
+        })
         .filter(Boolean)
     }
 
     if (roleKey === 'skill_provider') {
+      const roleState = getRoleState('skill_provider')
+      const serviceAssignments =
+        roleState && typeof roleState.service_assignments === 'object'
+          ? roleState.service_assignments
+          : {}
+      const hasServiceAssignments = Object.keys(serviceAssignments).length > 0
+      const globalAssignees = Array.isArray(roleState?.assignee_ids)
+        ? roleState.assignee_ids.map((id) => Number(id)).filter((id) => Number.isFinite(id) && id > 0)
+        : []
+
       return snapshotServices
-        .map((item) => String(item?.name || '').trim())
+        .map((item, index) => {
+          const name = String(item?.name || '').trim()
+          if (!name) return ''
+
+          if (!hasScopedUser) return name
+
+          const rowId = Number(item?.id)
+          const responsibilityId = Number.isFinite(rowId) && rowId > 0
+            ? `service:${rowId}`
+            : `service:index:${index}`
+          const assignedIds = Array.isArray(serviceAssignments[responsibilityId])
+            ? serviceAssignments[responsibilityId]
+                .map((id) => Number(id))
+                .filter((id) => Number.isFinite(id) && id > 0)
+            : []
+
+          if (assignedIds.includes(scopedUserId)) return name
+          if (!hasServiceAssignments && globalAssignees.includes(scopedUserId)) return name
+          return ''
+        })
         .filter(Boolean)
     }
 
@@ -385,9 +438,9 @@ export default function ERPTaskCard({
     return []
   }
 
-  const getResponsibilityTextByRole = (roleKey) => {
+  const getResponsibilityTextByRole = (roleKey, options = {}) => {
     if (!roleKey) return ''
-    const items = Array.from(new Set(getResponsibilityItemsByRole(roleKey)))
+    const items = Array.from(new Set(getResponsibilityItemsByRole(roleKey, options)))
     if (!items.length) return 'Specific task details are not listed yet.'
 
     const joined = items.join(', ')
@@ -431,7 +484,9 @@ export default function ERPTaskCard({
     return []
   }
 
-  const selectedRoleResponsibilityText = getResponsibilityTextByRole(selectedMemberRole)
+  const selectedRoleResponsibilityText = getResponsibilityTextByRole(selectedMemberRole, {
+    forUserId: isProvider ? null : currentUserId,
+  })
   const selectedRoleResponsibilityOptions = getResponsibilityOptionsByRole(selectedMemberRole)
   const providerTargetableMembers = isProvider
     ? providerAssignableMembers
@@ -539,6 +594,11 @@ export default function ERPTaskCard({
     selectedMemberRole === 'expertise' && selectedRoleState && typeof selectedRoleState.expertise_assignments === 'object'
       ? selectedRoleState.expertise_assignments
       : {}
+  const skillProviderAssignmentsByResponsibility =
+    selectedMemberRole === 'skill_provider' && selectedRoleState && typeof selectedRoleState.service_assignments === 'object'
+      ? selectedRoleState.service_assignments
+      : {}
+  const hasSkillProviderScopedAssignments = Object.keys(skillProviderAssignmentsByResponsibility).length > 0
   const expertiseRowsForAssignment =
     selectedMemberRole === 'expertise'
       ? snapshotExpertise
@@ -560,6 +620,30 @@ export default function ERPTaskCard({
               rowId,
               name: String(row?.name || `Expertise ${index + 1}`),
               required,
+              assignedIds,
+            }
+          })
+          .filter(Boolean)
+      : []
+  const skillProviderRowsForAssignment =
+    selectedMemberRole === 'skill_provider'
+      ? selectedRoleResponsibilityOptions
+          .map((item) => {
+            const responsibilityId = String(item?.id || '').trim()
+            if (!responsibilityId) return null
+            const assignedRaw = Array.isArray(skillProviderAssignmentsByResponsibility[responsibilityId])
+              ? skillProviderAssignmentsByResponsibility[responsibilityId]
+              : (hasSkillProviderScopedAssignments ? [] : selectedAssigneeIds)
+            const assignedIds = Array.from(
+              new Set(
+                assignedRaw
+                  .map((id) => Number(id))
+                  .filter((id) => Number.isFinite(id) && id > 0),
+              ),
+            )
+            return {
+              rowId: responsibilityId,
+              name: String(item?.label || 'Service responsibility'),
               assignedIds,
             }
           })
@@ -588,7 +672,7 @@ export default function ERPTaskCard({
         return Array.from(roleSet).map((roleKey) => ({
           roleKey,
           roleLabel: roleKeyToLabel[roleKey] || roleKey,
-          responsibilityText: getResponsibilityTextByRole(roleKey),
+          responsibilityText: getResponsibilityTextByRole(roleKey, { forUserId: currentUserNumericId }),
         }))
       })()
     : []
@@ -884,8 +968,48 @@ export default function ERPTaskCard({
     if (isProvider || !selectedMemberRole || selectedMemberRole !== 'skill_provider' || !hasServicesCategory) {
       return selectedServicesForTable
     }
-    // Services + skill_provider will be added if backend supports per-row assignment tracking for services
-    return selectedServicesForTable
+
+    const roleState = getRoleState('skill_provider')
+    const serviceAssignments =
+      roleState && typeof roleState.service_assignments === 'object'
+        ? roleState.service_assignments
+        : {}
+    const hasServiceAssignments = Object.keys(serviceAssignments).length > 0
+    const globalAssignees = Array.isArray(roleState?.assignee_ids)
+      ? roleState.assignee_ids.map((id) => Number(id)).filter((id) => Number.isFinite(id) && id > 0)
+      : []
+    const viewerId = Number(currentUserId)
+
+    if (!Number.isFinite(viewerId) || viewerId <= 0) {
+      return []
+    }
+
+    if (!hasServiceAssignments) {
+      return globalAssignees.includes(viewerId) ? selectedServicesForTable : []
+    }
+
+    const allowedServiceNames = new Set(
+      snapshotServices
+        .map((row, index) => {
+          const serviceName = String(row?.name || row?.service_name || '').trim()
+          if (!serviceName) return ''
+          const rowId = Number(row?.id)
+          const responsibilityId = Number.isFinite(rowId) && rowId > 0
+            ? `service:${rowId}`
+            : `service:index:${index}`
+          const assignedIds = Array.isArray(serviceAssignments[responsibilityId])
+            ? serviceAssignments[responsibilityId]
+                .map((id) => Number(id))
+                .filter((id) => Number.isFinite(id) && id > 0)
+            : []
+          return assignedIds.includes(viewerId) ? serviceName : ''
+        })
+        .filter(Boolean),
+    )
+
+    return selectedServicesForTable.filter((row) =>
+      allowedServiceNames.has(String(row?.service_name || '').trim()),
+    )
   }
 
   const getMemberViewProductTableData = () => {
@@ -1953,6 +2077,63 @@ export default function ERPTaskCard({
                                     Number(user.id),
                                     event.target.checked,
                                     { expertiseId: row.rowId },
+                                  )
+                                }
+                              />
+                            ) : checked ? (
+                              <span className="text-[11px] font-semibold text-emerald-700">Assigned</span>
+                            ) : null}
+                          </label>
+                        )
+                      })
+                    ) : (
+                      <p className="text-[11px] text-slate-500">
+                        {isProvider ? 'No connections found.' : 'No assigned members yet.'}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : selectedMemberRole === 'skill_provider' && skillProviderRowsForAssignment.length > 0 ? (
+            <div className="max-h-64 space-y-2 overflow-y-auto rounded-md border border-slate-100 bg-slate-50 p-2">
+              {skillProviderRowsForAssignment.map((row) => (
+                <div key={`skill-provider-row-${erp.id}-${row.rowId}`} className="rounded-md border border-slate-200 bg-white p-2">
+                  <p className="text-[11px] font-semibold text-slate-800">{row.name}</p>
+                  <div className="mt-1 space-y-1">
+                    {(isProvider
+                      ? visibleMembers
+                      : assignedMembersForSelectedRole.filter((user) => row.assignedIds.includes(Number(user.id)))
+                    ).length ? (
+                      (isProvider
+                        ? visibleMembers
+                        : assignedMembersForSelectedRole.filter((user) => row.assignedIds.includes(Number(user.id)))
+                      ).map((user) => {
+                        const checked = row.assignedIds.includes(Number(user.id))
+                        const isCurrentUser = Number(user.id) === Number(currentUserId)
+                        return (
+                          <label
+                            key={`erp-member-${selectedMemberRole}-${row.rowId}-${user.id}`}
+                            className={`flex items-center justify-between gap-2 rounded-md px-2 py-1 ${isProvider ? 'cursor-pointer hover:bg-slate-50' : ''}`}
+                          >
+                            <span className="min-w-0">
+                              <span className="block truncate text-slate-700">
+                                {isProvider && isCurrentUser
+                                  ? 'Assign myself'
+                                  : user.name || user.username || `User #${user.id}`}
+                              </span>
+                            </span>
+                            {isProvider ? (
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={(event) =>
+                                  onUpdateMemberAssignment?.(
+                                    erp,
+                                    selectedMemberRole,
+                                    Number(user.id),
+                                    event.target.checked,
+                                    { responsibilityId: row.rowId },
                                   )
                                 }
                               />

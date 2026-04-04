@@ -1737,11 +1737,35 @@ class ERPViewSet(viewsets.ModelViewSet):
                         cleaned.append(parsed_uid)
                 expertise_assignments[str(item_id)] = sorted(list(set(cleaned)))
 
+        service_assignments = {}
+        raw_service_assignments = role_bucket.get("service_assignments") or {}
+        if isinstance(raw_service_assignments, dict):
+            for raw_item_id, raw_assignees in raw_service_assignments.items():
+                item_id = str(raw_item_id or "").strip()
+                if not item_id or not isinstance(raw_assignees, list):
+                    continue
+                cleaned = []
+                for raw_uid in raw_assignees:
+                    try:
+                        parsed_uid = int(raw_uid)
+                    except (TypeError, ValueError):
+                        continue
+                    if parsed_uid > 0:
+                        cleaned.append(parsed_uid)
+                if cleaned:
+                    service_assignments[item_id] = sorted(list(set(cleaned)))
+
         if role == "expertise" and expertise_assignments:
             expertise_union = set(assignee_ids)
             for ids in expertise_assignments.values():
                 expertise_union.update(ids)
             assignee_ids = sorted(list(expertise_union))
+
+        if role == "skill_provider" and service_assignments:
+            service_union = set(assignee_ids)
+            for ids in service_assignments.values():
+                service_union.update(ids)
+            assignee_ids = sorted(list(service_union))
 
         existing_target_ids = role_bucket.get("self_assign_target_ids") or []
         target_ids = []
@@ -1804,6 +1828,7 @@ class ERPViewSet(viewsets.ModelViewSet):
         role_bucket = {
             "assignee_ids": sorted(list(set(assignee_ids))),
             "expertise_assignments": expertise_assignments if role == "expertise" else {},
+            "service_assignments": service_assignments if role == "skill_provider" else {},
             "self_assign_enabled": bool(role_bucket.get("self_assign_enabled", False)),
             "self_assign_message": str(role_bucket.get("self_assign_message", "") or "").strip(),
             "self_assign_post_link": str(role_bucket.get("self_assign_post_link", "") or "").strip(),
@@ -1829,6 +1854,19 @@ class ERPViewSet(viewsets.ModelViewSet):
                 expertise_assignments = role_bucket.get("expertise_assignments") or {}
                 if isinstance(expertise_assignments, dict):
                     for raw_assignees in expertise_assignments.values():
+                        if not isinstance(raw_assignees, list):
+                            continue
+                        for raw_id in raw_assignees:
+                            try:
+                                parsed = int(raw_id)
+                            except (TypeError, ValueError):
+                                continue
+                            if parsed > 0:
+                                ids.add(parsed)
+            if role == "skill_provider":
+                service_assignments = role_bucket.get("service_assignments") or {}
+                if isinstance(service_assignments, dict):
+                    for raw_assignees in service_assignments.values():
                         if not isinstance(raw_assignees, list):
                             continue
                         for raw_id in raw_assignees:
@@ -1984,9 +2022,14 @@ class ERPViewSet(viewsets.ModelViewSet):
         errors = []
         expertise_bucket = self._as_dict(members.get("expertise"))
         expertise_assignments = self._as_dict(expertise_bucket.get("expertise_assignments"))
+        service_bucket = self._as_dict(members.get("skill_provider"))
+        service_assignments = self._as_dict(service_bucket.get("service_assignments"))
         expertise_rows = snapshot.get("expertise") or []
+        service_rows = snapshot.get("services") or []
         per_row_errors = []
+        per_service_errors = []
         checked_rows = 0
+        checked_service_rows = 0
 
         for row in expertise_rows:
             if not isinstance(row, dict) or row.get("included") is False:
@@ -2020,7 +2063,35 @@ class ERPViewSet(viewsets.ModelViewSet):
                 f"Expertise assignment mismatch: required exactly {required_expertise}, currently assigned {len(expertise_ids)}."
             )
 
-        if has_service_rows and len(skill_provider_ids) < 1:
+        for index, row in enumerate(service_rows):
+            if not isinstance(row, dict) or row.get("included") is False:
+                continue
+
+            service_name = str(row.get("name") or row.get("service_name") or "").strip()
+            if not service_name:
+                continue
+
+            row_id = self._to_int(row.get("id"), default=0)
+            responsibility_id = f"service:{row_id}" if row_id > 0 else f"service:index:{index}"
+            assigned_for_row = set()
+            for raw_id in service_assignments.get(responsibility_id, []) or []:
+                try:
+                    parsed = int(raw_id)
+                except (TypeError, ValueError):
+                    continue
+                if parsed > 0:
+                    assigned_for_row.add(parsed)
+
+            checked_service_rows += 1
+            if len(assigned_for_row) < 1:
+                per_service_errors.append(
+                    f'Skill provider "{service_name}": required at least 1, assigned {len(assigned_for_row)}.'
+                )
+
+        if per_service_errors:
+            errors.extend(per_service_errors)
+
+        if has_service_rows and checked_service_rows == 0 and len(skill_provider_ids) < 1:
             errors.append("At least one Service provider must be assigned.")
 
         if has_product_rows and len(supplier_ids) < 1:
@@ -2114,6 +2185,7 @@ class ERPViewSet(viewsets.ModelViewSet):
                 response[role] = {
                     "assignee_ids": [int(uid) for uid in assignee_ids if str(uid).isdigit()],
                     "expertise_assignments": role_bucket.get("expertise_assignments", {}) if role == "expertise" else {},
+                    "service_assignments": role_bucket.get("service_assignments", {}) if role == "skill_provider" else {},
                     "self_assign_enabled": bool(role_bucket.get("self_assign_enabled", False)),
                 }
             return Response(response)
@@ -2208,6 +2280,62 @@ class ERPViewSet(viewsets.ModelViewSet):
                         updated_global.add(parsed_uid)
 
             role_bucket["expertise_assignments"] = expertise_assignments
+            role_bucket["assignee_ids"] = sorted(list(updated_global))
+            updated = updated_global
+        elif role == "skill_provider" and request.data.get("responsibility_id") is not None:
+            responsibility_id = str(request.data.get("responsibility_id") or "").strip()
+            if not responsibility_id:
+                return Response(
+                    {"detail": "Valid responsibility_id is required for service assignment."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            valid_responsibility_ids = {
+                str(entry.get("id") or "").strip()
+                for entry in self._list_responsibilities_for_role(snapshot, "skill_provider")
+                if isinstance(entry, dict)
+            }
+            if responsibility_id not in valid_responsibility_ids:
+                return Response(
+                    {"detail": "Unknown service responsibility."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            service_assignments = self._as_dict(role_bucket.get("service_assignments"))
+            existing_for_item = set()
+            for raw_id in service_assignments.get(responsibility_id, []) or []:
+                try:
+                    parsed = int(raw_id)
+                except (TypeError, ValueError):
+                    continue
+                if parsed > 0:
+                    existing_for_item.add(parsed)
+
+            if mode == "set":
+                updated_for_item = set(valid_ids)
+            elif mode == "add":
+                updated_for_item = existing_for_item.union(valid_ids)
+            else:
+                updated_for_item = existing_for_item.difference(valid_ids)
+
+            if updated_for_item:
+                service_assignments[responsibility_id] = sorted(list(updated_for_item))
+            else:
+                service_assignments.pop(responsibility_id, None)
+
+            updated_global = set()
+            for item_ids in service_assignments.values():
+                if not isinstance(item_ids, list):
+                    continue
+                for raw_uid in item_ids:
+                    try:
+                        parsed_uid = int(raw_uid)
+                    except (TypeError, ValueError):
+                        continue
+                    if parsed_uid > 0:
+                        updated_global.add(parsed_uid)
+
+            role_bucket["service_assignments"] = service_assignments
             role_bucket["assignee_ids"] = sorted(list(updated_global))
             updated = updated_global
         else:
@@ -2570,6 +2698,60 @@ class ERPViewSet(viewsets.ModelViewSet):
                     if parsed_uid > 0:
                         ids.add(parsed_uid)
             role_bucket["expertise_assignments"] = expertise_assignments
+        elif role == "skill_provider":
+            service_assignments = self._as_dict(role_bucket.get("service_assignments"))
+            service_rows = self._list_responsibilities_for_role(snapshot, "skill_provider")
+            valid_service_ids = [str(row.get("id") or "").strip() for row in service_rows if isinstance(row, dict)]
+            selected_service_id = requested_responsibility_id
+            if selected_scope_entry and not selected_service_id:
+                selected_service_id = str(selected_scope_entry.get("responsibility_id") or "").strip()
+
+            if should_assign:
+                target_service_id = ""
+                if selected_service_id and selected_service_id in valid_service_ids:
+                    target_service_id = selected_service_id
+                elif valid_service_ids:
+                    target_service_id = valid_service_ids[0]
+
+                if target_service_id:
+                    assigned_ids = set(
+                        int(uid)
+                        for uid in service_assignments.get(target_service_id, [])
+                        if str(uid).isdigit()
+                    )
+                    assigned_ids.add(int(request.user.id))
+                    service_assignments[target_service_id] = sorted(list(assigned_ids))
+            else:
+                if selected_service_id:
+                    target_ids = [selected_service_id]
+                else:
+                    target_ids = list(service_assignments.keys())
+
+                for target_service_id in target_ids:
+                    assigned_ids = set(
+                        int(uid)
+                        for uid in service_assignments.get(target_service_id, [])
+                        if str(uid).isdigit()
+                    )
+                    if int(request.user.id) in assigned_ids:
+                        assigned_ids.discard(int(request.user.id))
+                        if assigned_ids:
+                            service_assignments[target_service_id] = sorted(list(assigned_ids))
+                        else:
+                            service_assignments.pop(target_service_id, None)
+
+            ids = set()
+            for item_ids in service_assignments.values():
+                if not isinstance(item_ids, list):
+                    continue
+                for raw_uid in item_ids:
+                    try:
+                        parsed_uid = int(raw_uid)
+                    except (TypeError, ValueError):
+                        continue
+                    if parsed_uid > 0:
+                        ids.add(parsed_uid)
+            role_bucket["service_assignments"] = service_assignments
         else:
             if should_assign:
                 ids.add(request.user.id)
@@ -2713,6 +2895,38 @@ class ERPViewSet(viewsets.ModelViewSet):
 
                 recomputed_union = set()
                 for item_ids in cleaned_assignments.values():
+                    for parsed_uid in item_ids:
+                        recomputed_union.add(int(parsed_uid))
+                role_bucket["assignee_ids"] = sorted(list(recomputed_union))
+
+            service_assignments = role_bucket.get("service_assignments")
+            if isinstance(service_assignments, dict):
+                cleaned_service_assignments = {}
+                for item_key, item_raw_ids in service_assignments.items():
+                    if not isinstance(item_raw_ids, list):
+                        continue
+                    item_ids = set()
+                    for raw_uid in item_raw_ids:
+                        try:
+                            parsed_uid = int(raw_uid)
+                        except (TypeError, ValueError):
+                            continue
+                        if parsed_uid > 0 and parsed_uid != user_id:
+                            item_ids.add(parsed_uid)
+                    if item_ids:
+                        cleaned_service_assignments[str(item_key)] = sorted(list(item_ids))
+
+                if cleaned_service_assignments != service_assignments:
+                    changed = True
+                role_bucket["service_assignments"] = cleaned_service_assignments
+
+                recomputed_union = set(role_bucket.get("assignee_ids") or [])
+                if expertise_assignments is not None:
+                    recomputed_union = set()
+                    for item_ids in (role_bucket.get("expertise_assignments") or {}).values():
+                        for parsed_uid in item_ids:
+                            recomputed_union.add(int(parsed_uid))
+                for item_ids in cleaned_service_assignments.values():
                     for parsed_uid in item_ids:
                         recomputed_union.add(int(parsed_uid))
                 role_bucket["assignee_ids"] = sorted(list(recomputed_union))
