@@ -260,20 +260,20 @@ export default function Connections() {
 
       if (roleKey === 'expertise') {
         const names = uniqueNames(expertiseRows)
-        return names.length ? `Work as: ${names.join(', ')}` : 'Work as listed in ERP details.'
+        return names.length ? `Work as: ${names.join(', ')}` : 'Work as listed in Process Tracker details.'
       }
 
       if (roleKey === 'skill_provider') {
         const names = uniqueNames(serviceRows)
-        return names.length ? `Provide service: ${names.join(', ')}` : 'Provide service as listed in ERP details.'
+        return names.length ? `Provide service: ${names.join(', ')}` : 'Provide service as listed in Process Tracker details.'
       }
 
       if (roleKey === 'supplier') {
         const names = uniqueNames(productRows)
-        return names.length ? `Deliver product: ${names.join(', ')}` : 'Deliver product as listed in ERP details.'
+        return names.length ? `Deliver product: ${names.join(', ')}` : 'Deliver product as listed in Process Tracker details.'
       }
 
-      return 'See ERP details for responsibility.'
+      return 'See Process Tracker details for responsibility.'
     }
 
     return (erpItems || []).flatMap((erp) => {
@@ -486,7 +486,13 @@ export default function Connections() {
   }
 
   const profileLikeBoxClass =
-    'card relative overflow-hidden border border-violet-200/70 bg-gradient-to-br from-white/55 via-violet-100/45 to-fuchsia-100/40 shadow-xl backdrop-blur-md'
+    'relative overflow-hidden rounded-2xl border border-white/45 bg-white/28 p-4 shadow-[0_12px_40px_rgba(76,29,149,0.16)] backdrop-blur-xl sm:p-5'
+
+  const sectionGlassClass =
+    'relative overflow-hidden rounded-2xl border border-white/45 bg-white/28 p-4 shadow-[0_12px_40px_rgba(76,29,149,0.16)] backdrop-blur-xl sm:p-5'
+
+  const insetGlassClass =
+    'rounded-xl border border-violet-200/55 bg-white/45 p-3 shadow-inner backdrop-blur-sm'
 
   const resolveMediaUrl = (value) => {
     if (!value) return ''
@@ -529,28 +535,40 @@ export default function Connections() {
       tabIndex={0}
       onClick={() => setSelected({ ...person, type })}
       onKeyDown={(event) => handleCardKeyDown(event, person, type)}
-      className={`${profileLikeBoxClass} text-left transition hover:border-violet-300`}
+      className={`${profileLikeBoxClass} text-left transition hover:border-white/70 hover:bg-white/35`}
     >
-      <div className="flex items-start gap-3">
-        <RatingRingAvatar
-          src={resolveMediaUrl(person.profile_photo)}
-          alt={person.name || person.username || 'User'}
-          rating={
-            averageRatingByUser.get(Number(person?.id))
-            ?? Number(person?.profile_rating ?? person?.average_rating ?? person?.rating)
-          }
-          size={48}
-          ringWidth={2}
-          className="shrink-0"
-        />
+      <span
+        className={`absolute right-4 top-4 rounded-full px-2.5 py-1 text-[11px] font-semibold ${
+          type === 'Live'
+            ? 'bg-emerald-500 text-white ring-1 ring-emerald-300 shadow-sm shadow-emerald-500/40 animate-pulse'
+            : 'bg-violet-100 text-violet-700 ring-1 ring-violet-200'
+        }`}
+      >
+        {type}
+      </span>
+
+      <div className="flex items-start gap-3 pr-20">
+        <div className="rounded-full bg-gradient-to-br from-violet-200/70 to-fuchsia-200/70 p-1.5 shadow-sm">
+          <RatingRingAvatar
+            src={resolveMediaUrl(person.profile_photo)}
+            alt={person.name || person.username || 'User'}
+            rating={
+              averageRatingByUser.get(Number(person?.id))
+              ?? Number(person?.profile_rating ?? person?.average_rating ?? person?.rating)
+            }
+            size={50}
+            ringWidth={2}
+            className="shrink-0"
+          />
+        </div>
         <div className="min-w-0 flex-1">
-          <p className="font-semibold">{person.name || person.username}</p>
-          <div className="mt-2 space-y-1 text-xs text-slate-600">
-            <p><span className="font-semibold text-slate-700">Phone:</span> {person.phone || '-'}</p>
-            <p className="truncate"><span className="font-semibold text-slate-700">Email:</span> {person.email || '-'}</p>
+          <p className="text-sm font-semibold text-slate-900">{person.name || person.username}</p>
+          <div className="mt-2 space-y-1.5 text-xs text-black/85">
+            <p><span className="font-medium text-black">📞</span> {person.phone || '-'}</p>
+            <p className="truncate"><span className="font-medium text-black">✉️</span> {person.email || '-'}</p>
             {person.whatsapp_link ? (
               <p className="truncate">
-                <span className="font-semibold text-slate-700">WhatsApp:</span>{' '}
+                <span className="font-medium text-black">💬</span>{' '}
                 <a
                   href={normalizeWhatsAppHref(person.whatsapp_link)}
                   target="_blank"
@@ -564,7 +582,7 @@ export default function Connections() {
             ) : null}
             {person.facebook_link ? (
               <p className="truncate">
-                <span className="font-semibold text-slate-700">Facebook:</span>{' '}
+                <span className="font-medium text-black">📘</span>{' '}
                 <a
                   href={normalizeFacebookHref(person.facebook_link)}
                   target="_blank"
@@ -578,11 +596,8 @@ export default function Connections() {
             ) : null}
           </div>
         </div>
-        <span className="ml-auto rounded-full bg-violet-100 px-2 py-1 text-xs font-semibold text-violet-700">
-          {type}
-        </span>
       </div>
-      <p className="mt-3 text-sm text-slate-500">{person.location}</p>
+      <p className="mt-3 text-sm text-black/75">📍 {person.location || '-'}</p>
       <div className="mt-2 flex justify-end">
         <button
           type="button"
@@ -591,7 +606,7 @@ export default function Connections() {
             handleRemoveConnection(person, type)
           }}
           disabled={removeConnectionLoading === String(person.id)}
-          className="rounded-full border border-rose-200 px-3 py-1 text-xs font-semibold text-rose-700 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60"
+          className="rounded-full border border-rose-200 bg-white/75 px-3 py-1 text-xs font-semibold text-rose-600 transition hover:border-rose-500 hover:bg-rose-500 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
         >
           {removeConnectionLoading === String(person.id) ? 'Removing...' : 'Remove'}
         </button>
@@ -601,7 +616,7 @@ export default function Connections() {
 
   return (
     <div className="space-y-6">
-      <div className="card relative overflow-hidden border-0 bg-gradient-to-r from-[#c9b6ff] via-[#e6d7ff] to-[#f2eaff] p-0 text-slate-800 shadow-lg">
+      <div className="card relative overflow-hidden border-0 bg-gradient-to-r from-[#c9b6ff] via-[#e6d7ff] to-[#f2eaff] p-0 text-black shadow-lg">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.45),transparent_58%)]" />
         <div className="absolute -right-8 -top-8 h-20 w-20 rounded-full bg-white/30 blur-xl" />
         <div className="relative px-6 py-3.5 pr-40 sm:px-8 sm:py-4 sm:pr-44 lg:pr-48">
@@ -623,7 +638,7 @@ export default function Connections() {
       </div>
 
       {message ? (
-        <div className="card border border-slate-200 bg-white/80 text-sm text-slate-600">
+        <div className="card border border-slate-200 bg-white/80 text-sm text-black/85">
           {message}
         </div>
       ) : null}
@@ -631,52 +646,70 @@ export default function Connections() {
       <div className="grid gap-6 lg:grid-cols-[minmax(0,4fr)_minmax(0,1fr)]">
         <div className="space-y-6">
           <div className="space-y-4">
+            <div className={sectionGlassClass}>
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-semibold">Hired By</h3>
-              <p className="text-xs text-slate-400">People who requested to connect with you.</p>
+              <p className="text-xs text-black/60">People who requested to connect with you.</p>
             </div>
-            <div className="grid gap-4 lg:grid-cols-3">
+            <div className="mt-4 grid gap-4 lg:grid-cols-3">
               {overview.hired_connections.length ? (
                 overview.hired_connections.map((person) => renderCard(person, 'Hired By'))
               ) : (
-                <p className="text-sm text-slate-500">No hired connections yet.</p>
+                <p className="text-sm text-black/75">No hired connections yet.</p>
               )}
+            </div>
+            </div>
+          </div>
+
+          <div className="px-1">
+            <div className="flex flex-wrap gap-2">
+              <span className="rounded-full border border-emerald-200 bg-emerald-50/80 px-3 py-1 text-xs font-semibold text-emerald-700">
+                Active now: {overview.live_connections.length}
+              </span>
+              <span className="rounded-full border border-amber-200 bg-amber-50/80 px-3 py-1 text-xs font-semibold text-amber-700">
+                Recent: {overview.recent_connections.length}
+              </span>
+              <span className="rounded-full border border-violet-200 bg-violet-50/80 px-3 py-1 text-xs font-semibold text-violet-700">
+                Members: {memberCards.length}
+              </span>
             </div>
           </div>
 
           <div className="space-y-4">
+            <div className={sectionGlassClass}>
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-semibold">Members</h3>
-              <p className="text-xs text-slate-400">Accepted connection requests.</p>
+              <p className="text-xs text-black/60">Accepted connection requests.</p>
             </div>
 
-            <div className="flex flex-wrap gap-2">
+            <div className="mt-4 inline-flex flex-wrap gap-1 rounded-full border border-white/55 bg-white/35 p-1 backdrop-blur-sm">
               {['Expertise', 'Skill Providers', 'Delivery Man'].map((category) => (
                 <button
                   key={category}
                   type="button"
                   onClick={() => setMemberCategory(category)}
-                  className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
+                  className={`rounded-full px-3.5 py-1.5 text-xs font-semibold transition ${
                     memberCategory === category
-                      ? 'border-violet-400 bg-violet-100 text-violet-800'
-                      : 'border-slate-300 bg-white text-slate-600 hover:border-violet-300'
+                      ? 'bg-white text-violet-800 shadow-sm ring-1 ring-violet-200'
+                      : 'text-black/80 hover:bg-white/70 hover:text-violet-700'
                   }`}
                 >
                   {category}
                 </button>
               ))}
             </div>
-            <div className="card border border-slate-200 bg-white/80">
+
+            <div className={`mt-4 ${insetGlassClass}`}>
               <p className="text-sm font-semibold">Incoming Requests</p>
               <div className="mt-2 space-y-2 text-sm">
                 {overview.incoming_requests.length ? (
                   overview.incoming_requests.map((item) => (
-                    <div key={`incoming-${item.id}`} className="rounded-lg border border-slate-200 bg-white p-2">
-                      <p className="font-semibold text-slate-800">{item.requester_name || `User #${item.requester}`}</p>
+                    <div key={`incoming-${item.id}`} className="rounded-lg border border-slate-200/80 bg-white/80 p-2.5">
+                      <p className="font-semibold text-black">{item.requester_name || `User #${item.requester}`}</p>
                       <p className="text-xs font-semibold text-violet-700">
                         Requested as: {item.requested_role_label || 'Skill provider'}
                       </p>
-                      <p className="text-xs text-slate-500">{item.request_message || 'No request message.'}</p>
+                      <p className="text-xs text-black/75">{item.request_message || 'No request message.'}</p>
                       <div className="mt-2 flex items-center gap-2">
                         <button
                           type="button"
@@ -698,58 +731,68 @@ export default function Connections() {
                     </div>
                   ))
                 ) : (
-                  <p className="text-slate-500">No incoming requests.</p>
+                  <p className="text-black/75">No incoming requests.</p>
                 )}
               </div>
             </div>
 
-            <div className="grid gap-4 lg:grid-cols-3">
+            <div className="mt-4 grid gap-4 lg:grid-cols-3">
               {memberCards.length ? (
                 memberCards.map((person) => renderCard(person, memberCategory))
               ) : (
-                <p className="text-sm text-slate-500">No members yet.</p>
+                <p className="text-sm text-black/75">No members yet.</p>
               )}
+            </div>
             </div>
           </div>
 
           <div className="space-y-4">
+            <div className={sectionGlassClass}>
             <div className="flex items-center justify-between">
-              <h3 className="text-lg font-semibold">Live</h3>
-              <p className="text-xs text-slate-400">Connections currently active in ERP.</p>
+              <h3 className="inline-flex items-center gap-2 text-lg font-semibold">
+                Live
+                <span className="inline-flex h-2.5 w-2.5 rounded-full bg-emerald-500 animate-ping" />
+                <span className="inline-flex h-2.5 w-2.5 -ml-4 rounded-full bg-emerald-500" />
+              </h3>
+              <p className="text-xs text-black/60">Connections currently active in Process Tracker.</p>
             </div>
-            <div className="grid gap-4 lg:grid-cols-3">
+
+            <div className="mt-4 grid gap-4 lg:grid-cols-3">
               {overview.live_connections.length ? (
                 overview.live_connections.map((person) => renderCard(person, 'Live'))
               ) : (
-                <p className="text-sm text-slate-500">No live connections yet.</p>
+                <p className="text-sm text-black/75">No live connections yet.</p>
               )}
+            </div>
             </div>
           </div>
 
           <div className="space-y-4">
+            <div className={sectionGlassClass}>
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-semibold">Recent</h3>
-              <p className="text-xs text-slate-400">Previously live ERP connections.</p>
+              <p className="text-xs text-black/60">Previously live Process Tracker connections.</p>
             </div>
-            <div className="grid gap-4 lg:grid-cols-3">
+            <div className="mt-4 grid gap-4 lg:grid-cols-3">
               {overview.recent_connections.length ? (
                 overview.recent_connections.map((person) => renderCard(person, 'Recent'))
               ) : (
-                <p className="text-sm text-slate-500">No recent connections yet.</p>
+                <p className="text-sm text-black/75">No recent connections yet.</p>
               )}
+            </div>
             </div>
           </div>
 
           <div className={profileLikeBoxClass}>
             <h3 className="text-lg font-semibold">Connection Details</h3>
             {!selected ? (
-              <p className="mt-3 text-sm text-slate-500">Select a connection to view profile details.</p>
+              <p className="mt-3 text-sm text-black/75">Select a connection to view profile details.</p>
             ) : (
               <div className="mt-4 space-y-4">
                 <div className="flex flex-wrap items-center gap-3">
                   <div>
                     <p className="text-sm font-semibold">{selected.name || selected.username}</p>
-                    <p className="text-xs text-slate-500">{selected.location}</p>
+                    <p className="text-xs text-black/75">{selected.location}</p>
                   </div>
                   <span
                     className="rounded-full bg-violet-100 px-2 py-1 text-xs font-semibold text-violet-700"
@@ -760,14 +803,14 @@ export default function Connections() {
 
                 <div>
                   <p className="text-sm font-semibold">Recent Posts</p>
-                  <div className="mt-2 space-y-2 text-sm text-slate-500">
+                  <div className="mt-2 space-y-2 text-sm text-black/75">
                     {recentPosts.length === 0 ? (
                       <p>No posts available.</p>
                     ) : (
                       recentPosts.map((post) => (
                         <div key={post.id} className="flex items-center justify-between">
                           <span>{post.post_name}</span>
-                          <span className="text-xs text-slate-400">{post.post_type}</span>
+                          <span className="text-xs text-black/60">{post.post_type}</span>
                         </div>
                       ))
                     )}
@@ -779,10 +822,29 @@ export default function Connections() {
         </div>
 
         <div className="space-y-6 lg:sticky lg:top-6 lg:h-fit" id="self-assign-posts-section">
-          <div className={profileLikeBoxClass}>
-            <h3 className="text-lg font-semibold">Self-Assign ERP Posts</h3>
-            <p className="mt-1 text-xs text-slate-500">If provider generated assignment post, you can assign or remove yourself here.</p>
-            <div className="mt-3 space-y-2">
+          <div className="rounded-3xl border border-white/35 bg-white/20 p-4 shadow-[0_10px_30px_rgba(76,29,149,0.2)] backdrop-blur-xl sm:p-4.5">
+            <div className="mb-3 inline-flex h-10 w-10 items-center justify-center rounded-xl bg-white/22 ring-1 ring-white/35">
+              <svg viewBox="0 0 24 24" className="h-6 w-6 text-slate-900/85" fill="currentColor" aria-hidden="true">
+                <path d="M12 2.75a4.75 4.75 0 1 0 0 9.5 4.75 4.75 0 0 0 0-9.5Zm0 11.5c-4.69 0-8.5 2.72-8.5 6.07 0 .38.3.68.68.68h15.64a.68.68 0 0 0 .68-.68c0-3.35-3.81-6.07-8.5-6.07Z" />
+              </svg>
+            </div>
+
+            <h3
+              className="text-[24px] font-extrabold leading-tight text-slate-900"
+              style={{ fontFamily: "'Merriweather', 'Georgia', serif" }}
+            >
+              Self-Assign Process Tracker Posts
+            </h3>
+            <p
+              className="mt-2 text-[14px] leading-[1.35] text-slate-900/90"
+              style={{ fontFamily: "'Merriweather', 'Georgia', serif" }}
+            >
+              If a provider generated an assignment post,
+              <br />
+              you can assign or remove yourself here.
+            </p>
+
+            <div className="mt-3.5 space-y-2">
               {openSelfAssignPosts.length ? (
                 openSelfAssignPosts.map(({ erp, role, roleLabel, responsibilityId, responsibilityText, assignedIds, selfAssignMessage, postTitle }) => {
                   const isAssigned = assignedIds.map((id) => Number(id)).includes(Number(currentUserId))
@@ -792,7 +854,7 @@ export default function Connections() {
                     postRecord?.post_title ||
                     postTitle ||
                     postRecord?.post_name ||
-                    `ERP #${erp.id}`
+                    `Process Tracker #${erp.id}`
                   const provider = usersById.get(Number(erp.provider))
                   const providerName =
                     provider?.name || provider?.username || (erp.provider ? `User #${erp.provider}` : 'Unknown')
@@ -801,23 +863,23 @@ export default function Connections() {
                     <div
                       key={`${erp.id}-${role}-${responsibilityId || 'all'}`}
                       id={`self-assign-card-${erp.id}-${role}-${responsibilityId || 'all'}`}
-                      className="rounded-lg border border-slate-200 bg-white p-2"
+                      className="rounded-xl border border-black/10 bg-white/70 p-3 backdrop-blur-sm"
                     >
                       <div className="flex flex-wrap items-center justify-between gap-2">
-                        <p className="text-sm font-semibold text-slate-800">{titleText}</p>
-                        <p className="text-xs text-slate-500">Role: {roleLabel}</p>
+                        <p className="text-sm font-semibold text-slate-900">{titleText}</p>
+                        <p className="text-xs text-slate-800/85">Role: {roleLabel}</p>
                       </div>
 
-                      <p className="mt-1 text-xs text-slate-500">Requested by: {providerName}</p>
-                      <p className="mt-1 text-xs text-slate-600">Responsibility: {responsibilityText}</p>
-                      <p className="mt-1 text-xs text-slate-600">
+                      <p className="mt-1 text-xs text-slate-800/90">Requested by: {providerName}</p>
+                      <p className="mt-1 text-xs text-slate-800/90">Responsibility: {responsibilityText}</p>
+                      <p className="mt-1 text-xs text-slate-800/90">
                         Message: {selfAssignMessage || 'No message from provider.'}
                       </p>
 
-                      <p className="mt-1 text-xs text-slate-500">
-                        ERPTaskCard link:{' '}
-                        <a href={erpTaskLink} className="font-semibold text-brand-700 hover:underline">
-                          Open this ERP task
+                      <p className="mt-1 text-xs text-slate-800/90">
+                        Process Tracker link:{' '}
+                        <a href={erpTaskLink} className="font-semibold text-slate-900 hover:underline">
+                          Open this Process Tracker task
                         </a>
                       </p>
 
@@ -827,7 +889,7 @@ export default function Connections() {
                             type="button"
                             disabled={selfAssignLoading === loadingKey}
                             onClick={() => handleSelfAssign(erp.id, role, !isAssigned, responsibilityId)}
-                            className="rounded-full border border-brand-200 px-3 py-1 text-xs font-semibold text-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
+                            className="rounded-full border border-slate-400/70 bg-white/70 px-3 py-1 text-xs font-semibold text-slate-900 transition hover:bg-slate-900 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
                           >
                             {selfAssignLoading === loadingKey
                               ? 'Updating...'
@@ -840,7 +902,7 @@ export default function Connections() {
                               type="button"
                               disabled={selfAssignLoading === loadingKey}
                               onClick={() => handleSelfAssign(erp.id, role, false, responsibilityId, true)}
-                              className="rounded-full border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-600 disabled:cursor-not-allowed disabled:opacity-60"
+                              className="rounded-full border border-slate-400/70 bg-white/70 px-3 py-1 text-xs font-semibold text-slate-900 transition hover:bg-slate-900 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
                             >
                               {selfAssignLoading === loadingKey ? 'Updating...' : 'Reject'}
                             </button>
@@ -851,7 +913,12 @@ export default function Connections() {
                   )
                 })
               ) : (
-                <p className="text-sm text-slate-500">No open self-assign posts right now.</p>
+                <p
+                  className="text-[21px] italic leading-tight text-slate-900/35"
+                  style={{ fontFamily: "'Merriweather', 'Georgia', serif" }}
+                >
+                  No open self-assign posts right now.
+                </p>
               )}
             </div>
           </div>
