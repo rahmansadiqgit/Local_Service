@@ -12,8 +12,6 @@ export default function EditProfile() {
     name: '',
     phone: '',
     location: '',
-    supply_status: [],
-    demand_status: [],
     education_skills: '',
     experience: '',
     facebook_link: '',
@@ -47,22 +45,10 @@ export default function EditProfile() {
         const data = res.data
         setProfile(data)
 
-        const parseStatus = (value) => {
-          const tokens = value
-            ? value
-                .split(',')
-                .map((item) => item.trim())
-                .filter(Boolean)
-            : []
-          return tokens.length ? [tokens[0]] : []
-        }
-
         setForm({
           name: data.name || '',
           phone: data.phone || '',
           location: data.location || '',
-          supply_status: parseStatus(data.supply_status),
-          demand_status: parseStatus(data.demand_status),
           education_skills: data.education_skills || '',
           experience: data.experience || '',
           facebook_link: data.facebook_link || '',
@@ -88,13 +74,6 @@ export default function EditProfile() {
   const handleChange = (event) => {
     const { name, value } = event.target
     setForm((prev) => ({ ...prev, [name]: value }))
-  }
-
-  const toggleStatus = (field, value) => {
-    setForm((prev) => {
-      const currentValue = prev[field]?.[0]
-      return { ...prev, [field]: currentValue === value ? [] : [value] }
-    })
   }
 
   const normalizeOptionalUrl = (value) => {
@@ -275,48 +254,6 @@ export default function EditProfile() {
               className={formInputClass}
               placeholder="Enter your city or area"
             />
-          </div>
-          <div className="lg:col-span-2">
-            <label className={formLabelClass}>Available Status</label>
-            <div className="mt-2 flex flex-wrap gap-2.5">
-              {['Active', 'Available', 'Viewer'].map((status) => (
-                <button
-                  type="button"
-                  key={status}
-                  onClick={() => toggleStatus('supply_status', status)}
-                  aria-pressed={form.supply_status.includes(status)}
-                  className={`flex items-center gap-2 rounded-full border px-3.5 py-1.5 text-xs font-semibold transition ${
-                    form.supply_status.includes(status)
-                      ? 'border-violet-500 bg-violet-700 text-white shadow-md'
-                      : 'border-slate-200 bg-white text-slate-600 hover:border-violet-300'
-                  }`}
-                >
-                  <span className={`h-2 w-2 rounded-full ${form.supply_status.includes(status) ? 'bg-white' : 'bg-violet-300'}`} />
-                  {status}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div className="lg:col-span-2">
-            <label className={formLabelClass}>Demand Status</label>
-            <div className="mt-2 flex flex-wrap gap-2.5">
-              {['Busy', 'Active', 'Inactive'].map((status) => (
-                <button
-                  type="button"
-                  key={status}
-                  onClick={() => toggleStatus('demand_status', status)}
-                  aria-pressed={form.demand_status.includes(status)}
-                  className={`flex items-center gap-2 rounded-full border px-3.5 py-1.5 text-xs font-semibold transition ${
-                    form.demand_status.includes(status)
-                      ? 'border-fuchsia-700 bg-fuchsia-700 text-white shadow-md'
-                      : 'border-slate-200 bg-white text-slate-600 hover:border-fuchsia-300'
-                  }`}
-                >
-                  <span className={`h-2 w-2 rounded-full ${form.demand_status.includes(status) ? 'bg-white' : 'bg-fuchsia-300'}`} />
-                  {status}
-                </button>
-              ))}
-            </div>
           </div>
           <div className="lg:col-span-2">
             <label className={formLabelClass}>Education & Skills</label>
