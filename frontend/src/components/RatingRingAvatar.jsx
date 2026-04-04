@@ -43,7 +43,9 @@ export default function RatingRingAvatar({
   const progressDegrees = normalizedRating == null ? 0 : (normalizedRating / 5) * 360
   const hasVisibleRing = normalizedRating != null && normalizedRating > 0
   const ringSpeed = ringSpeedForRating(normalizedRating)
-  const effectiveRingWidth = Math.max(ringWidth, Math.round(size * 0.14))
+  const requestedRingWidth = Number(ringWidth)
+  const safeRequestedWidth = Number.isFinite(requestedRingWidth) ? requestedRingWidth : 2
+  const effectiveRingWidth = Math.max(2, Math.min(Math.round(size * 0.2), Math.round(safeRequestedWidth)))
 
   return (
     <span

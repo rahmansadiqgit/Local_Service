@@ -352,8 +352,18 @@ export default function Header() {
     const messageLower = message.toLowerCase()
     const relatedUserId = Number(item?.related_user)
 
-    if (title.includes("booking request sent") || title.includes("application request sent")) {
-      return "/feed"
+    // Prefer an explicit in-message link when available.
+    const postLinkMatch = message.match(/post\s+link:\s*([^\s]+)/i)
+    if (postLinkMatch && postLinkMatch[1]) {
+      return postLinkMatch[1].trim()
+    }
+
+    if (
+      title.includes("booking request sent")
+      || title.includes("application request sent")
+      || title.includes("applying request sent")
+    ) {
+      return "/erp"
     }
 
     if (title.includes("request declined")) {
@@ -386,27 +396,18 @@ export default function Header() {
       return memberSectionTarget
     }
 
-    // Prefer an explicit in-message link when available.
-    const postLinkMatch = message.match(/post\s+link:\s*([^\s]+)/i)
-    if (postLinkMatch && postLinkMatch[1]) {
-      return postLinkMatch[1].trim()
-    }
-
     if (
       title.includes("booking request sent")
       || title.includes("new booking request")
       || title.includes("booking confirmed")
+      || title.includes("new apply request")
+      || title.includes("apply request confirmed")
     ) {
       return "/erp"
     }
 
     if (title.includes("connection request") || messageLower.includes("connection request")) {
       return "/connections"
-    }
-
-    const erpIdMatch = message.match(/erp\s*#\s*(\d+)/i)
-    if (erpIdMatch && erpIdMatch[1]) {
-      return `/erp?erp_id=${erpIdMatch[1]}`
     }
 
     if (title.includes("erp") || messageLower.includes("erp")) {
@@ -663,7 +664,7 @@ export default function Header() {
                     alt="Profile"
                     rating={Number.isFinite(profileRatingValue) ? profileRatingValue : null}
                     size={40}
-                    ringWidth={2}
+                    ringWidth={3}
                   />
                 ) : (
                   <span className="text-lg leading-none">👤</span>
@@ -766,7 +767,7 @@ export default function Header() {
                 onClick={() => setOpenDropdown(null)}
                 className={getSidebarItemClass("/erp")}
               >
-                ERP
+                Process Tracking
               </Link>
               <Link
                 to="/connections"
