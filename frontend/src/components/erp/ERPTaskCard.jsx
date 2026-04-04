@@ -40,6 +40,8 @@ export default function ERPTaskCard({
   onRejectApplication,
   onOpenOwner,
   toMediaUrl,
+  focusMemberRole = '',
+  focusMemberId = null,
 }) {
   const navigate = useNavigate()
   const [isActionsMenuOpen, setIsActionsMenuOpen] = useState(false)
@@ -52,6 +54,9 @@ export default function ERPTaskCard({
   const [isSendingMessage, setIsSendingMessage] = useState(false)
   const [messageError, setMessageError] = useState('')
   const [selfAssignMessageByRole, setSelfAssignMessageByRole] = useState({})
+  const [selfAssignScopeByRole, setSelfAssignScopeByRole] = useState({})
+  const [selfAssignConfigErrorByRole, setSelfAssignConfigErrorByRole] = useState({})
+  const [isAssignByPostOpenByRole, setIsAssignByPostOpenByRole] = useState({})
   const [isLeavingAssignment, setIsLeavingAssignment] = useState(false)
   const [isCompletionFormOpen, setIsCompletionFormOpen] = useState(false)
   const [completionRating, setCompletionRating] = useState('')
@@ -248,6 +253,7 @@ export default function ERPTaskCard({
     skill_provider: 'Skill provider',
     supplier: 'Delivery Man',
   }
+
   const associatedMemberRoles = ['expertise', 'skill_provider', 'supplier']
   const roleKeyAliases = {
     expertise: ['expertise'],
@@ -279,6 +285,9 @@ export default function ERPTaskCard({
   const getRoleState = (roleKey) => {
     const buckets = getRoleBuckets(roleKey)
     const mergedState = buckets[0] || {}
+    const existingScope =
+      buckets.find((bucket) => Array.isArray(bucket?.self_assign_scope) && bucket.self_assign_scope.length > 0)
+        ?.self_assign_scope || []
     return {
       ...mergedState,
       assignee_ids: getRoleAssigneeIds(roleKey),
@@ -288,6 +297,7 @@ export default function ERPTaskCard({
           .map((bucket) => String(bucket?.self_assign_message || '').trim())
           .find(Boolean) || '',
       ),
+      self_assign_scope: existingScope,
     }
   }
 
@@ -321,6 +331,13 @@ export default function ERPTaskCard({
         ? 'Receiver'
         : 'Viewer'
   const isProvider = viewerRole === 'Provider'
+  useEffect(() => {
+    if (!focusMemberRole) return
+    if (!isProvider) return
+    if (selectedMemberRole === focusMemberRole) return
+    if (!['expertise', 'skill_provider', 'supplier'].includes(focusMemberRole)) return
+    setSelectedMemberRole(focusMemberRole)
+  }, [focusMemberRole, isProvider, selectedMemberRole])
   const postOwnerId = Number(post?.owner_id || post?.owner || 0)
   const isPostOwner = Number.isFinite(postOwnerId) && postOwnerId > 0 && Number(postOwnerId) === Number(currentUserId)
   const assignedMembersForSelectedRole = users.filter((user) =>
@@ -380,7 +397,144 @@ export default function ERPTaskCard({
     return joined
   }
 
+  const getResponsibilityOptionsByRole = (roleKey) => {
+    if (roleKey === 'expertise') {
+      return snapshotExpertise
+        .map((row, index) => {
+          const rowId = Number(row?.id)
+          const required = Math.max(0, Number((row?.offered_people ?? row?.quantity) || 0))
+          if (!Number.isFinite(rowId) || rowId <= 0 || required <= 0) return null
+          return {
+            id: String(rowId),
+            label: String(row?.name || `Expertise ${index + 1}`),
+          }
+        })
+        .filter(Boolean)
+    }
+
+    if (roleKey === 'skill_provider') {
+      return snapshotServices
+        .map((row, index) => {
+          if (!row || typeof row !== 'object' || row.included === false) return null
+          const rawName = String(row?.name || row?.service_name || '').trim()
+          if (!rawName) return null
+          const numericId = Number(row?.id)
+          const id = Number.isFinite(numericId) && numericId > 0 ? `service:${numericId}` : `service:index:${index}`
+          return {
+            id,
+            label: rawName,
+          }
+        })
+        .filter(Boolean)
+    }
+
+    return []
+  }
+
   const selectedRoleResponsibilityText = getResponsibilityTextByRole(selectedMemberRole)
+  const selectedRoleResponsibilityOptions = getResponsibilityOptionsByRole(selectedMemberRole)
+  const providerTargetableMembers = isProvider
+    ? providerAssignableMembers
+        .map((user) => {
+          const parsedId = Number(user?.id)
+          if (!Number.isFinite(parsedId) || parsedId <= 0) return null
+          return {
+            id: parsedId,
+            label: user?.name || user?.username || `User #${parsedId}`,
+          }
+        })
+        .filter(Boolean)
+    : []
+  const selectedRoleSelfAssignScope = selectedMemberRole
+    ? (selfAssignScopeByRole[selectedMemberRole] || {})
+    : {}
+  const isAssignByPostOpen = Boolean(
+    selectedMemberRole && isAssignByPostOpenByRole[selectedMemberRole],
+  )
+  const selectedRoleExistingScopeSignature = JSON.stringify(
+    Array.isArray(selectedRoleState?.self_assign_scope) ? selectedRoleState.self_assign_scope : [],
+  )
+
+  useEffect(() => {
+    if (!selectedMemberRole || !isProvider) return
+    if (selectedMemberRole !== 'expertise' && selectedMemberRole !== 'skill_provider') return
+
+    const options = getResponsibilityOptionsByRole(selectedMemberRole)
+    if (!options.length) {
+      setSelfAssignScopeByRole((prev) => ({
+        ...prev,
+        [selectedMemberRole]: {},
+      }))
+      return
+    }
+
+    const allowedMemberIds = new Set(providerTargetableMembers.map((item) => Number(item.id)))
+    const existingScope = (() => {
+      try {
+        const parsed = JSON.parse(selectedRoleExistingScopeSignature)
+        return Array.isArray(parsed) ? parsed : []
+      } catch {
+        return []
+      }
+    })()
+    const existingById = new Map(
+      existingScope
+        .map((item) => {
+          const scopeId = String(item?.responsibility_id || '').trim()
+          if (!scopeId) return null
+          const targetIds = Array.isArray(item?.target_ids)
+            ? item.target_ids
+                .map((id) => Number(id))
+                .filter((id) => Number.isFinite(id) && id > 0 && allowedMemberIds.has(id))
+            : []
+          return [scopeId, targetIds]
+        })
+        .filter(Boolean),
+    )
+
+    const hasExisting = existingById.size > 0
+    const defaultMemberIds = providerTargetableMembers.map((item) => Number(item.id))
+    const nextScope = options.reduce((acc, item) => {
+      const existingTargetIds = existingById.get(String(item.id)) || []
+      acc[String(item.id)] = {
+        enabled: hasExisting ? existingById.has(String(item.id)) : true,
+        targetIds: hasExisting ? existingTargetIds : defaultMemberIds,
+      }
+      return acc
+    }, {})
+
+    setSelfAssignScopeByRole((prev) => ({
+      ...prev,
+      [selectedMemberRole]: nextScope,
+    }))
+  }, [
+    selectedMemberRole,
+    selectedRoleExistingScopeSignature,
+    isProvider,
+    providerAssignableMembers,
+  ])
+
+  const getSelectedResponsibilitiesPayload = () => {
+    if (!selectedMemberRole || (selectedMemberRole !== 'expertise' && selectedMemberRole !== 'skill_provider')) {
+      return []
+    }
+
+    const scopeState = selfAssignScopeByRole[selectedMemberRole] || {}
+    return selectedRoleResponsibilityOptions
+      .filter((item) => Boolean(scopeState?.[String(item.id)]?.enabled))
+      .map((item) => {
+        const targetIds = Array.isArray(scopeState?.[String(item.id)]?.targetIds)
+          ? scopeState[String(item.id)].targetIds
+              .map((id) => Number(id))
+              .filter((id) => Number.isFinite(id) && id > 0)
+          : []
+        return {
+          responsibility_id: String(item.id),
+          responsibility_name: String(item.label),
+          target_ids: Array.from(new Set(targetIds)),
+        }
+      })
+  }
   const expertiseAssignmentsByRow =
     selectedMemberRole === 'expertise' && selectedRoleState && typeof selectedRoleState.expertise_assignments === 'object'
       ? selectedRoleState.expertise_assignments
@@ -654,11 +808,6 @@ export default function ERPTaskCard({
       ? 'border-cyan-200/50 bg-cyan-400/25 text-cyan-50'
       : 'border-slate-200/50 bg-slate-400/25 text-slate-50'
   const categoryTextClass = isProviderTheme ? 'text-violet-100/95' : isReceiverTheme ? 'text-cyan-100/95' : 'text-slate-100/95'
-  const profileCardClass = isProviderTheme
-    ? 'border-violet-200/60 bg-white/90 hover:border-violet-300 hover:bg-violet-50/70'
-    : isReceiverTheme
-      ? 'border-sky-200/70 bg-white/90 hover:border-sky-300 hover:bg-sky-50/70'
-      : 'border-slate-200 bg-white'
   const phaseLineClass = erp.stage === 'Completed' ? 'bg-emerald-400' : isProviderTheme ? 'bg-violet-200/70' : 'bg-sky-200/70'
   const activePhaseDotClass = isProviderTheme
     ? 'border-violet-100 bg-violet-500 shadow-sm'
@@ -714,6 +863,42 @@ export default function ERPTaskCard({
   const canUseActionsMenu = isSupplyPost ? isBookingApproved : (isDemandPost ? isApplicationApproved : true)
   const menuItemBaseClass =
     'w-full rounded-xl border border-slate-200 bg-white px-4 py-2 text-left text-sm font-semibold text-slate-700 transition hover:border-violet-200 hover:bg-violet-50 hover:text-violet-700'
+
+  // Calculate member-view filtered tables (only show rows where member is assigned)
+  const getMemberViewExpTableData = () => {
+    if (isProvider || !selectedMemberRole || selectedMemberRole !== 'expertise' || !hasExpertiseCategory) {
+      return selectedExpertiseForTable
+    }
+    // For members viewing expertise role: filter to only rows where they're assigned
+    const roleAssignments = getRoleState(selectedMemberRole)?.expertise_assignments || {}
+    return selectedExpertiseForTable.filter((row) => {
+      const rowIdStr = String(row.id)
+      const assignedIds = Array.isArray(roleAssignments[rowIdStr])
+        ? roleAssignments[rowIdStr].map((id) => Number(id)).filter((id) => Number.isFinite(id) && id > 0)
+        : []
+      return assignedIds.includes(Number(currentUserId))
+    })
+  }
+
+  const getMemberViewServiceTableData = () => {
+    if (isProvider || !selectedMemberRole || selectedMemberRole !== 'skill_provider' || !hasServicesCategory) {
+      return selectedServicesForTable
+    }
+    // Services + skill_provider will be added if backend supports per-row assignment tracking for services
+    return selectedServicesForTable
+  }
+
+  const getMemberViewProductTableData = () => {
+    if (isProvider || !selectedMemberRole || selectedMemberRole !== 'supplier' || !hasProductCategory) {
+      return selectedProductsForTable
+    }
+    // Products + supplier will be added if backend supports per-row assignment tracking for products
+    return selectedProductsForTable
+  }
+
+  const displayExpertiseForTable = getMemberViewExpTableData()
+  const displayServicesForTable = getMemberViewServiceTableData()
+  const displayProductsForTable = getMemberViewProductTableData()
 
   useEffect(() => {
     if (!isDetailsOpen) return undefined
@@ -1046,6 +1231,57 @@ export default function ERPTaskCard({
             </div>
           </div>
         ) : null}
+
+        {/* Show assigned tasks summary for members viewing their assignments */}
+        {!isProvider && currentUserRoleResponsibilities.length > 0 && (
+          <div className="relative mx-auto mt-3 w-full max-w-3xl rounded-2xl border-2 border-emerald-300 bg-emerald-50 px-4 py-3">
+            <p className="text-sm font-bold text-emerald-900">✓ Your Assigned Tasks</p>
+            <div className="mt-2 space-y-2">
+              {currentUserRoleResponsibilities.map((roleResp) => {
+                const roleKey = roleResp.roleKey
+                const roleAssignments = getRoleState(roleKey)?.expertise_assignments || {}
+                const assignedRowIds = Object.entries(roleAssignments)
+                  .filter(([, assignedIds]) => {
+                    const ids = Array.isArray(assignedIds)
+                      ? assignedIds.map((id) => Number(id)).filter((id) => Number.isFinite(id) && id > 0)
+                      : []
+                    return ids.includes(Number(currentUserId))
+                  })
+                  .map(([rowId]) => rowId)
+
+                if (assignedRowIds.length === 0) return null
+
+                const assignedRows = (roleKey === 'expertise' ? snapshotExpertise : roleKey === 'skill_provider' ? snapshotServices : snapshotProducts)
+                  .filter((row) => assignedRowIds.includes(String(row.id)))
+                  .slice(0, 5) // Show first 5
+
+                return (
+                  <div key={`assigned-tasks-${erp.id}-${roleKey}`} className="rounded-lg border border-emerald-200 bg-white p-2.5">
+                    <p className="text-xs font-semibold text-emerald-800">
+                      {roleResp.roleLabel === 'Expertise' ? '👨‍💼' : roleResp.roleLabel === 'Skill provider' ? '🔧' : '📦'} {roleResp.roleLabel}
+                    </p>
+                    <ul className="mt-1 list-inside space-y-0.5 text-[11px] text-slate-700">
+                      {assignedRows.map((row) => (
+                        <li key={`assigned-row-${row.id}`} className="flex items-start gap-1.5">
+                          <span className="mt-0.5 text-emerald-600">•</span>
+                          <span>{row.name || row.skill_name || row.service_name || row.product_name || '-'}</span>
+                        </li>
+                      ))}
+                    </ul>
+                    {assignedRowIds.length > 5 && (
+                      <p className="mt-1 text-[10px] italic text-slate-500">
+                        +{assignedRowIds.length - 5} more task{assignedRowIds.length - 5 === 1 ? '' : 's'}
+                      </p>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+            <p className="mt-2 text-[11px] text-emerald-700">
+              Scroll down to see full details of your assigned responsibilities
+            </p>
+          </div>
+        )}
       </div>
 
       <div className="relative mt-2">
@@ -1406,24 +1642,18 @@ export default function ERPTaskCard({
             </p>
             <div className="flex items-center gap-2">
               {isProvider ? (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => onPublishMemberPost?.(erp, selectedMemberRole, selectedSelfAssignMessage)}
-                    className="rounded-full border border-brand-200 px-2 py-1 text-[11px] font-semibold text-brand-700"
-                  >
-                    Generate Self-Assign Post
-                  </button>
-                  {selfAssignEnabled ? (
-                    <button
-                      type="button"
-                      onClick={() => onCloseMemberPost?.(erp, selectedMemberRole)}
-                      className="rounded-full border border-rose-200 px-2 py-1 text-[11px] font-semibold text-rose-700"
-                    >
-                      Remove Self-Assign Post
-                    </button>
-                  ) : null}
-                </>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setIsAssignByPostOpenByRole((prev) => ({
+                      ...prev,
+                      [selectedMemberRole]: !prev[selectedMemberRole],
+                    }))
+                  }
+                  className="rounded-full border border-brand-200 px-2 py-1 text-[11px] font-semibold text-brand-700"
+                >
+                  Assign By post
+                </button>
               ) : null}
               <button
                 type="button"
@@ -1435,11 +1665,114 @@ export default function ERPTaskCard({
             </div>
           </div>
 
-          <p className="text-[11px] text-slate-500">
-            {isProvider
-              ? 'Manual assign: provider can add/remove connections. Self-assign post: connections can assign themselves from Connections page.'
-              : 'You can only view assigned members for this role.'}
-          </p>
+          {!isProvider && (
+            <div className="rounded-md border border-emerald-200 bg-emerald-50/60 p-2.5">
+              <p className="text-[11px] font-semibold text-emerald-800">Your Assignment Status</p>
+              <p className="mt-1 text-[11px] text-emerald-700">
+                You are assigned to work as {roleKeyToLabel[selectedMemberRole] || 'member'}. 
+                Review the responsibilities below and confirm you can complete the assigned tasks.
+              </p>
+            </div>
+          )}
+
+          {isProvider && isAssignByPostOpen ? (
+            <div className="space-y-2 rounded-md border border-brand-200 bg-brand-50/40 p-2">
+              <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+                <span />
+                <p className="justify-self-center inline-flex items-center rounded-full border border-brand-200 bg-white px-3 py-0.5 text-[11px] font-semibold text-brand-800">
+                  Assign By post Panel
+                </p>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setIsAssignByPostOpenByRole((prev) => ({
+                      ...prev,
+                      [selectedMemberRole]: false,
+                    }))
+                  }
+                  className="justify-self-end rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-semibold text-slate-600"
+                >
+                  Close
+                </button>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (selectedMemberRole === 'expertise' || selectedMemberRole === 'skill_provider') {
+                      const selectedResponsibilities = getSelectedResponsibilitiesPayload()
+                      if (!selectedResponsibilities.length) {
+                        setSelfAssignConfigErrorByRole((prev) => ({
+                          ...prev,
+                          [selectedMemberRole]: 'Select at least one responsibility to publish this self-assign post.',
+                        }))
+                        return
+                      }
+
+                      const invalidEntry = selectedResponsibilities.find(
+                        (item) => !Array.isArray(item.target_ids) || item.target_ids.length < 1,
+                      )
+                      if (invalidEntry) {
+                        setSelfAssignConfigErrorByRole((prev) => ({
+                          ...prev,
+                          [selectedMemberRole]: 'Each selected responsibility must have at least one target member.',
+                        }))
+                        return
+                      }
+
+                      setSelfAssignConfigErrorByRole((prev) => ({
+                        ...prev,
+                        [selectedMemberRole]: '',
+                      }))
+
+                      await onPublishMemberPost?.(erp, selectedMemberRole, selectedSelfAssignMessage, {
+                        selectedResponsibilities,
+                      })
+                      return
+                    }
+
+                    setSelfAssignConfigErrorByRole((prev) => ({
+                      ...prev,
+                      [selectedMemberRole]: '',
+                    }))
+                    await onPublishMemberPost?.(erp, selectedMemberRole, selectedSelfAssignMessage)
+                  }}
+                  className="rounded-full border border-brand-200 bg-white px-2 py-1 text-[11px] font-semibold text-brand-700"
+                >
+                  Generate Self-Assign Post
+                </button>
+                {selfAssignEnabled ? (
+                  <button
+                    type="button"
+                    onClick={() => onCloseMemberPost?.(erp, selectedMemberRole)}
+                    className="rounded-full border border-rose-200 bg-white px-2 py-1 text-[11px] font-semibold text-rose-700"
+                  >
+                    Remove Self-Assign Post
+                  </button>
+                ) : null}
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[11px] font-semibold text-slate-600">
+                  Self-assign message
+                </label>
+                <textarea
+                  value={selectedSelfAssignMessage}
+                  onChange={(event) =>
+                    setSelfAssignMessageByRole((prev) => ({
+                      ...prev,
+                      [selectedMemberRole]: event.target.value,
+                    }))
+                  }
+                  rows={2}
+                  placeholder="Write a short manual message for connection members"
+                  className="w-full rounded-md border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700 outline-none focus:border-brand-300"
+                />
+              </div>
+            </div>
+          ) : null}
+
           <p className="text-[11px] text-slate-500">
             Self-assign status: {selfAssignEnabled ? 'Open' : 'Closed'}
           </p>
@@ -1449,26 +1782,133 @@ export default function ERPTaskCard({
             <p className="mt-0.5">{selectedRoleResponsibilityText}</p>
           </div>
 
-          {isProvider ? (
-            <div className="space-y-1">
-              <label className="text-[11px] font-semibold text-slate-600">
-                Self-assign message
-              </label>
-              <textarea
-                value={selectedSelfAssignMessage}
-                onChange={(event) =>
-                  setSelfAssignMessageByRole((prev) => ({
-                    ...prev,
-                    [selectedMemberRole]: event.target.value,
-                  }))
-                }
-                rows={2}
-                placeholder="Write a short manual message for connection members"
-                className="w-full rounded-md border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700 outline-none focus:border-brand-300"
-              />
+          {isProvider && isAssignByPostOpen && (selectedMemberRole === 'expertise' || selectedMemberRole === 'skill_provider') ? (
+            <div className="space-y-2 rounded-md border border-slate-200 bg-slate-50 p-2">
+              <p className="text-[11px] font-semibold text-slate-700">
+                Self-assign targeting (responsibility -&gt; members)
+              </p>
+              {selectedRoleResponsibilityOptions.length ? (
+                selectedRoleResponsibilityOptions.map((item) => {
+                  const entry = selectedRoleSelfAssignScope[String(item.id)] || { enabled: false, targetIds: [] }
+                  const selectedTargetIds = Array.isArray(entry?.targetIds)
+                    ? entry.targetIds.map((id) => Number(id)).filter((id) => Number.isFinite(id) && id > 0)
+                    : []
+
+                  return (
+                    <div key={`self-assign-scope-${selectedMemberRole}-${item.id}`} className="rounded-md border border-slate-200 bg-white p-2">
+                      <label className="flex items-center justify-between gap-2 text-[11px] font-semibold text-slate-800">
+                        <span className="truncate">{item.label}</span>
+                        <input
+                          type="checkbox"
+                          checked={Boolean(entry?.enabled)}
+                          onChange={(event) => {
+                            const enabled = event.target.checked
+                            setSelfAssignScopeByRole((prev) => {
+                              const roleScope = prev[selectedMemberRole] || {}
+                              const current = roleScope[String(item.id)] || { enabled: false, targetIds: [] }
+                              return {
+                                ...prev,
+                                [selectedMemberRole]: {
+                                  ...roleScope,
+                                  [String(item.id)]: {
+                                    ...current,
+                                    enabled,
+                                    targetIds: enabled
+                                      ? (current.targetIds?.length
+                                        ? current.targetIds
+                                        : providerTargetableMembers.map((member) => Number(member.id)))
+                                      : current.targetIds,
+                                  },
+                                },
+                              }
+                            })
+                            setSelfAssignConfigErrorByRole((prev) => ({
+                              ...prev,
+                              [selectedMemberRole]: '',
+                            }))
+                          }}
+                        />
+                      </label>
+
+                      {entry?.enabled ? (
+                        <div className="mt-2 space-y-1 rounded-md border border-slate-100 bg-slate-50 p-2">
+                          {providerTargetableMembers.length ? (
+                            providerTargetableMembers.map((member) => {
+                              const checked = selectedTargetIds.includes(Number(member.id))
+                              return (
+                                <label
+                                  key={`self-assign-target-${selectedMemberRole}-${item.id}-${member.id}`}
+                                  className="flex items-center justify-between gap-2 rounded px-1 py-0.5 text-[11px] text-slate-700 hover:bg-white"
+                                >
+                                  <span className="truncate">{member.label}</span>
+                                  <input
+                                    type="checkbox"
+                                    checked={checked}
+                                    onChange={(event) => {
+                                      const nextChecked = event.target.checked
+                                      setSelfAssignScopeByRole((prev) => {
+                                        const roleScope = prev[selectedMemberRole] || {}
+                                        const current = roleScope[String(item.id)] || { enabled: true, targetIds: [] }
+                                        const nextTargetSet = new Set(
+                                          Array.isArray(current.targetIds)
+                                            ? current.targetIds
+                                                .map((id) => Number(id))
+                                                .filter((id) => Number.isFinite(id) && id > 0)
+                                            : [],
+                                        )
+                                        if (nextChecked) {
+                                          nextTargetSet.add(Number(member.id))
+                                        } else {
+                                          nextTargetSet.delete(Number(member.id))
+                                        }
+                                        return {
+                                          ...prev,
+                                          [selectedMemberRole]: {
+                                            ...roleScope,
+                                            [String(item.id)]: {
+                                              ...current,
+                                              enabled: true,
+                                              targetIds: Array.from(nextTargetSet),
+                                            },
+                                          },
+                                        }
+                                      })
+                                      setSelfAssignConfigErrorByRole((prev) => ({
+                                        ...prev,
+                                        [selectedMemberRole]: '',
+                                      }))
+                                    }}
+                                  />
+                                </label>
+                              )
+                            })
+                          ) : (
+                            <p className="text-[11px] text-slate-500">No connection members found for this role.</p>
+                          )}
+                        </div>
+                      ) : null}
+                    </div>
+                  )
+                })
+              ) : (
+                <p className="text-[11px] text-slate-500">No responsibilities found in this ERP for this role.</p>
+              )}
             </div>
           ) : null}
 
+          {selectedMemberRole && isAssignByPostOpen && selfAssignConfigErrorByRole[selectedMemberRole] ? (
+            <p className="text-[11px] font-semibold text-rose-700">
+              {selfAssignConfigErrorByRole[selectedMemberRole]}
+            </p>
+          ) : null}
+
+          <div className="flex justify-center">
+            <p className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-[11px] font-semibold text-amber-800 text-center">
+              {isProvider
+                ? 'Manual assign: provider can add/remove connections.'
+                : 'You can only view assigned members for this role.'}
+            </p>
+          </div>
           {selectedMemberRole === 'expertise' && expertiseRowsForAssignment.length > 0 ? (
             <div className="max-h-64 space-y-2 overflow-y-auto rounded-md border border-slate-100 bg-slate-50 p-2">
               {expertiseRowsForAssignment.map((row) => (
@@ -1477,8 +1917,14 @@ export default function ERPTaskCard({
                     {row.name} ({row.assignedIds.length}/{row.required})
                   </p>
                   <div className="mt-1 space-y-1">
-                    {visibleMembers.length ? (
-                      visibleMembers.map((user) => {
+                    {(isProvider
+                      ? visibleMembers
+                      : assignedMembersForSelectedRole.filter((user) => row.assignedIds.includes(Number(user.id)))
+                    ).length ? (
+                      (isProvider
+                        ? visibleMembers
+                        : assignedMembersForSelectedRole.filter((user) => row.assignedIds.includes(Number(user.id)))
+                      ).map((user) => {
                         const checked = row.assignedIds.includes(Number(user.id))
                         const isCurrentUser = Number(user.id) === Number(currentUserId)
                         const disableAssign = !checked && row.assignedIds.length >= row.required
@@ -1489,7 +1935,7 @@ export default function ERPTaskCard({
                           >
                             <span className="min-w-0">
                               <span className="block truncate text-slate-700">
-                                {isCurrentUser
+                                {isProvider && isCurrentUser
                                   ? 'Assign myself'
                                   : user.name || user.username || `User #${user.id}`}
                               </span>
@@ -1538,7 +1984,7 @@ export default function ERPTaskCard({
                     >
                       <span className="min-w-0">
                         <span className="block truncate text-slate-700">
-                          {isCurrentUser
+                          {isProvider && isCurrentUser
                             ? 'Assign myself'
                             : user.name || user.username || `User #${user.id}`}
                         </span>
@@ -1834,24 +2280,30 @@ export default function ERPTaskCard({
             )}
           </div>
 
-          {selectedExpertiseForTable.length ? (
+          {displayExpertiseForTable.length ? (
             <div className="rounded-2xl border border-violet-200 bg-white p-4">
-              <h4 className="text-sm font-semibold text-slate-800">Expertise (Selected)</h4>
+              <h4 className="text-sm font-semibold text-slate-800">
+                Expertise (Selected)
+                {!isProvider && selectedMemberRole === 'expertise' ? ' - Your Assignments' : ''}
+              </h4>
               <div className="mt-2">
                 <ExpertiseTable
-                  expertises={selectedExpertiseForTable}
+                  expertises={displayExpertiseForTable}
                   postType={isDemandPost ? 'Demand' : 'Supply'}
                 />
               </div>
             </div>
           ) : null}
 
-          {selectedServicesForTable.length ? (
+          {displayServicesForTable.length ? (
             <div className="rounded-2xl border border-violet-200 bg-white p-4">
-              <h4 className="text-sm font-semibold text-slate-800">Services (Selected)</h4>
+              <h4 className="text-sm font-semibold text-slate-800">
+                Services (Selected)
+                {!isProvider && selectedMemberRole === 'skill_provider' ? ' - Your Assignments' : ''}
+              </h4>
               <div className="mt-2">
                 <ServiceTable
-                  services={selectedServicesForTable}
+                  services={displayServicesForTable}
                   postType={isDemandPost ? 'Demand' : 'Supply'}
                   showDescription
                 />
@@ -1859,12 +2311,15 @@ export default function ERPTaskCard({
             </div>
           ) : null}
 
-          {selectedProductsForTable.length ? (
+          {displayProductsForTable.length ? (
             <div className="rounded-2xl border border-violet-200 bg-white p-4">
-              <h4 className="text-sm font-semibold text-slate-800">Products (Selected)</h4>
+              <h4 className="text-sm font-semibold text-slate-800">
+                Products (Selected)
+                {!isProvider && selectedMemberRole === 'supplier' ? ' - Your Assignments' : ''}
+              </h4>
               <div className="mt-2">
                 <ProductTable
-                  products={selectedProductsForTable}
+                  products={displayProductsForTable}
                   postType={isDemandPost ? 'Demand' : 'Supply'}
                   showDescription
                 />

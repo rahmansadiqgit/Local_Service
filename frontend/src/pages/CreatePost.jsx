@@ -950,6 +950,7 @@ export default function CreatePost() {
                   <option value="hourly">Hourly</option>
                   <option value="daily">Daily</option>
                   <option value="monthly">Monthly</option>
+                  <option value="per_project">Per Project</option>
                 </select>
               </div>
               {isDemand ? (

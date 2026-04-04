@@ -147,10 +147,16 @@ export default function Connections() {
     const section = String(params.get('section') || '').trim().toLowerCase()
     const name = String(params.get('name') || '').trim().toLowerCase()
     const role = String(params.get('role') || '').trim().toLowerCase()
+    const erpId = String(params.get('erp_id') || '').trim()
+    const responsibilityId = String(params.get('responsibility_id') || '').trim()
+    const responsibility = String(params.get('responsibility') || '').trim().toLowerCase()
     return {
       section,
       name,
       role,
+      erpId,
+      responsibilityId,
+      responsibility,
       hasNameTarget: Boolean(name),
     }
   }, [location.search])
@@ -271,10 +277,6 @@ export default function Connections() {
     }
 
     return (erpItems || []).flatMap((erp) => {
-      if (String(erp?.stage || '').trim().toLowerCase() === 'on process') {
-        return []
-      }
-
       const snapshot = erp.configuration_snapshot || {}
       const members = snapshot.members || {}
 
@@ -295,32 +297,144 @@ export default function Connections() {
           const assignedIds = rawAssignedIds
             .map((id) => Number(id))
             .filter((id) => Number.isFinite(id) && id > 0)
+          const rejectedIds = Array.isArray(members[key]?.self_assign_rejected_ids)
+            ? members[key].self_assign_rejected_ids
+                .map((id) => Number(id))
+                .filter((id) => Number.isFinite(id) && id > 0)
+            : []
 
           // Show only to explicitly targeted users, or users already assigned in this role.
           const currentId = Number(currentUserId)
-          return targetIds.includes(currentId) || assignedIds.includes(currentId)
+          return (targetIds.includes(currentId) || assignedIds.includes(currentId)) && !rejectedIds.includes(currentId)
         })
-        .map(({ key, label }) => ({
-          erp,
-          role: key,
-          roleLabel: label,
-          responsibilityText: getResponsibilityText(erp, key),
-          assignedIds: Array.isArray(members[key]?.assignee_ids) ? members[key].assignee_ids : [],
-          selfAssignMessage: String(members[key]?.self_assign_message || '').trim(),
-          postLink: String(members[key]?.self_assign_post_link || '').trim(),
-          postTitle: String(members[key]?.self_assign_post_title || '').trim(),
-          sourcePostId: members[key]?.self_assign_post_id,
-        }))
+        .flatMap(({ key, label }) => {
+          const roleBucket = members[key] || {}
+          const expertiseAssignments =
+            key === 'expertise' && roleBucket && typeof roleBucket.expertise_assignments === 'object'
+              ? roleBucket.expertise_assignments
+              : {}
+          const scopedResponsibilities = Array.isArray(roleBucket?.self_assign_scope)
+            ? roleBucket.self_assign_scope
+            : []
+          const scopedItems = scopedResponsibilities
+            .map((entry) => {
+              const responsibilityId = String(entry?.responsibility_id || '').trim()
+              if (!responsibilityId) return null
+              const targetIds = Array.isArray(entry?.target_ids)
+                ? entry.target_ids
+                    .map((id) => Number(id))
+                    .filter((id) => Number.isFinite(id) && id > 0)
+                : []
+              const currentId = Number(currentUserId)
+              if (targetIds.length > 0 && !targetIds.includes(currentId)) {
+                return null
+              }
+              const rejectedIds = Array.isArray(entry?.rejected_ids)
+                ? entry.rejected_ids
+                    .map((id) => Number(id))
+                    .filter((id) => Number.isFinite(id) && id > 0)
+                : []
+              if (rejectedIds.includes(currentId)) {
+                return null
+              }
+              return {
+                responsibilityId,
+                responsibilityName: String(entry?.responsibility_name || '').trim(),
+                targetIds,
+                assignedIds:
+                  key === 'expertise'
+                    ? (Array.isArray(expertiseAssignments?.[responsibilityId]) ? expertiseAssignments[responsibilityId] : [])
+                    : (Array.isArray(roleBucket?.assignee_ids) ? roleBucket.assignee_ids : []),
+              }
+            })
+            .filter(Boolean)
+
+          if (scopedItems.length > 0) {
+            return scopedItems.map((item) => ({
+              erp,
+              role: key,
+              roleLabel: label,
+              responsibilityId: item.responsibilityId,
+              responsibilityText: item.responsibilityName || getResponsibilityText(erp, key),
+              assignedIds: Array.isArray(item.assignedIds) ? item.assignedIds : [],
+              selfAssignMessage: String(members[key]?.self_assign_message || '').trim(),
+              postLink: String(members[key]?.self_assign_post_link || '').trim(),
+              postTitle: String(members[key]?.self_assign_post_title || '').trim(),
+              sourcePostId: members[key]?.self_assign_post_id,
+            }))
+          }
+
+          return [{
+            erp,
+            role: key,
+            roleLabel: label,
+            responsibilityId: null,
+            responsibilityText: getResponsibilityText(erp, key),
+            assignedIds: Array.isArray(members[key]?.assignee_ids) ? members[key].assignee_ids : [],
+            selfAssignMessage: String(members[key]?.self_assign_message || '').trim(),
+            postLink: String(members[key]?.self_assign_post_link || '').trim(),
+            postTitle: String(members[key]?.self_assign_post_title || '').trim(),
+            sourcePostId: members[key]?.self_assign_post_id,
+          }]
+        })
     })
   }, [erpItems, currentUserId])
 
-  const handleSelfAssign = async (erpId, role, assign) => {
-    const loadingKey = `${erpId}-${role}`
+  useEffect(() => {
+    if (deepLinkTarget.section !== 'self_assign') return
+    if (!openSelfAssignPosts.length) return
+
+    const responsibilityQuery = deepLinkTarget.responsibility
+    const targetResponsibilityId = String(deepLinkTarget.responsibilityId || '').trim()
+    const targetErpId = Number(deepLinkTarget.erpId)
+
+    const matchedPost = openSelfAssignPosts.find((entry) => {
+      const matchesErp = Number.isFinite(targetErpId) ? Number(entry?.erp?.id) === targetErpId : true
+      const matchesRole = deepLinkTarget.role ? String(entry?.role || '').toLowerCase() === deepLinkTarget.role : true
+      const matchesResponsibilityId = targetResponsibilityId
+        ? String(entry?.responsibilityId || '').trim() === targetResponsibilityId
+        : true
+      const matchesResponsibility = responsibilityQuery
+        ? String(entry?.responsibilityText || '').trim().toLowerCase().includes(responsibilityQuery)
+        : true
+      return matchesErp && matchesRole && matchesResponsibilityId && matchesResponsibility
+    })
+
+    window.requestAnimationFrame(() => {
+      const sectionNode = document.getElementById('self-assign-posts-section')
+      if (sectionNode) {
+        sectionNode.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      }
+
+      if (matchedPost) {
+        const cardNode = document.getElementById(
+          `self-assign-card-${matchedPost.erp.id}-${matchedPost.role}-${matchedPost.responsibilityId || 'all'}`,
+        )
+        if (cardNode) {
+          cardNode.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        }
+      }
+    })
+  }, [deepLinkTarget, openSelfAssignPosts])
+
+  const handleSelfAssign = async (erpId, role, assign, responsibilityId = null, reject = false) => {
+    const loadingKey = `${erpId}-${role}-${responsibilityId || 'all'}`
     setSelfAssignLoading(loadingKey)
     try {
-      const { data } = await api.post(`/erp/${erpId}/self_assign/`, { role, assign })
-      setErpItems((prev) => prev.map((item) => (item.id === data.id ? data : item)))
-      setMessage(assign ? 'You assigned yourself successfully.' : 'You removed yourself successfully.')
+      const payload = { role, assign, reject }
+      if (responsibilityId) {
+        payload.responsibility_id = responsibilityId
+      }
+
+      const { data } = await api.post(`/erp/${erpId}/self_assign/`, payload)
+      setErpItems((prev) => prev.map((item) => (Number(item?.id) === Number(data?.id) ? data : item)))
+      setMessage(
+        reject
+          ? 'You declined the open assignment.'
+          : assign
+            ? 'You assigned yourself successfully.'
+            : 'You removed yourself successfully.',
+      )
       await loadOverview()
       window.dispatchEvent(new Event('localix:notifications-refresh'))
     } catch (error) {
@@ -664,15 +778,15 @@ export default function Connections() {
           </div>
         </div>
 
-        <div className="space-y-6 lg:sticky lg:top-6 lg:h-fit">
+        <div className="space-y-6 lg:sticky lg:top-6 lg:h-fit" id="self-assign-posts-section">
           <div className={profileLikeBoxClass}>
             <h3 className="text-lg font-semibold">Self-Assign ERP Posts</h3>
             <p className="mt-1 text-xs text-slate-500">If provider generated assignment post, you can assign or remove yourself here.</p>
             <div className="mt-3 space-y-2">
               {openSelfAssignPosts.length ? (
-                openSelfAssignPosts.map(({ erp, role, roleLabel, responsibilityText, assignedIds, selfAssignMessage, postTitle }) => {
+                openSelfAssignPosts.map(({ erp, role, roleLabel, responsibilityId, responsibilityText, assignedIds, selfAssignMessage, postTitle }) => {
                   const isAssigned = assignedIds.map((id) => Number(id)).includes(Number(currentUserId))
-                  const loadingKey = `${erp.id}-${role}`
+                  const loadingKey = `${erp.id}-${role}-${responsibilityId || 'all'}`
                   const postRecord = posts.find((item) => Number(item.id) === Number(erp.post)) || null
                   const titleText =
                     postRecord?.post_title ||
@@ -684,7 +798,11 @@ export default function Connections() {
                     provider?.name || provider?.username || (erp.provider ? `User #${erp.provider}` : 'Unknown')
                   const erpTaskLink = `/erp?erp_id=${erp.id}`
                   return (
-                    <div key={`${erp.id}-${role}`} className="rounded-lg border border-slate-200 bg-white p-2">
+                    <div
+                      key={`${erp.id}-${role}-${responsibilityId || 'all'}`}
+                      id={`self-assign-card-${erp.id}-${role}-${responsibilityId || 'all'}`}
+                      className="rounded-lg border border-slate-200 bg-white p-2"
+                    >
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <p className="text-sm font-semibold text-slate-800">{titleText}</p>
                         <p className="text-xs text-slate-500">Role: {roleLabel}</p>
@@ -704,18 +822,30 @@ export default function Connections() {
                       </p>
 
                       <div className="mt-2 flex justify-end">
-                        <button
-                          type="button"
-                          disabled={selfAssignLoading === loadingKey}
-                          onClick={() => handleSelfAssign(erp.id, role, !isAssigned)}
-                          className="rounded-full border border-brand-200 px-3 py-1 text-xs font-semibold text-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
-                        >
-                          {selfAssignLoading === loadingKey
-                            ? 'Updating...'
-                            : isAssigned
-                              ? 'Remove Myself'
-                              : 'Assign Myself'}
-                        </button>
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            disabled={selfAssignLoading === loadingKey}
+                            onClick={() => handleSelfAssign(erp.id, role, !isAssigned, responsibilityId)}
+                            className="rounded-full border border-brand-200 px-3 py-1 text-xs font-semibold text-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            {selfAssignLoading === loadingKey
+                              ? 'Updating...'
+                              : isAssigned
+                                ? 'Remove Myself'
+                                : 'Assign Myself'}
+                          </button>
+                          {!isAssigned ? (
+                            <button
+                              type="button"
+                              disabled={selfAssignLoading === loadingKey}
+                              onClick={() => handleSelfAssign(erp.id, role, false, responsibilityId, true)}
+                              className="rounded-full border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-600 disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                              {selfAssignLoading === loadingKey ? 'Updating...' : 'Reject'}
+                            </button>
+                          ) : null}
+                        </div>
                       </div>
                     </div>
                   )

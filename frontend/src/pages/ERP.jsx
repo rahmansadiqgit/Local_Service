@@ -243,6 +243,7 @@ export default function ERP() {
   const uniqueFilteredTasks = useMemo(() => {
     const focusErpIdRaw = searchParams.get('erp_id')
     const focusErpId = Number(focusErpIdRaw)
+    const focusPostTitle = String(searchParams.get('focus_post_title') || '').trim().toLowerCase()
 
     if (Number.isFinite(focusErpId) && focusErpId > 0) {
       const focusedVisible = visibleErpItems.find((erp) => Number(erp.id) === focusErpId)
@@ -254,8 +255,73 @@ export default function ERP() {
       return focusedAny ? [focusedAny] : []
     }
 
+    if (focusPostTitle) {
+      const titleFor = (erp) => {
+        const post = postMap[erp.post]
+        const snapshotTitle = String(erp?.configuration_snapshot?.post?.title || '').trim()
+        return String(post?.post_title || post?.post_name || snapshotTitle || '').trim().toLowerCase()
+      }
+      const focusedVisible = visibleErpItems.find((erp) => titleFor(erp) === focusPostTitle)
+      if (focusedVisible) {
+        return [focusedVisible]
+      }
+      const focusedAny = erpItems.find((erp) => titleFor(erp) === focusPostTitle)
+      return focusedAny ? [focusedAny] : []
+    }
+
     return filteredTasks
-  }, [filteredTasks, searchParams, visibleErpItems, erpItems])
+  }, [filteredTasks, searchParams, visibleErpItems, erpItems, postMap])
+
+  const focusedMemberId = useMemo(() => {
+    const rawId = Number(searchParams.get('member_id'))
+    if (Number.isFinite(rawId) && rawId > 0) {
+      return rawId
+    }
+
+    const memberNameRaw = String(searchParams.get('focus_member_name') || '').trim().toLowerCase()
+    if (!memberNameRaw) return null
+    const matched = (Array.isArray(users) ? users : []).find((user) => {
+      const name = String(user?.name || '').trim().toLowerCase()
+      const username = String(user?.username || '').trim().toLowerCase()
+      return name === memberNameRaw || username === memberNameRaw
+    })
+    const parsed = Number(matched?.id)
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : null
+  }, [searchParams, users])
+
+  const focusedMemberRole = useMemo(() => {
+    const rawRole = String(searchParams.get('members_role') || '').trim().toLowerCase()
+    if (rawRole === 'expertise' || rawRole === 'skill_provider' || rawRole === 'supplier') {
+      return rawRole
+    }
+    if (rawRole === 'service_provider') return 'skill_provider'
+    if (rawRole === 'delivery_man' || rawRole === 'delivary_man' || rawRole === 'delivery') return 'supplier'
+
+    if (!focusedMemberId || !uniqueFilteredTasks.length) return ''
+
+    const focusedErp = uniqueFilteredTasks[0]
+    const members = focusedErp?.configuration_snapshot?.members || {}
+    const roleMatches = (roleKey, aliases = []) => {
+      const keys = [roleKey, ...aliases]
+      return keys.some((key) => {
+        const bucket = members?.[key] || {}
+        const assignees = Array.isArray(bucket?.assignee_ids) ? bucket.assignee_ids : []
+        return assignees.map((id) => Number(id)).includes(Number(focusedMemberId))
+      })
+    }
+
+    if (roleMatches('expertise')) return 'expertise'
+    if (roleMatches('skill_provider', ['service_provider'])) return 'skill_provider'
+    if (roleMatches('supplier', ['delivery_man', 'delivary_man', 'delivery'])) return 'supplier'
+
+    return ''
+  }, [searchParams, uniqueFilteredTasks, focusedMemberId])
+
+  const isFocusedCardView = useMemo(() => {
+    const focusErpId = Number(searchParams.get('erp_id'))
+    const focusPostTitle = String(searchParams.get('focus_post_title') || '').trim()
+    return (Number.isFinite(focusErpId) && focusErpId > 0) || Boolean(focusPostTitle)
+  }, [searchParams])
 
   const handleStageChange = async (erp, stage) => {
     const isProvider = currentUserId && String(erp.provider) === String(currentUserId)
@@ -557,7 +623,7 @@ export default function ERP() {
     }
   }
 
-  const handlePublishMemberPost = async (erp, role, messageText = '') => {
+  const handlePublishMemberPost = async (erp, role, messageText = '', options = {}) => {
     const isProvider = currentUserId && String(erp.provider) === String(currentUserId)
     if (!isProvider) {
       setMessage('Only provider can publish self-assign post.')
@@ -565,15 +631,26 @@ export default function ERP() {
     }
 
     try {
-      const { data } = await api.post(`/erp/${erp.id}/publish_member_post/`, {
+      const payload = {
         role,
         message: String(messageText || '').trim(),
-      })
+      }
+
+      if (Array.isArray(options?.selectedResponsibilities)) {
+        payload.selected_responsibilities = options.selectedResponsibilities
+      }
+
+      const { data } = await api.post(`/erp/${erp.id}/publish_member_post/`, payload)
       setErpItems((prev) => prev.map((item) => (item.id === data.id ? data : item)))
       setMessage(`Self-assign post published for ${role.replace('_', ' ')}.`)
+      return { ok: true }
     } catch (error) {
       console.error(error)
       setMessage('Failed to publish self-assign post.')
+      return {
+        ok: false,
+        detail: String(error?.response?.data?.detail || '').trim() || 'Failed to publish self-assign post.',
+      }
     }
   }
 
@@ -753,32 +830,38 @@ export default function ERP() {
   }
 
   return (
-    <div className="space-y-6">
-      <ERPHeader />
+    <div className={isFocusedCardView ? 'space-y-4' : 'space-y-6'}>
+      {!isFocusedCardView ? (
+        <>
+          <ERPHeader />
 
-      <ERPAnalyticsGrid analytics={analytics} ratingsByProvider={ratingsByProvider} />
+          <ERPAnalyticsGrid analytics={analytics} ratingsByProvider={ratingsByProvider} />
 
-      <ERPTopRatedServices topServices={analytics.topServices} postMap={postMap} />
+          <ERPTopRatedServices topServices={analytics.topServices} postMap={postMap} />
 
-      <ERPFiltersBar
-        filters={filters}
-        workerPool={workerPool}
-        onFilterChange={handleFilterChange}
-        onWorkerPoolChange={(event) => setWorkerPool(event.target.value)}
-      />
+          <ERPFiltersBar
+            filters={filters}
+            workerPool={workerPool}
+            onFilterChange={handleFilterChange}
+            onWorkerPoolChange={(event) => setWorkerPool(event.target.value)}
+          />
 
-      <div className="flex flex-wrap items-center gap-3">
-        <button
-          type="button"
-          onClick={handleAutoGenerate}
-          className="rounded-full border border-brand-200 px-4 py-2 text-sm font-semibold text-brand-600"
-        >
-          Auto-generate PDFs
-        </button>
-        {message && <p className="text-sm text-slate-500">{message}</p>}
-      </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              onClick={handleAutoGenerate}
+              className="rounded-full border border-brand-200 px-4 py-2 text-sm font-semibold text-brand-600"
+            >
+              Auto-generate PDFs
+            </button>
+            {message && <p className="text-sm text-slate-500">{message}</p>}
+          </div>
+        </>
+      ) : message ? (
+        <p className="text-sm text-slate-500">{message}</p>
+      ) : null}
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className={isFocusedCardView ? 'grid gap-4 lg:grid-cols-1' : 'grid gap-4 lg:grid-cols-2'}>
         {uniqueFilteredTasks.length === 0 ? (
           <div className="card">No ERP tasks found.</div>
         ) : (
@@ -817,6 +900,8 @@ export default function ERP() {
               onRejectApplication={handleRejectApplication}
               onOpenOwner={(ownerId) => navigate(`/dashboard/${ownerId}`)}
               toMediaUrl={toMediaUrl}
+              focusMemberRole={focusedMemberRole}
+              focusMemberId={focusedMemberId}
             />
           ))
         )}
