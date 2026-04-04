@@ -211,10 +211,13 @@ export default function Header() {
   }
 
   const getVisibleNotificationMessage = (value) => {
+    const replaceErpLabel = (text) => String(text || "").replace(/\bERP\b/gi, "Process Tracking")
     const text = String(value || "")
     // Keep routing payload hidden from visible copy.
-    return text.replace(/\s*post\s+link:\s*[^\s]+\s*/gi, " ").replace(/\s{2,}/g, " ").trim()
+    return replaceErpLabel(text.replace(/\s*post\s+link:\s*[^\s]+\s*/gi, " ").replace(/\s{2,}/g, " ").trim())
   }
+
+  const getVisibleNotificationTitle = (value) => String(value || "Notification").replace(/\bERP\b/gi, "Process Tracking")
 
   const getMemberSectionNotificationTarget = (item) => {
     const roleKey = String(item?.connection_role || "").trim().toLowerCase()
@@ -673,7 +676,7 @@ export default function Header() {
                           } cursor-pointer transition hover:border-violet-300 hover:bg-violet-100`}
                         >
                           <div className="flex items-start justify-between gap-2">
-                            <p className="font-semibold text-slate-800">{item.title || "Notification"}</p>
+                            <p className="font-semibold text-slate-800">{getVisibleNotificationTitle(item.title)}</p>
                             <div
                               className="relative"
                               data-notification-menu-root
@@ -849,7 +852,7 @@ export default function Header() {
                 onClick={() => setOpenDropdown(null)}
                 className={getSidebarItemClass("/connections")}
               >
-                Connections
+                My Network
               </Link>
               <Link
                 to="/help-centre"
