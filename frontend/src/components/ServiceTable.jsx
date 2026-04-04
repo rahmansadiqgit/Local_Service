@@ -57,6 +57,7 @@ export default function ServiceTable({ services = [], postType = 'Supply', showD
                 {isDemand ? 'Budget (BDT)' : 'Service Cost (BDT)'}
               </button>
             </th>
+            <th className="px-3 py-2 whitespace-nowrap">Status</th>
           </tr>
         </thead>
         <tbody className={isProfileTone ? 'divide-y divide-violet-200/70' : 'divide-y divide-slate-200 dark:divide-slate-800'}>
@@ -79,6 +80,17 @@ export default function ServiceTable({ services = [], postType = 'Supply', showD
               )}
               <td className={isProfileTone ? 'px-3 py-2 whitespace-nowrap text-slate-800' : 'px-3 py-2 text-slate-900 dark:text-slate-100 whitespace-nowrap'}>
                 {!isNaN(parseFloat(row.cost_per_unit)) ? parseFloat(row.cost_per_unit).toFixed(2) : '0.00'}
+              </td>
+              <td className={isProfileTone ? 'px-3 py-2 whitespace-nowrap text-slate-800' : 'px-3 py-2 text-slate-900 dark:text-slate-100 whitespace-nowrap'}>
+                {row.is_fully_booked ? (
+                  <span className="rounded-full border border-rose-300 bg-rose-100 px-2 py-0.5 text-[10px] font-semibold text-rose-700">
+                    Booked
+                  </span>
+                ) : (
+                  <span className="rounded-full border border-emerald-300 bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+                    Open
+                  </span>
+                )}
               </td>
             </tr>
           ))}

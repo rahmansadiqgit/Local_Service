@@ -29,45 +29,6 @@ export default function Dashboard() {
   const [connectionNote, setConnectionNote] = useState('')
   const [isSendingConnectionRequest, setIsSendingConnectionRequest] = useState(false)
   const [connectionsOverview, setConnectionsOverview] = useState(null)
-  const [pendingApplications, setPendingApplications] = useState([])
-  const [applicationActionMessage, setApplicationActionMessage] = useState('')
-  const [activeRequestPreview, setActiveRequestPreview] = useState(null)
-  const [showRequestsPanel, setShowRequestsPanel] = useState(false)
-
-  const buildPendingApplicationsFromErp = (erpList, ownerId) => {
-    const owner = Number(ownerId)
-    if (!Number.isFinite(owner) || owner <= 0) return []
-
-    return (Array.isArray(erpList) ? erpList : [])
-      .filter((item) => {
-        const postType = String(item?.configuration_snapshot?.post?.type || '').toLowerCase()
-        const status = String(item?.configuration_snapshot?.application_submission?.status || '').toLowerCase()
-        const receiverId = Number(item?.receiver)
-        return postType === 'demand' && receiverId === owner && status === 'submitted'
-      })
-      .map((item) => ({
-        erp_id: item.id,
-        post: {
-          id: Number(item?.post),
-          title: String(item?.configuration_snapshot?.post?.title || item?.configuration_snapshot?.post?.name || ''),
-          type: String(item?.configuration_snapshot?.post?.type || ''),
-        },
-        applicant: {
-          id: Number(item?.provider),
-          name: '',
-          profile_photo: '',
-        },
-        totals: {
-          expertise: Number(item?.configuration_snapshot?.totals?.expertise || 0),
-          services: Number(item?.configuration_snapshot?.totals?.services || 0),
-          products: Number(item?.configuration_snapshot?.totals?.products || 0),
-          grand: Number(item?.configuration_snapshot?.totals?.grand || item?.total_cost || 0),
-        },
-        submitted_at: item?.configuration_snapshot?.application_submission?.submitted_at || null,
-        submitted_by: item?.configuration_snapshot?.application_submission?.submitted_by || null,
-        configuration_snapshot: item?.configuration_snapshot || {},
-      }))
-  }
 
   useEffect(() => {
     let active = true;
@@ -101,11 +62,10 @@ export default function Dashboard() {
           api.get('/connections/overview/'),
           api.get('/users/'),
           api.get('/erp/'),
-      api.get('/erp/pending_applications/'),
         ]);
 
         if (!active) return;
-  const [postRes, ratingRes, skillRes, expertiseRes, productRes, overviewRes, userRes, erpRes, pendingRes] = results
+  const [postRes, ratingRes, skillRes, expertiseRes, productRes, overviewRes, userRes, erpRes] = results
 
   if (postRes.status === 'rejected') {
     throw postRes.reason
@@ -119,11 +79,6 @@ export default function Dashboard() {
   setProducts(productRes.status === 'fulfilled' && Array.isArray(productRes.value?.data) ? productRes.value.data : []);
   const erpList = erpRes.status === 'fulfilled' && Array.isArray(erpRes.value?.data) ? erpRes.value.data : []
   setErpItems(erpList);
-  if (pendingRes.status === 'fulfilled' && Array.isArray(pendingRes.value?.data)) {
-    setPendingApplications(pendingRes.value.data)
-  } else {
-    setPendingApplications(buildPendingApplicationsFromErp(erpList, profileData?.id))
-  }
   setConnectionsOverview(overviewRes.status === 'fulfilled' ? (overviewRes.value?.data || null) : null)
         setProfile(profileData);
       } catch (error) {
@@ -134,8 +89,15 @@ export default function Dashboard() {
       }
     };
     load();
+
+    const handleNotificationRefresh = () => {
+      load();
+    };
+    window.addEventListener('localix:notifications-refresh', handleNotificationRefresh);
+
     return () => {
       active = false;
+      window.removeEventListener('localix:notifications-refresh', handleNotificationRefresh);
     };
   }, [id]);
 
@@ -146,19 +108,6 @@ export default function Dashboard() {
       return acc
     }, {})
   }, [ratings])
-
-  const pendingApplicationsByPost = useMemo(() => {
-    const map = new Map()
-    ;(Array.isArray(pendingApplications) ? pendingApplications : []).forEach((entry) => {
-      const postId = Number(entry?.post?.id)
-      if (!Number.isFinite(postId) || postId <= 0) return
-      if (!map.has(postId)) {
-        map.set(postId, [])
-      }
-      map.get(postId).push(entry)
-    })
-    return map
-  }, [pendingApplications])
 
   const averageRatingByPost = useMemo(() => {
     const map = {}
@@ -618,111 +567,6 @@ export default function Dashboard() {
     return `৳${parsed.toFixed(0)}`
   }
 
-  const refreshApplicationData = async (ownerId) => {
-    const [erpRes, pendingRes, usersRes] = await Promise.all([
-      api.get('/erp/'),
-      api.get('/erp/pending_applications/').catch(() => ({ data: null })),
-      api.get('/users/').catch(() => ({ data: null })),
-    ])
-
-    const erpList = Array.isArray(erpRes?.data) ? erpRes.data : []
-    setErpItems(erpList)
-
-    if (usersRes?.data && Array.isArray(usersRes.data)) {
-      setUsers(usersRes.data)
-    }
-
-    if (Array.isArray(pendingRes?.data)) {
-      setPendingApplications(pendingRes.data)
-    } else {
-      setPendingApplications(buildPendingApplicationsFromErp(erpList, ownerId))
-    }
-  }
-
-  const updateApplicationDecision = async (erpId, postId, decision) => {
-    const isApprove = decision === 'approved'
-    const startMsg = isApprove ? 'Confirming application...' : 'Rejecting application...'
-    setApplicationActionMessage(startMsg)
-
-    try {
-      if (isApprove) {
-        try {
-          await api.post(`/erp/${erpId}/approve_application/`)
-        } catch (approveError) {
-          if (approveError?.response?.status !== 404) throw approveError
-
-          const erpDetail = await api.get(`/erp/${erpId}/`)
-          const current = erpDetail?.data || {}
-          const snapshot = { ...(current.configuration_snapshot || {}) }
-          const submission = { ...(snapshot.application_submission || {}) }
-          submission.status = 'approved'
-          submission.approved_at = new Date().toISOString()
-          snapshot.application_submission = submission
-          await api.patch(`/erp/${erpId}/`, {
-            configuration_snapshot: snapshot,
-            is_configured: true,
-          })
-        }
-      } else {
-        try {
-          await api.post(`/erp/${erpId}/reject_application/`)
-        } catch (rejectError) {
-          if (rejectError?.response?.status !== 404) throw rejectError
-
-          const erpDetail = await api.get(`/erp/${erpId}/`)
-          const current = erpDetail?.data || {}
-          const snapshot = { ...(current.configuration_snapshot || {}) }
-          const submission = { ...(snapshot.application_submission || {}) }
-          submission.status = 'rejected'
-          submission.rejected_at = new Date().toISOString()
-          snapshot.application_submission = submission
-          await api.patch(`/erp/${erpId}/`, {
-            configuration_snapshot: snapshot,
-            is_configured: false,
-          })
-        }
-      }
-
-      await refreshApplicationData(profile?.id)
-      setDetailModalPostId(postId)
-      setDetailModalSectionType('Demand')
-      setApplicationActionMessage(
-        isApprove
-          ? 'Application confirmed. ERP task card is now active.'
-          : 'Application rejected successfully.',
-      )
-    } catch (decisionError) {
-      console.error(decisionError)
-      setApplicationActionMessage(
-        decisionError?.response?.data?.detail || 'Failed to update application status. Please try again.',
-      )
-    }
-  }
-
-  const handleApproveApplication = async (erpId, postId) => {
-    await updateApplicationDecision(erpId, postId, 'approved')
-  }
-
-  const handleRejectApplication = async (erpId, postId) => {
-    await updateApplicationDecision(erpId, postId, 'rejected')
-  }
-
-  const openRequestPreview = (entry, post) => {
-    setActiveRequestPreview({
-      entry,
-      postId: post?.id,
-      postTitle: post?.post_title || post?.post_name || `Post #${post?.id || '-'}`,
-      post: post || null,
-    })
-  }
-
-  const closeRequestPreview = () => {
-    setActiveRequestPreview(null)
-  }
-
-  const previewPost = activeRequestPreview?.post || null
-  const previewPostRows = previewPost ? buildCategoryRows(previewPost) : null
-
   const connectionRelationship = useMemo(() => {
     const targetId = Number(profile?.id)
     if (!Number.isFinite(targetId) || targetId <= 0 || !connectionsOverview) {
@@ -810,19 +654,59 @@ export default function Dashboard() {
   const renderPostDetailsContent = (post, sectionType) => {
     if (!post) return null
 
-    const isDemand = sectionType === 'Demand'
     const { hasExpertise, hasServices, hasProduct, expertiseRows, serviceRows, productRows, showServiceDescription, showProductDescription } =
       buildCategoryRows(post)
+    const postImageSrc = toMediaUrl(post.image)
     const postOwnerId = Number(post.owner_id ?? post.owner)
     const postRatings = (ratingsByPost[post.id] || [])
       .filter((entry) => Number(entry?.provider) === postOwnerId)
       .slice()
       .sort((left, right) => Number(right?.id || 0) - Number(left?.id || 0))
     const perPostRoleMap = roleLabelsByPostAndUser.get(Number(post.id)) || new Map()
-    const postPendingApplications = pendingApplicationsByPost.get(Number(post.id)) || []
 
     return (
       <div className="space-y-3">
+        <div className="space-y-2 rounded-xl border border-violet-200/70 bg-white/80 p-3">
+          <p className="text-sm font-semibold text-slate-700">Post Details</p>
+          <div className="grid gap-2 text-sm text-slate-700 sm:grid-cols-2">
+            <p><span className="font-semibold text-slate-900">Post Type:</span> {post.post_type || '-'}</p>
+            <p><span className="font-semibold text-slate-900">Post Categories:</span> {post.post_name || '-'}</p>
+            <p><span className="font-semibold text-slate-900">Post Title:</span> {post.post_title || '-'}</p>
+            <p><span className="font-semibold text-slate-900">Brand / Company:</span> {post.brand_company_name || '-'}</p>
+            <p><span className="font-semibold text-slate-900">Location:</span> {post.location || '-'}</p>
+            <p>
+              <span className="font-semibold text-slate-900">Website:</span>{' '}
+              {post.website_link ? (
+                <a
+                  href={post.website_link}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-violet-700 underline-offset-2 hover:underline"
+                >
+                  Open link
+                </a>
+              ) : '-'}
+            </p>
+          </div>
+          <p className="text-sm text-slate-700">
+            <span className="font-semibold text-slate-900">Description:</span> {post.description || '-'}
+          </p>
+          <div className="text-sm text-slate-700">
+            <span className="font-semibold text-slate-900">Image:</span>
+            {postImageSrc ? (
+              <div className="mt-2 max-w-sm overflow-hidden rounded-xl border border-violet-200 bg-white p-1.5">
+                <img
+                  src={postImageSrc}
+                  alt={post.post_title || post.post_name || 'Post image'}
+                  className="h-44 w-full rounded-lg object-cover"
+                />
+              </div>
+            ) : (
+              <span className="ml-1">-</span>
+            )}
+          </div>
+        </div>
+
         {hasExpertise && (
           <div className="space-y-2 rounded-xl border border-violet-200/70 bg-white/80 p-3">
             <p className="text-sm font-semibold text-slate-700">Expertise</p>
@@ -860,142 +744,22 @@ export default function Dashboard() {
           <p className="text-sm text-slate-400">No detail listed.</p>
         )}
 
-        {isDemand && canDeletePosts && (
-          <div className="space-y-2 rounded-xl border border-amber-200 bg-amber-50/70 p-3">
-            <div className="flex items-center justify-between gap-2">
-              <p className="text-sm font-semibold text-amber-900">Submitted Applications</p>
-              <span className="rounded-full border border-amber-300 bg-white px-2 py-0.5 text-xs font-semibold text-amber-800">
-                {postPendingApplications.length} pending
-              </span>
-            </div>
-
-            {postPendingApplications.length === 0 ? (
-              <p className="text-sm text-slate-600">No pending applications for this demand post.</p>
-            ) : (
-              <div className="space-y-3">
-                {postPendingApplications.map((entry) => {
-                  const snapshot = entry?.configuration_snapshot || {}
-                  const applicant = entry?.applicant || {}
-                  const totals = entry?.totals || {}
-                  const expertiseRows = Array.isArray(snapshot?.expertise) ? snapshot.expertise : []
-                  const serviceRows = Array.isArray(snapshot?.services) ? snapshot.services : []
-                  const productRows = Array.isArray(snapshot?.products) ? snapshot.products : []
-                  const requesterNote = String(snapshot?.requester_note || snapshot?.notes?.requester_note || '').trim()
-
-                  return (
-                    <div key={`pending-app-${entry.erp_id}`} className="rounded-lg border border-amber-200 bg-white p-3">
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <p className="text-sm font-semibold text-slate-900">
-                          Applicant: {applicant?.name || `User #${applicant?.id || '-'}`}
-                        </p>
-                        <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={() => handleApproveApplication(entry.erp_id, post.id)}
-                            className="rounded-full border border-emerald-300 bg-emerald-600 px-3 py-1 text-xs font-semibold text-white transition hover:bg-emerald-700"
-                          >
-                            Accept
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleRejectApplication(entry.erp_id, post.id)}
-                            className="rounded-full border border-rose-300 bg-rose-600 px-3 py-1 text-xs font-semibold text-white transition hover:bg-rose-700"
-                          >
-                            Reject
-                          </button>
-                        </div>
-                      </div>
-
-                      <p className="mt-1 text-xs text-slate-500">Submitted at: {formatPostDate(entry?.submitted_at)}</p>
-
-                      <div className="mt-2 overflow-x-auto rounded-lg border border-slate-200">
-                        <table className="w-full min-w-[520px] border-collapse text-xs">
-                          <thead className="bg-slate-100 text-slate-700">
-                            <tr>
-                              <th className="border border-slate-200 px-2 py-1 text-left">Type</th>
-                              <th className="border border-slate-200 px-2 py-1 text-left">Name</th>
-                              <th className="border border-slate-200 px-2 py-1 text-left">Configuration</th>
-                              <th className="border border-slate-200 px-2 py-1 text-right">Line Total</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {expertiseRows.map((row) => (
-                              <tr key={`exp-${entry.erp_id}-${row.id}`} className="odd:bg-white even:bg-slate-50">
-                                <td className="border border-slate-200 px-2 py-1">Expertise</td>
-                                <td className="border border-slate-200 px-2 py-1">{row?.name || '-'}</td>
-                                <td className="border border-slate-200 px-2 py-1">
-                                  {Number(row?.offered_people || 0)} person x {Number(row?.offered_hours || 0)} hr at {formatCurrency(row?.offered_rate || 0)}
-                                </td>
-                                <td className="border border-slate-200 px-2 py-1 text-right">{formatCurrency(row?.line_total || 0)}</td>
-                              </tr>
-                            ))}
-                            {serviceRows.map((row) => (
-                              <tr key={`svc-${entry.erp_id}-${row.id}`} className="odd:bg-white even:bg-slate-50">
-                                <td className="border border-slate-200 px-2 py-1">Service</td>
-                                <td className="border border-slate-200 px-2 py-1">{row?.name || '-'}</td>
-                                <td className="border border-slate-200 px-2 py-1">
-                                  Charge: {formatCurrency(row?.offered_rate ?? row?.requested_rate ?? 0)}
-                                </td>
-                                <td className="border border-slate-200 px-2 py-1 text-right">{formatCurrency(row?.line_total || 0)}</td>
-                              </tr>
-                            ))}
-                            {productRows.map((row) => (
-                              <tr key={`prd-${entry.erp_id}-${row.id}`} className="odd:bg-white even:bg-slate-50">
-                                <td className="border border-slate-200 px-2 py-1">Product</td>
-                                <td className="border border-slate-200 px-2 py-1">{row?.name || '-'}</td>
-                                <td className="border border-slate-200 px-2 py-1">
-                                  {Number(row?.offered_quantity || 0)} {String(row?.unit || 'unit')} at {formatCurrency(row?.offered_rate || 0)}
-                                </td>
-                                <td className="border border-slate-200 px-2 py-1 text-right">{formatCurrency(row?.line_total || 0)}</td>
-                              </tr>
-                            ))}
-                            {expertiseRows.length === 0 && serviceRows.length === 0 && productRows.length === 0 ? (
-                              <tr>
-                                <td className="border border-slate-200 px-2 py-2 text-center text-slate-500" colSpan={4}>
-                                  No application configuration rows found.
-                                </td>
-                              </tr>
-                            ) : null}
-                          </tbody>
-                        </table>
-                      </div>
-
-                      <div className="mt-2 grid gap-2 sm:grid-cols-4">
-                        <div className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-xs text-slate-700">Expertise: {formatCurrency(totals?.expertise || 0)}</div>
-                        <div className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-xs text-slate-700">Service: {formatCurrency(totals?.services || 0)}</div>
-                        <div className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-xs text-slate-700">Product: {formatCurrency(totals?.products || 0)}</div>
-                        <div className="rounded-md border border-violet-300 bg-violet-50 px-2 py-1 text-xs font-semibold text-violet-800">Overall: {formatCurrency(totals?.grand || 0)}</div>
-                      </div>
-
-                      {requesterNote ? (
-                        <p className="mt-2 text-xs text-slate-700">
-                          <span className="font-semibold">Requester note:</span> {requesterNote}
-                        </p>
-                      ) : null}
-                    </div>
-                  )
-                })}
-              </div>
-            )}
-          </div>
-        )}
-
-        <div className="space-y-2 rounded-xl border border-violet-200 bg-violet-50/50 p-3">
-          <p className="text-sm font-semibold text-violet-800">Ratings and Comments</p>
-          {postRatings.length ? (
+        <div className="space-y-2 rounded-xl border border-violet-200/70 bg-white/80 p-3">
+          <p className="text-sm font-semibold text-slate-700">Post Ratings</p>
+          {postRatings.length === 0 ? (
+            <p className="text-sm text-slate-500">No ratings/comments yet for this post.</p>
+          ) : (
             <div className="space-y-2">
               {postRatings.map((entry) => {
-                const reviewerId = Number(entry?.customer)
-                const targetId = Number(entry?.provider)
-                const reviewer = usersById.get(reviewerId)
+                const providerId = Number(entry?.provider)
+                const targetId = Number(entry?.target_user)
+                const provider = usersById.get(providerId)
                 const target = usersById.get(targetId)
-                const reviewerRoles = Array.from(perPostRoleMap.get(reviewerId) || [])
-
+                const reviewerRoles = perPostRoleMap.get(providerId) || []
                 return (
-                  <div key={`post-rating-${post.id}-${entry.id}`} className="rounded-lg border border-violet-200 bg-white p-2">
-                    <p className="font-semibold text-slate-800">
-                      {reviewer?.name || reviewer?.username || `User #${reviewerId}`}
-                      {' -> '}
+                  <div key={`post-rating-${entry.id}`} className="rounded-lg border border-violet-200 bg-violet-50/50 px-3 py-2">
+                    <p className="text-xs font-semibold text-slate-700">
+                      {provider?.name || provider?.username || `User #${providerId}`} {' -> '}
                       {target?.name || target?.username || `User #${targetId}`}
                     </p>
                     {reviewerRoles.length ? (
@@ -1011,8 +775,6 @@ export default function Dashboard() {
                 )
               })}
             </div>
-          ) : (
-            <p className="text-sm text-slate-500">No ratings/comments yet for this post.</p>
           )}
         </div>
       </div>
@@ -1155,233 +917,6 @@ export default function Dashboard() {
         </div>
       )}
 
-      {applicationActionMessage && (
-        <div className="card border border-emerald-200 bg-emerald-50">
-          <p className="text-sm text-emerald-700">{applicationActionMessage}</p>
-        </div>
-      )}
-
-      {activeRequestPreview && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 p-2 sm:p-4">
-          <div className="flex h-[96vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl border border-slate-300 bg-slate-100 shadow-2xl">
-            <div className="flex items-center justify-between border-b border-slate-300 bg-white px-4 py-3">
-              <div>
-                <p className="text-base font-semibold text-slate-900">Request PDF Preview</p>
-                <p className="text-xs text-slate-500">{activeRequestPreview.postTitle}</p>
-              </div>
-              <button
-                type="button"
-                onClick={closeRequestPreview}
-                className="rounded-md border border-slate-300 bg-white px-3 py-1 text-xs font-semibold text-slate-700 transition hover:bg-slate-100"
-              >
-                Close
-              </button>
-            </div>
-
-            <div className="flex-1 overflow-y-auto p-3 sm:p-5">
-              <div className="mx-auto w-full max-w-5xl rounded-lg border border-slate-300 bg-white p-4 shadow sm:p-6">
-                <div className="mb-6 rounded-lg border border-slate-200 bg-slate-50 p-4">
-                  <p className="text-lg font-bold text-slate-900">Post Details</p>
-                  <div className="mt-2 grid gap-2 text-sm sm:grid-cols-2">
-                    <p className="text-slate-700"><span className="font-semibold">Title:</span> {previewPost?.post_title || previewPost?.post_name || activeRequestPreview.postTitle}</p>
-                    <p className="text-slate-700"><span className="font-semibold">Type:</span> {previewPost?.post_type || '-'}</p>
-                    <p className="text-slate-700"><span className="font-semibold">Location:</span> {previewPost?.location || 'Remote'}</p>
-                    <p className="text-slate-700"><span className="font-semibold">Created:</span> {formatPostDate(previewPost?.created_at)}</p>
-                  </div>
-                  <div className="mt-3 rounded-md border border-slate-200 bg-white p-3">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Full Post Description</p>
-                    <p className="mt-1 whitespace-pre-wrap text-sm text-slate-800">{String(previewPost?.description || 'No description added yet.').trim() || 'No description added yet.'}</p>
-                  </div>
-                </div>
-
-                {previewPostRows?.hasExpertise && (
-                  <div className="mb-6 space-y-2">
-                    <p className="text-sm font-semibold text-slate-700">Post Expertise</p>
-                    {previewPostRows.expertiseRows.length ? (
-                      <ExpertiseTable expertises={previewPostRows.expertiseRows} postType={previewPost?.post_type} />
-                    ) : (
-                      <p className="text-sm text-slate-500">No expertise detail listed.</p>
-                    )}
-                  </div>
-                )}
-
-                {previewPostRows?.hasServices && (
-                  <div className="mb-6 space-y-2">
-                    <p className="text-sm font-semibold text-slate-700">Post Services</p>
-                    {previewPostRows.serviceRows.length ? (
-                      <ServiceTable
-                        services={previewPostRows.serviceRows}
-                        postType={previewPost?.post_type}
-                        showDescription={previewPostRows.showServiceDescription}
-                      />
-                    ) : (
-                      <p className="text-sm text-slate-500">No service detail listed.</p>
-                    )}
-                  </div>
-                )}
-
-                {previewPostRows?.hasProduct && (
-                  <div className="mb-6 space-y-2">
-                    <p className="text-sm font-semibold text-slate-700">Post Product</p>
-                    {previewPostRows.productRows.length ? (
-                      <ProductTable
-                        products={previewPostRows.productRows}
-                        postType={previewPost?.post_type}
-                        showDescription={previewPostRows.showProductDescription}
-                      />
-                    ) : (
-                      <p className="text-sm text-slate-500">No product detail listed.</p>
-                    )}
-                  </div>
-                )}
-
-                <div className="mb-4 flex flex-wrap items-start justify-between gap-2 border-b border-slate-200 pb-3">
-                  <div>
-                    <p className="text-lg font-bold text-slate-900">Application Summary</p>
-                    {(() => {
-                      const applicantId = Number(activeRequestPreview.entry?.applicant?.id)
-                      const applicantUser = usersById.get(applicantId)
-                      const applicantName =
-                        String(activeRequestPreview.entry?.applicant?.name || '').trim() ||
-                        String(applicantUser?.name || applicantUser?.username || '').trim() ||
-                        'Unknown applicant'
-                      const applicantAvatarUrl =
-                        toMediaUrl(activeRequestPreview.entry?.applicant?.profile_photo || applicantUser?.profile_photo || '') ||
-                        '/images/default-avatar.svg'
-
-                      return (
-                        <div className="mt-1 flex items-center gap-2 text-sm text-slate-600">
-                          <img src={applicantAvatarUrl} alt={applicantName} className="h-7 w-7 rounded-full border border-slate-200 object-cover" />
-                          <span>Applicant: {applicantName}</span>
-                        </div>
-                      )
-                    })()}
-                  </div>
-                  <p className="text-sm text-slate-500">Submitted at: {formatPostDate(activeRequestPreview.entry?.submitted_at)}</p>
-                </div>
-
-                <div className="overflow-x-auto rounded-lg border border-slate-200">
-                  <table className="w-full min-w-[720px] border-collapse text-sm">
-                    <thead className="bg-slate-100 text-slate-800">
-                      <tr>
-                        <th className="border border-slate-200 px-3 py-2 text-left">Type</th>
-                        <th className="border border-slate-200 px-3 py-2 text-left">Name</th>
-                        <th className="border border-slate-200 px-3 py-2 text-left">Configuration</th>
-                        <th className="border border-slate-200 px-3 py-2 text-right">Line Total</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {(Array.isArray(activeRequestPreview.entry?.configuration_snapshot?.expertise)
-                        ? activeRequestPreview.entry.configuration_snapshot.expertise
-                        : []
-                      ).map((row) => (
-                        <tr key={`preview-exp-${activeRequestPreview.entry?.erp_id}-${row.id}`} className="odd:bg-white even:bg-slate-50">
-                          <td className="border border-slate-200 px-3 py-2">Expertise</td>
-                          <td className="border border-slate-200 px-3 py-2">{row?.name || '-'}</td>
-                          <td className="border border-slate-200 px-3 py-2">
-                            {Number(row?.offered_people || 0)} person x {Number(row?.offered_hours || 0)} hr at {formatCurrency(row?.offered_rate || 0)}
-                          </td>
-                          <td className="border border-slate-200 px-3 py-2 text-right">{formatCurrency(row?.line_total || 0)}</td>
-                        </tr>
-                      ))}
-                      {(Array.isArray(activeRequestPreview.entry?.configuration_snapshot?.services)
-                        ? activeRequestPreview.entry.configuration_snapshot.services
-                        : []
-                      ).map((row) => (
-                        <tr key={`preview-svc-${activeRequestPreview.entry?.erp_id}-${row.id}`} className="odd:bg-white even:bg-slate-50">
-                          <td className="border border-slate-200 px-3 py-2">Service</td>
-                          <td className="border border-slate-200 px-3 py-2">{row?.name || '-'}</td>
-                          <td className="border border-slate-200 px-3 py-2">Charge: {formatCurrency(row?.offered_rate ?? row?.requested_rate ?? 0)}</td>
-                          <td className="border border-slate-200 px-3 py-2 text-right">{formatCurrency(row?.line_total || 0)}</td>
-                        </tr>
-                      ))}
-                      {(Array.isArray(activeRequestPreview.entry?.configuration_snapshot?.products)
-                        ? activeRequestPreview.entry.configuration_snapshot.products
-                        : []
-                      ).map((row) => (
-                        <tr key={`preview-prd-${activeRequestPreview.entry?.erp_id}-${row.id}`} className="odd:bg-white even:bg-slate-50">
-                          <td className="border border-slate-200 px-3 py-2">Product</td>
-                          <td className="border border-slate-200 px-3 py-2">{row?.name || '-'}</td>
-                          <td className="border border-slate-200 px-3 py-2">
-                            {Number(row?.offered_quantity || 0)} {String(row?.unit || 'unit')} at {formatCurrency(row?.offered_rate || 0)}
-                          </td>
-                          <td className="border border-slate-200 px-3 py-2 text-right">{formatCurrency(row?.line_total || 0)}</td>
-                        </tr>
-                      ))}
-                      {(Array.isArray(activeRequestPreview.entry?.configuration_snapshot?.expertise)
-                        ? activeRequestPreview.entry.configuration_snapshot.expertise
-                        : []
-                      ).length === 0 &&
-                      (Array.isArray(activeRequestPreview.entry?.configuration_snapshot?.services)
-                        ? activeRequestPreview.entry.configuration_snapshot.services
-                        : []
-                      ).length === 0 &&
-                      (Array.isArray(activeRequestPreview.entry?.configuration_snapshot?.products)
-                        ? activeRequestPreview.entry.configuration_snapshot.products
-                        : []
-                      ).length === 0 ? (
-                        <tr>
-                          <td className="border border-slate-200 px-3 py-3 text-center text-slate-500" colSpan={4}>
-                            No application configuration rows found.
-                          </td>
-                        </tr>
-                      ) : null}
-                    </tbody>
-                  </table>
-                </div>
-
-                <div className="mt-4 grid gap-2 sm:grid-cols-4">
-                  <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
-                    Expertise: {formatCurrency(activeRequestPreview.entry?.totals?.expertise || 0)}
-                  </div>
-                  <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
-                    Service: {formatCurrency(activeRequestPreview.entry?.totals?.services || 0)}
-                  </div>
-                  <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
-                    Product: {formatCurrency(activeRequestPreview.entry?.totals?.products || 0)}
-                  </div>
-                  <div className="rounded-md border border-violet-300 bg-violet-50 px-3 py-2 text-sm font-semibold text-violet-800">
-                    Overall: {formatCurrency(activeRequestPreview.entry?.totals?.grand || 0)}
-                  </div>
-                </div>
-
-                {String(activeRequestPreview.entry?.configuration_snapshot?.requester_note || activeRequestPreview.entry?.configuration_snapshot?.notes?.requester_note || '').trim() ? (
-                  <p className="mt-4 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
-                    <span className="font-semibold">Requester note:</span>{' '}
-                    {String(activeRequestPreview.entry?.configuration_snapshot?.requester_note || activeRequestPreview.entry?.configuration_snapshot?.notes?.requester_note || '').trim()}
-                  </p>
-                ) : null}
-              </div>
-            </div>
-
-            <div className="border-t border-slate-300 bg-white px-4 py-3">
-              <div className="flex flex-wrap items-center justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    handleRejectApplication(activeRequestPreview.entry?.erp_id, activeRequestPreview.postId)
-                    closeRequestPreview()
-                  }}
-                  className="rounded-full border border-rose-300 bg-rose-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-rose-700"
-                >
-                  Reject
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    handleApproveApplication(activeRequestPreview.entry?.erp_id, activeRequestPreview.postId)
-                    closeRequestPreview()
-                  }}
-                  className="rounded-full border border-emerald-300 bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700"
-                >
-                  Accept
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
       {canSendConnectionRequest && (
         <div className="card border border-sky-200 bg-sky-50/80">
           <p className="text-sm font-semibold text-sky-900">Connection Request</p>
@@ -1497,105 +1032,6 @@ export default function Dashboard() {
           </div>
         </div>
       </div>
-
-      {canDeletePosts && (
-        <div className="card border border-amber-300/80 bg-gradient-to-br from-[#fffbf0] via-[#fff8e6] to-[#fffcf5] shadow-lg">
-          <div className="flex items-center justify-between gap-3 mb-4">
-            <h3 className="text-lg font-semibold text-amber-900">
-              Requests
-              {pendingApplications.length > 0 && (
-                <span className="ml-3 inline-flex rounded-full border border-amber-400 bg-amber-100 px-3 py-0.5 text-sm font-bold text-amber-800">
-                  {pendingApplications.length}
-                </span>
-              )}
-            </h3>
-            <button
-              type="button"
-              onClick={() => setShowRequestsPanel(!showRequestsPanel)}
-              className="rounded-full border border-amber-400 bg-amber-100 px-3 py-1.5 text-xs font-semibold text-amber-800 transition hover:bg-amber-200"
-            >
-              {showRequestsPanel ? 'Hide' : 'View'}
-            </button>
-          </div>
-
-          {showRequestsPanel && (
-            <div className="space-y-3">
-              {pendingApplications.length === 0 ? (
-                <p className="text-sm text-slate-600">No pending requests at this time.</p>
-              ) : (
-                <div className="overflow-hidden rounded-lg border border-amber-200 bg-white">
-                  <table className="w-full text-left text-xs">
-                    <thead className="border-b border-amber-200 bg-amber-50">
-                      <tr>
-                        <th className="px-3 py-2 font-semibold text-amber-900">Post Title</th>
-                        <th className="px-3 py-2 font-semibold text-amber-900">Applicant</th>
-                        <th className="px-3 py-2 font-semibold text-amber-900">Submitted</th>
-                        <th className="px-3 py-2 font-semibold text-amber-900">Total Cost</th>
-                        <th className="px-3 py-2 font-semibold text-amber-900">Action</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-amber-200">
-                      {pendingApplications.map((request) => {
-                        const postId = Number(request?.post?.id)
-                        const applicantId = Number(request?.applicant?.id)
-                        const applicantUser = usersById.get(applicantId)
-                        const applicantName =
-                          String(request?.applicant?.name || '').trim() ||
-                          String(applicantUser?.name || applicantUser?.username || '').trim() ||
-                          'Unknown applicant'
-                        const applicantAvatarUrl =
-                          toMediaUrl(request?.applicant?.profile_photo || applicantUser?.profile_photo || '') ||
-                          '/images/default-avatar.svg'
-                        const submittedDate = request?.submitted_at
-                          ? new Date(request.submitted_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: request?.submitted_at?.includes(new Date().getFullYear().toString()) ? undefined : '2-digit' })
-                          : 'N/A'
-                        const totalCost = formatCurrency(request?.totals?.grand || 0)
-
-                        return (
-                          <tr key={`request-${request.erp_id}`} className="hover:bg-amber-50/50">
-                            <td className="px-3 py-2 font-medium text-slate-800">{request?.post?.title || 'N/A'}</td>
-                            <td className="px-3 py-2">
-                              <button
-                                type="button"
-                                onClick={() => navigate(`/dashboard/${applicantId}`)}
-                                className="inline-flex items-center gap-2 rounded px-1 py-0.5 text-slate-700 transition hover:bg-amber-100"
-                              >
-                                <img
-                                  src={applicantAvatarUrl}
-                                  alt={applicantName}
-                                  className="h-5 w-5 rounded-full border border-amber-200 object-cover"
-                                />
-                                <span className="font-medium hover:underline">{applicantName}</span>
-                              </button>
-                            </td>
-                            <td className="px-3 py-2 text-slate-600">{submittedDate}</td>
-                            <td className="px-3 py-2 font-semibold text-amber-900">{totalCost}</td>
-                            <td className="px-3 py-2 space-x-1 flex">
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  const targetPost = userPosts.find((entry) => Number(entry.id) === postId)
-                                  if (targetPost) {
-                                    openPostDetailsModal(targetPost, targetPost.post_type === 'Demand' ? 'Demand' : 'Available')
-                                  }
-                                  setShowRequestsPanel(false)
-                                }}
-                                className="rounded border border-emerald-400 bg-emerald-50 px-2 py-1 text-[10px] font-semibold text-emerald-700 transition hover:bg-emerald-100"
-                              >
-                                Review
-                              </button>
-                            </td>
-                          </tr>
-                        )
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      )}
 
       <div className="card border border-violet-300/80 bg-gradient-to-br from-[#f4e9ff] via-[#ecd9ff] to-[#f7ecff] shadow-lg">
         <p className="text-lg font-semibold text-violet-900">

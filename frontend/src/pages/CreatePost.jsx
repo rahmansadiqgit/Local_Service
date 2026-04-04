@@ -320,7 +320,7 @@ export default function CreatePost() {
         }
 
         if (isDemand && item.unit && !isBlank(item.needed_budget_unit) && !isValidNumber(item.needed_budget_unit)) {
-          setMessage(`Invalid value in Expertise row ${index + 1}: Needed Hire Unit must be a valid number.`)
+          setMessage(`Invalid value in Expertise row ${index + 1}: Needed Hire Unit Per Person must be a valid number.`)
           setSaving(false)
           return
         }
@@ -375,13 +375,13 @@ export default function CreatePost() {
     })
 
     if (showExpertiseSection && expertiseDurationMissing) {
-      setMessage(isDemand ? 'Please select Hire Unit for all expertise rows.' : 'Please select Service Duration Unit for all expertise rows.')
+      setMessage(isDemand ? 'Please select Deal As for all expertise rows.' : 'Please select Service Duration Unit for all expertise rows.')
       setSaving(false)
       return
     }
 
     if (showExpertiseSection && expertiseBudgetUnitAmountMissing) {
-      setMessage('Needed Hire Unit must be greater than 0 for all expertise rows.')
+      setMessage('Needed Hire Unit Per Person must be greater than 0 for all expertise rows.')
       setSaving(false)
       return
     }
@@ -526,9 +526,9 @@ export default function CreatePost() {
       const expertiseFieldLabels = {
         name: 'Skill/Experties Name',
         experience: isDemand ? 'Preferred Experience' : 'Your Experience',
-        unit: isDemand ? 'Hire Unit' : 'Service Duration Unit',
-        needed_budget_unit: 'Needed Hire Unit',
-        cost: isDemand ? 'Your Budget (BDT)' : 'Charge (BDT) Per Unit',
+        unit: isDemand ? 'Deal As' : 'Service Duration Unit',
+        needed_budget_unit: '(Hour/Day/Month) you need per person',
+        cost: isDemand ? 'Your Deal As Budget (BDT) per person' : 'Charge (BDT) Per Unit',
         available_person: isDemand ? 'Required Person' : 'Available Person',
       }
       const serviceFieldLabels = {
@@ -928,7 +928,7 @@ export default function CreatePost() {
                 />
               </div>
               <div>
-                <label className="text-xs font-semibold text-black">{isDemand ? 'Hire Unit' : 'Service Duration Unit'}</label>
+                <label className="text-xs font-semibold text-black">{isDemand ? 'Deal As' : 'Service Duration Unit'}</label>
                 <select
                   value={row.unit}
                   onChange={(event) =>
@@ -945,7 +945,7 @@ export default function CreatePost() {
                     className="bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white"
                     style={{ backgroundColor: '#7c3aed', color: '#ffffff' }}
                   >
-                    {isDemand ? 'Select hire unit' : 'Select service duration unit'}
+                    {isDemand ? 'Select deal as' : 'Select service duration unit'}
                   </option>
                   <option value="hourly">Hourly</option>
                   <option value="daily">Daily</option>
@@ -955,20 +955,24 @@ export default function CreatePost() {
               </div>
               {isDemand ? (
                 <div>
-                  <label className="text-xs font-semibold text-black">Needed Hire Unit</label>
+                  <label className="text-xs font-semibold text-black">
+                    {row.unit === 'hourly'
+                      ? 'Hours you need per person'
+                      : row.unit === 'daily'
+                        ? 'Days you need per person'
+                        : row.unit === 'monthly'
+                          ? 'Months you need per person'
+                          : 'Deal As units you need per person'}
+                  </label>
                   <input
                     type="text"
                     inputMode="numeric"
                     placeholder={
                       row.unit === 'hourly'
-                        ? 'e.g., 2 (hours)'
+                        ? 'e.g., 2 hours per person'
                         : row.unit === 'daily'
-                          ? 'e.g., 3 (days)'
-                          : row.unit === 'monthly'
-                            ? 'e.g., 1 (months)'
-                            : row.unit === 'per_project'
-                              ? 'e.g., 1 (project)'
-                              : 'e.g., 1'
+                          ? 'e.g., 3 days per person'
+                          : 'e.g., 1 month per person'
                     }
                     value={row.needed_budget_unit}
                     onChange={(event) =>
@@ -983,33 +987,37 @@ export default function CreatePost() {
                 </div>
               ) : null}
               <div>
+                {/** Map Deal As value to a display word so label never falls back to empty wording. */}
+                {(() => {
+                  const dealAs = String(row.unit || '').trim().toLowerCase()
+                  const dealAsWord =
+                    dealAs === 'hourly' || dealAs === 'hour' ? 'Hourly' :
+                    dealAs === 'daily' || dealAs === 'day' ? 'Daily' :
+                    dealAs === 'monthly' || dealAs === 'month' ? 'Monthly' :
+                    ''
+
+                  return (
                 <label className="text-xs font-semibold text-black">
                   {isDemand
-                    ? row.unit === 'hourly'
-                      ? 'Your Hourly Budget (BDT)'
-                      : row.unit === 'daily'
-                        ? 'Your Daily Budget (BDT)'
-                        : row.unit === 'monthly'
-                          ? 'Your Monthly Budget (BDT)'
-                          : row.unit === 'per_project'
-                            ? 'Your Project Budget (BDT)'
-                          : 'Your Budget (BDT)'
+                    ? dealAsWord
+                      ? `Your ${dealAsWord} Budget (BDT) per person`
+                      : 'Your Deal As Budget (BDT) per person'
                         : 'Charge (BDT) Per Unit'}
                 </label>
+                  )
+                })()}
                 <input
                   type="text"
                   inputMode="decimal"
                   placeholder={
                     isDemand
                       ? row.unit === 'hourly'
-                        ? 'Enter your hourly budget (BDT)'
+                        ? 'Enter your hourly budget (BDT) per person'
                         : row.unit === 'daily'
-                          ? 'Enter your daily budget (BDT)'
+                          ? 'Enter your daily budget (BDT) per person'
                           : row.unit === 'monthly'
-                            ? 'Enter your monthly budget (BDT)'
-                            : row.unit === 'per_project'
-                              ? 'Enter your project budget (BDT)'
-                            : 'Enter your budget (BDT)'
+                            ? 'Enter your monthly budget (BDT) per person'
+                            : 'Enter your deal as budget (BDT) per person'
                         : 'Enter charge amount per unit (BDT)'
                   }
                   value={row.cost}

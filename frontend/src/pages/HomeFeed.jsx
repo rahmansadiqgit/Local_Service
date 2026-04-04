@@ -187,14 +187,17 @@ export default function HomeFeed() {
 
     const handlePostCreated = () => load()
     const handlePostDeleted = () => load()
+    const handleNotificationRefresh = () => load()
 
     window.addEventListener('post-created', handlePostCreated)
     window.addEventListener('post-deleted', handlePostDeleted)
+    window.addEventListener('localix:notifications-refresh', handleNotificationRefresh)
 
     return () => {
       active = false
       window.removeEventListener('post-created', handlePostCreated)
       window.removeEventListener('post-deleted', handlePostDeleted)
+      window.removeEventListener('localix:notifications-refresh', handleNotificationRefresh)
     }
 
   }, [isAuthenticated])
