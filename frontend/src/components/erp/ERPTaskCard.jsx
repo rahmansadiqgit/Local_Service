@@ -70,6 +70,7 @@ export default function ERPTaskCard({
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false)
   const [isDeletingErp, setIsDeletingErp] = useState(false)
   const [deleteError, setDeleteError] = useState('')
+  const [isDecidingBooking, setIsDecidingBooking] = useState(false)
 
   const snapshot = erp.configuration_snapshot || {}
   const snapshotPost = snapshot.post || {}
@@ -504,11 +505,6 @@ export default function ERPTaskCard({
       ? 'border-cyan-200/50 bg-cyan-400/25 text-cyan-50'
       : 'border-slate-200/50 bg-slate-400/25 text-slate-50'
   const categoryTextClass = isProviderTheme ? 'text-violet-100/95' : isReceiverTheme ? 'text-cyan-100/95' : 'text-slate-100/95'
-  const profileCardClass = isProviderTheme
-    ? 'border-violet-200/60 bg-white/90 hover:border-violet-300 hover:bg-violet-50/70'
-    : isReceiverTheme
-      ? 'border-sky-200/70 bg-white/90 hover:border-sky-300 hover:bg-sky-50/70'
-      : 'border-slate-200 bg-white'
   const phaseLineClass = erp.stage === 'Completed' ? 'bg-emerald-400' : isProviderTheme ? 'bg-violet-200/70' : 'bg-sky-200/70'
   const activePhaseDotClass = isProviderTheme
     ? 'border-violet-100 bg-violet-500 shadow-sm'
