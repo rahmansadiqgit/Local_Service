@@ -557,7 +557,7 @@ export default function ERP() {
     }
   }
 
-  const handlePublishMemberPost = async (erp, role, messageText = '') => {
+  const handlePublishMemberPost = async (erp, role, messageText = '', options = {}) => {
     const isProvider = currentUserId && String(erp.provider) === String(currentUserId)
     if (!isProvider) {
       setMessage('Only provider can publish self-assign post.')
@@ -565,15 +565,26 @@ export default function ERP() {
     }
 
     try {
-      const { data } = await api.post(`/erp/${erp.id}/publish_member_post/`, {
+      const payload = {
         role,
         message: String(messageText || '').trim(),
-      })
+      }
+
+      if (Array.isArray(options?.selectedResponsibilities)) {
+        payload.selected_responsibilities = options.selectedResponsibilities
+      }
+
+      const { data } = await api.post(`/erp/${erp.id}/publish_member_post/`, payload)
       setErpItems((prev) => prev.map((item) => (item.id === data.id ? data : item)))
       setMessage(`Self-assign post published for ${role.replace('_', ' ')}.`)
+      return { ok: true }
     } catch (error) {
       console.error(error)
       setMessage('Failed to publish self-assign post.')
+      return {
+        ok: false,
+        detail: String(error?.response?.data?.detail || '').trim() || 'Failed to publish self-assign post.',
+      }
     }
   }
 
