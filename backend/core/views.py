@@ -2553,6 +2553,11 @@ class ERPViewSet(viewsets.ModelViewSet):
         allowed_member_ids = set()
         selected_scope_entry = None
         if isinstance(scoped_entries, list) and scoped_entries:
+            responsibility_name_by_id = {
+                str(entry.get("id") or "").strip(): str(entry.get("name") or "").strip()
+                for entry in self._list_responsibilities_for_role(snapshot, role)
+                if isinstance(entry, dict)
+            }
             normalized_scope = []
             for item in scoped_entries:
                 if not isinstance(item, dict):
@@ -2571,6 +2576,7 @@ class ERPViewSet(viewsets.ModelViewSet):
                 normalized_scope.append(
                     {
                         "responsibility_id": scope_id,
+                        "responsibility_name": str(item.get("responsibility_name") or responsibility_name_by_id.get(scope_id) or "").strip(),
                         "target_ids": sorted(list(scope_targets)),
                         "rejected_ids": [
                             parsed_target
